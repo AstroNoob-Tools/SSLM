@@ -168,6 +168,7 @@ class App {
 
             // Add new event listener
             if (confirmCallback) {
+                newConfirmBtn.style.display = '';  // Ensure button is visible
                 newConfirmBtn.addEventListener('click', () => {
                     confirmCallback();
                     this.hideModal();

@@ -32,8 +32,8 @@ const PORT = process.env.PORT || config.server.port || 3000;
 const HOST = config.server.host || 'localhost';
 
 // Middleware
-app.use(express.json());
-app.use(express.urlencoded({ extended: true }));
+app.use(express.json({ limit: '50mb' }));
+app.use(express.urlencoded({ extended: true, limit: '50mb' }));
 app.use(express.static(path.join(__dirname, 'public')));
 
 // Routes
@@ -186,9 +186,11 @@ app.get('/api/analyze/cleanup-suggestions', async (req, res) => {
 // Cleanup API Routes
 app.post('/api/cleanup/empty-directories', async (req, res) => {
   try {
+    console.log('Empty directories cleanup request received');
     const { directories } = req.body;
 
     if (!directories || !Array.isArray(directories)) {
+      console.error('Invalid request: directories array missing or not an array');
       return res.status(400).json({ success: false, error: 'Directories array required' });
     }
 
@@ -199,15 +201,18 @@ app.post('/api/cleanup/empty-directories', async (req, res) => {
 
     res.json(result);
   } catch (error) {
-    res.status(500).json({ success: false, error: error.message });
+    console.error('Error in empty directories cleanup:', error);
+    res.status(500).json({ success: false, error: error.message, stack: error.stack });
   }
 });
 
 app.post('/api/cleanup/subframe-directories', async (req, res) => {
   try {
+    console.log('Sub-frame cleanup request received');
     const { objects } = req.body;
 
     if (!objects || !Array.isArray(objects)) {
+      console.error('Invalid request: objects array missing or not an array');
       return res.status(400).json({ success: false, error: 'Objects array required' });
     }
 
@@ -218,7 +223,8 @@ app.post('/api/cleanup/subframe-directories', async (req, res) => {
 
     res.json(result);
   } catch (error) {
-    res.status(500).json({ success: false, error: error.message });
+    console.error('Error in sub-frame cleanup:', error);
+    res.status(500).json({ success: false, error: error.message, stack: error.stack });
   }
 });
 
