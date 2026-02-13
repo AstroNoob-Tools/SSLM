@@ -10,14 +10,22 @@
 - **Collection Statistics**: View total objects, file counts, storage usage, and date ranges at a glance
 - **Sidebar Navigation**: Quick access to all dashboard sections (Summary, File Types, Catalogs, Objects)
 - **Catalog Breakdown**: See your collection organized by astronomical catalogs (Messier, NGC, IC, SH)
+  - **Clickable Catalogs**: Click any catalog card to view catalog-specific details
+  - **Catalog Detail View**: Drill down into individual catalogs to see all objects and imaging sessions
+  - **Catalog Statistics**: View summary stats (objects, size, integration time) for each catalog
 - **File Type Analysis**: Detailed breakdown of .FIT files, JPGs, thumbnails, and videos
 - **Search & Filter**: Quickly find objects by name or catalog
 
 ### 🎯 Object Management
 - **Detailed Object View**: Complete information for each celestial object
+  - Click any object name to view comprehensive details
+  - Imaging sessions table with stacking counts, exposure times, and filters
+  - Exposure breakdown showing counts by exposure time for both stacked images and light frames
+  - Complete file lists for main and sub-frame folders with capture dates
 - **Sub-Frame Detection**: Automatically identifies objects with sub-frame directories
 - **Integration Time Tracking**: View total integration time per object
 - **Sub-Frame Statistics**: See breakdown of .fit files vs other files in sub-frame folders
+- **Visual Hover Effects**: Object names highlight on hover to indicate they're clickable
 
 ### 🧹 Cleanup & Optimization
 - **Empty Directory Cleanup**: Identify and delete empty directories safely
@@ -32,6 +40,10 @@
   - Removable drive support (E:\, F:\, etc.)
   - Network path support (\\seestar)
 - **Work with Local Copies**: Manage existing local astrophotography collections
+- **Favorite Folders**: Save frequently used directories for quick access
+  - Add folders to favorites with the ⭐ button
+  - One-click access from favorite list
+  - Remove favorites you no longer need
 - **Smart File Detection**: Automatically recognizes SeeStar file structure
   - Main object directories
   - Sub-frame directories (_sub folders)
@@ -101,8 +113,9 @@ npm run dev
 ### Work with Local Copy
 
 1. Select "Work with local copy"
-2. Browse to your existing SeeStar directory
-3. Dashboard loads immediately with collection statistics
+2. Choose from your favorite folders or browse to your existing SeeStar directory
+3. Add frequently used directories to favorites with the ⭐ button
+4. Dashboard loads immediately with collection statistics
 
 ### Dashboard Features
 
@@ -121,6 +134,8 @@ npm run dev
 
 **Catalogs Section**:
 - Breakdown by astronomical catalog (M, NGC, IC, SH)
+- Click any catalog to view detailed catalog page
+- Catalog-specific statistics and object lists
 
 **Empty Directories**:
 - List of empty directories
@@ -137,6 +152,12 @@ npm run dev
 - Integration time per object
 - Individual cleanup buttons
 - Total files and size per object
+- Clickable object names (with hover effects) to view detailed pages
+- Detailed object pages include:
+  - Imaging sessions table with dates, times, and stacking counts
+  - Exposure breakdown for both stacked images and light frames
+  - Complete file lists with capture timestamps
+  - Metadata including filters, exposures, and stacking counts
 
 ## 🗂️ Project Structure
 

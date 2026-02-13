@@ -10,10 +10,14 @@ SSLM (SeaStar Library Manager) is an application that manages astrophotography f
 - Clean up unnecessary files to optimize storage
 
 ### Current Development Phase
-**Phase 1**: Initial setup workflow and dashboard implementation
-- User selection: Import from SeeStar or use existing local copy
-- File import process with progress indication
-- Dashboard displaying aggregated collection statistics
+**Phase 1 - COMPLETE**: Initial setup workflow and dashboard implementation
+- ✅ User selection: Import from SeeStar or use existing local copy
+- ✅ File import process with progress indication
+- ✅ Interactive dashboard with collection statistics
+- ✅ Object detail pages with comprehensive metadata
+- ✅ Catalog detail pages for catalog-specific views
+- ✅ Cleanup operations for optimizing storage
+- ✅ Favorites system for quick folder access
 
 ## Domain Context
 
@@ -160,7 +164,10 @@ When the user has an existing local copy:
      - Estimated time remaining
 
 3. **Local Copy Selection** (if user chooses existing copy)
-   - Ask user: "Where is your local copy of the SeeStar content located?"
+   - Display list of favorite folders (if any)
+   - User can select from favorites for quick access
+   - Or browse for folder using folder browser
+   - Add frequently used folders to favorites with ⭐ button
    - Validate the selected directory contains expected SeeStar file structure
 
 4. **Dashboard Display**
@@ -284,3 +291,209 @@ Use this as a reference for testing and understanding actual file organization p
 - **Never write to or modify files on the SeeStar device**
 - All operations read-only on source, write to local destination only
 - Validate paths before copy operations to prevent accidental overwrites
+
+## Implemented Features (Phase 1 Complete)
+
+### Dashboard Features
+
+#### Main Dashboard View
+- **Summary Cards**: Display key statistics (total objects, with/without sub-frames, total size, total files, empty directories)
+- **Sidebar Navigation**: Smooth scrolling navigation to different dashboard sections
+- **File Type Breakdown**: Statistics for .FIT files, JPG files, thumbnails, and MP4 videos
+- **Catalog Breakdown**: Visual cards showing object counts by catalog (Messier, NGC, IC, Sharpless, etc.)
+  - Clickable catalog cards with hover effects
+  - Each catalog card displays icon, count, and catalog name
+- **Empty Directory Detection**: Identifies and lists empty directories with one-click cleanup
+- **Sub-Frame Cleanup**: Identifies JPG/thumbnail files in _sub directories that can be safely removed
+  - Global cleanup option (clean all objects at once)
+  - Individual cleanup option (clean specific objects)
+  - Space savings preview
+- **Objects Table**: Comprehensive table showing all objects with:
+  - Object name (clickable to view details)
+  - Catalog type
+  - Sub-frame presence indicator
+  - Sub-frame file breakdown (.fit vs other)
+  - Integration time per object
+  - Total files and size
+  - Individual cleanup buttons
+  - Search functionality to filter by name or catalog
+
+#### Catalog Detail View
+- **Clickable Catalogs**: Click any catalog card to view catalog-specific page
+- **Catalog Statistics**: Shows summary stats for selected catalog only
+  - Total objects in catalog
+  - Objects with/without sub-frames
+  - Total size and file count
+  - Total integration time
+- **Date Range**: First and latest capture dates for the catalog
+- **Filtered Objects Table**: Shows only objects from selected catalog
+- **Back Navigation**: Return to main dashboard with back button
+
+#### Object Detail View
+- **Clickable Objects**: Click any object name in tables to view detailed page
+- **Visual Hover Effects**: Object names highlight on hover to indicate they're clickable
+- **Comprehensive Metadata**:
+  - Stacking counts (number of sub-frames combined in each image)
+  - Exposure times used
+  - Filters used (IRCUT, LP, etc.)
+  - Integration time per object
+- **Exposure Breakdown**:
+  - Main folder: Count of stacked images by exposure time
+  - Sub-frames folder: Count of light frames by exposure time
+  - Visual cards showing exposure/count pairs
+- **Imaging Sessions Table**:
+  - Date and time of each imaging session
+  - Number of stacked frames
+  - Exposure time
+  - Filter used
+  - Total integration time per session
+- **File Lists**:
+  - Main folder files with capture dates
+  - Sub-frames folder files with capture dates
+  - Grouped by file type (.fit, .jpg, thumbnails, videos)
+  - Expandable sections for each file type
+- **Individual Cleanup**: Button to clean sub-frame directory for this object
+
+### Folder Selection & Favorites
+
+#### Favorites System
+- **Save Favorites**: Add frequently used folders to favorites list
+- **Favorite Display**: Shows list of favorite folders with:
+  - Folder icon
+  - Folder name
+  - Full path (truncated if too long)
+  - Remove button (✕) to delete from favorites
+- **Quick Access**: Click any favorite to instantly select it
+- **Visual Feedback**: Selected favorite highlights with border color change
+- **Persistence**: Favorites saved to config/settings.json
+- **API Endpoints**:
+  - GET /api/favorites - Retrieve all favorites
+  - POST /api/favorites/add - Add new favorite
+  - POST /api/favorites/remove - Remove favorite
+
+#### Folder Browser
+- **Drive Detection**: Automatically detects available drives (C:\, D:\, E:\, etc.)
+- **Common Paths**: Quick access to common directories (Desktop, Documents, etc.)
+- **Directory Navigation**: Browse subdirectories with up button
+- **Modal Interface**: Clean modal dialog for folder selection
+- **Path Display**: Shows current path while browsing
+
+### Cleanup Operations
+
+#### Empty Directory Cleanup
+- **Detection**: Automatically identifies empty directories during analysis
+- **Confirmation Dialog**: Shows count of directories to be deleted
+- **Batch Deletion**: Deletes all empty directories at once
+- **Progress Indicator**: Shows loading state during operation
+- **Result Report**: Shows success/failure count after operation
+- **Dashboard Refresh**: Automatically refreshes after cleanup
+
+#### Sub-Frame Cleanup
+- **Detection**: Identifies non-.fit files in _sub directories
+- **Space Calculation**: Shows estimated space to be freed
+- **Safety**: Only deletes JPG and thumbnail files, never touches .fit files
+- **Two Modes**:
+  - Global: Clean all sub-frame directories at once
+  - Individual: Clean specific object's sub-frame directory
+- **Confirmation Dialog**: Shows file count and affected objects
+- **Result Report**: Shows files deleted, space freed, success/failure counts
+- **Dashboard Refresh**: Automatically refreshes after cleanup
+
+### Data Analysis
+
+#### File Analyzer Service
+- **Directory Scanning**: Recursively scans SeeStar directory structure
+- **Object Detection**: Identifies object directories and their sub-frame pairs
+- **Catalog Parsing**: Extracts catalog information from directory names
+- **File Counting**: Counts files by type (.fit, .jpg, .mp4, thumbnails)
+- **Size Calculation**: Calculates total storage usage
+- **Date Range Extraction**: Finds oldest and newest captures from filenames
+- **Integration Time Calculation**: Computes total integration time from stacking counts and exposure times
+- **Light Frame Counting**: Counts individual light frames in sub-frame directories
+- **Metadata Extraction**: Parses filenames to extract:
+  - Stacking counts
+  - Exposure times
+  - Filters used
+  - Timestamps
+  - Object names
+
+### User Interface
+
+#### Visual Design
+- **Dark Theme**: Easy on the eyes for night-time use
+- **Responsive Layout**: Adapts to different screen sizes
+- **Color-Coded Elements**: Different colors for different data types
+- **Icon Usage**: Emojis used for visual identification
+- **Smooth Animations**: Transitions for hover effects and navigation
+- **Loading Indicators**: Spinner and loading text during operations
+- **Modal Dialogs**: Clean confirmation and result displays
+
+#### Navigation
+- **Screen Switching**: Smooth transitions between screens
+- **Back Buttons**: Clear navigation back to previous views
+- **Smooth Scrolling**: Animated scrolling to dashboard sections
+- **Sticky Sidebar**: Navigation sidebar remains visible while scrolling
+
+#### Interactions
+- **Hover Effects**: Visual feedback on clickable elements
+- **Search Filtering**: Real-time filtering of objects table
+- **Expandable Sections**: Click to expand/collapse file lists
+- **Button States**: Disabled states for unavailable actions
+- **Visual Feedback**: Border and background color changes on selection
+
+### Data Persistence
+
+#### Configuration Management
+- **Settings File**: config/settings.json stores user preferences
+- **Favorites Storage**: Favorites list persisted across sessions
+- **Server Configuration**: Port, host, and mode settings
+- **Path Memory**: Last used source and destination paths (for future incremental imports)
+
+### API Endpoints
+
+#### Analysis
+- GET /api/analyze?path={path} - Analyze directory and return statistics
+
+#### Favorites
+- GET /api/favorites - Get all favorites
+- POST /api/favorites/add - Add favorite (body: {path, name})
+- POST /api/favorites/remove - Remove favorite (body: {path})
+
+#### Cleanup
+- POST /api/cleanup/empty-directories - Delete empty directories (body: {directories})
+- POST /api/cleanup/subframe-directories - Clean sub-frame directories (body: {objects})
+- GET /api/cleanup/subframe-info?path={path} - Get sub-frame cleanup information
+
+#### Directory Browsing
+- GET /api/browse/drives - Get available drives and common paths
+- GET /api/browse/directory?path={path} - Get directory contents
+- GET /api/browse/validate?path={path}&checkMyWork={bool} - Validate path
+
+### Known Patterns & Parsing
+
+#### Filename Parsing
+- **Stacked Images**: `Stacked_{count}_{object}_{exposure}s_{filter}_{timestamp}.fit`
+- **DSO Stacked Images**: `DSO_Stacked_{count}_{object}_{exposure}s_{timestamp}.fit`
+- **Light Frames**: `Light_{object}_{exposure}s_{filter}_{timestamp}.fit`
+- **Timestamp Format**: YYYYMMDD-HHMMSS (e.g., 20250822-231258)
+- **Exposure Format**: Decimal seconds (e.g., 30.0s, 10.0s)
+- **Filters**: IRCUT (IR Cut filter), LP (Light Pollution filter)
+
+#### Directory Naming
+- **Main Directory**: Object name (e.g., "NGC 6729", "M 42")
+- **Sub-frame Directory**: Object name + "_sub" suffix (e.g., "NGC 6729_sub")
+- **Mosaic Variant**: Object name + "_mosaic" suffix (e.g., "M 45_mosaic")
+- **Special Characters**: Spaces, hyphens, and numbers in object names
+
+### Future Enhancement Ideas
+- Cross-platform support (macOS, Linux)
+- Windows installer package
+- Incremental import functionality (in progress)
+- File import with real-time progress tracking
+- Backup and restore features
+- Advanced filtering and sorting options
+- Export capabilities (CSV, reports)
+- Batch operations on multiple objects
+- Image preview/thumbnail display
+- Stacking quality metrics
+- Weather and seeing condition logging
