@@ -43,18 +43,59 @@ class ModeSelection {
         this.showLocalCopySelection();
     }
 
-    showLocalCopySelection() {
+    async showLocalCopySelection() {
         const localCopyContent = document.getElementById('localCopyContent');
         if (!localCopyContent) return;
+
+        // Load favorites
+        let favorites = [];
+        try {
+            const response = await fetch('/api/favorites');
+            const data = await response.json();
+            if (data.success) {
+                favorites = data.favorites;
+            }
+        } catch (error) {
+            console.error('Error loading favorites:', error);
+        }
 
         localCopyContent.innerHTML = `
             <div style="padding: 2rem;">
                 <p style="margin-bottom: 1.5rem; color: var(--text-secondary);">
                     Select the directory where your local copy of SeeStar files is located.
                 </p>
+
+                ${favorites.length > 0 ? `
+                    <div style="margin-bottom: 2rem;">
+                        <h3 style="font-size: 1rem; margin-bottom: 1rem; color: var(--text-secondary); display: flex; align-items: center; gap: 0.5rem;">
+                            ⭐ Favorite Folders
+                        </h3>
+                        <div id="favoritesList" style="display: flex; flex-direction: column; gap: 0.75rem;">
+                            ${favorites.map(fav => `
+                                <div class="favorite-item" data-path="${fav.path}"
+                                     style="display: flex; align-items: center; gap: 0.75rem; padding: 1rem;
+                                            background: var(--bg-card); border: 2px solid var(--border-color);
+                                            border-radius: 8px; cursor: pointer; transition: all 0.2s;">
+                                    <span style="font-size: 1.5rem;">📁</span>
+                                    <div style="flex: 1; min-width: 0;">
+                                        <div style="font-weight: 600; margin-bottom: 0.25rem;">${fav.name}</div>
+                                        <div style="font-size: 0.875rem; color: var(--text-secondary); font-family: monospace;
+                                                    overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">${fav.path}</div>
+                                    </div>
+                                    <button class="remove-favorite-btn" data-path="${fav.path}"
+                                            style="background: none; border: none; color: var(--text-secondary);
+                                                   cursor: pointer; padding: 0.5rem; font-size: 1.25rem;
+                                                   transition: color 0.2s;"
+                                            title="Remove from favorites">✕</button>
+                                </div>
+                            `).join('')}
+                        </div>
+                    </div>
+                ` : ''}
+
                 <div style="margin-bottom: 1.5rem;">
                     <label for="localPathInput" style="display: block; margin-bottom: 0.5rem; font-weight: 500;">
-                        Local Copy Path:
+                        Or Browse for a Folder:
                     </label>
                     <div style="display: flex; gap: 0.5rem;">
                         <input type="text"
@@ -66,6 +107,9 @@ class ModeSelection {
                                       border-radius: 8px; font-size: 1rem;">
                         <button class="btn btn-secondary" id="browseLocalBtn" style="padding: 0.75rem 1.5rem;">
                             📁 Browse
+                        </button>
+                        <button class="btn btn-secondary" id="addFavoriteBtn" style="padding: 0.75rem 1.5rem;" disabled title="Add to favorites">
+                            ⭐
                         </button>
                     </div>
                 </div>
@@ -84,7 +128,59 @@ class ModeSelection {
         const backBtn = document.getElementById('backToWelcomeBtn');
         const proceedBtn = document.getElementById('proceedLocalBtn');
         const browseBtn = document.getElementById('browseLocalBtn');
+        const addFavoriteBtn = document.getElementById('addFavoriteBtn');
         const pathInput = document.getElementById('localPathInput');
+
+        // Favorite items click handlers
+        const favoriteItems = document.querySelectorAll('.favorite-item');
+        favoriteItems.forEach(item => {
+            item.addEventListener('click', (e) => {
+                // Don't trigger if clicking the remove button
+                if (e.target.closest('.remove-favorite-btn')) return;
+
+                const path = item.getAttribute('data-path');
+                this.selectedPath = path;
+                pathInput.value = path;
+                proceedBtn.disabled = false;
+                addFavoriteBtn.disabled = false;
+
+                // Visual feedback
+                favoriteItems.forEach(fi => {
+                    fi.style.borderColor = 'var(--border-color)';
+                    fi.style.background = 'var(--bg-card)';
+                });
+                item.style.borderColor = 'var(--primary-color)';
+                item.style.background = 'var(--bg-secondary)';
+            });
+
+            // Hover effects
+            item.addEventListener('mouseenter', function() {
+                if (this.style.borderColor !== 'var(--primary-color)') {
+                    this.style.background = 'var(--bg-secondary)';
+                }
+            });
+            item.addEventListener('mouseleave', function() {
+                if (this.style.borderColor !== 'var(--primary-color)') {
+                    this.style.background = 'var(--bg-card)';
+                }
+            });
+        });
+
+        // Remove favorite buttons
+        const removeFavBtns = document.querySelectorAll('.remove-favorite-btn');
+        removeFavBtns.forEach(btn => {
+            btn.addEventListener('mouseenter', function() {
+                this.style.color = 'var(--danger-color)';
+            });
+            btn.addEventListener('mouseleave', function() {
+                this.style.color = 'var(--text-secondary)';
+            });
+            btn.addEventListener('click', async (e) => {
+                e.stopPropagation();
+                const path = btn.getAttribute('data-path');
+                await this.removeFavorite(path);
+            });
+        });
 
         if (backBtn) {
             backBtn.addEventListener('click', () => {
@@ -98,7 +194,16 @@ class ModeSelection {
                     this.selectedPath = selectedPath;
                     pathInput.value = selectedPath;
                     proceedBtn.disabled = false;
+                    addFavoriteBtn.disabled = false;
                 });
+            });
+        }
+
+        if (addFavoriteBtn) {
+            addFavoriteBtn.addEventListener('click', async () => {
+                if (this.selectedPath) {
+                    await this.addFavorite(this.selectedPath);
+                }
             });
         }
 
@@ -108,6 +213,50 @@ class ModeSelection {
                     this.proceedWithLocalPath(this.selectedPath);
                 }
             });
+        }
+    }
+
+    async addFavorite(path) {
+        try {
+            const pathName = path.split('\\').pop() || path;
+
+            const response = await fetch('/api/favorites/add', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ path, name: pathName })
+            });
+
+            const result = await response.json();
+
+            if (result.success) {
+                app.updateStatus('Added to favorites');
+                // Refresh the local copy selection screen
+                this.showLocalCopySelection();
+            }
+        } catch (error) {
+            console.error('Error adding favorite:', error);
+            app.showModal('Error', `<p>Failed to add favorite: ${error.message}</p>`, null, 'Close');
+        }
+    }
+
+    async removeFavorite(path) {
+        try {
+            const response = await fetch('/api/favorites/remove', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ path })
+            });
+
+            const result = await response.json();
+
+            if (result.success) {
+                app.updateStatus('Removed from favorites');
+                // Refresh the local copy selection screen
+                this.showLocalCopySelection();
+            }
+        } catch (error) {
+            console.error('Error removing favorite:', error);
+            app.showModal('Error', `<p>Failed to remove favorite: ${error.message}</p>`, null, 'Close');
         }
     }
 

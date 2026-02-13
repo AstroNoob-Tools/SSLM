@@ -75,6 +75,75 @@ app.post('/api/config', async (req, res) => {
   }
 });
 
+// Favorites API Routes
+app.get('/api/favorites', (req, res) => {
+  try {
+    const favorites = config.favorites || [];
+    res.json({ success: true, favorites });
+  } catch (error) {
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
+app.post('/api/favorites/add', async (req, res) => {
+  try {
+    const { path: favPath, name } = req.body;
+
+    if (!favPath) {
+      return res.status(400).json({ success: false, error: 'Path required' });
+    }
+
+    // Initialize favorites if not exists
+    if (!config.favorites) {
+      config.favorites = [];
+    }
+
+    // Check if already exists
+    const exists = config.favorites.some(fav => fav.path === favPath);
+    if (exists) {
+      return res.json({ success: true, message: 'Path already in favorites', favorites: config.favorites });
+    }
+
+    // Add to favorites
+    config.favorites.push({
+      path: favPath,
+      name: name || path.basename(favPath),
+      addedAt: new Date().toISOString()
+    });
+
+    // Save to file
+    await fs.writeJSON(configPath, config, { spaces: 2 });
+
+    res.json({ success: true, favorites: config.favorites });
+  } catch (error) {
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
+app.post('/api/favorites/remove', async (req, res) => {
+  try {
+    const { path: favPath } = req.body;
+
+    if (!favPath) {
+      return res.status(400).json({ success: false, error: 'Path required' });
+    }
+
+    if (!config.favorites) {
+      config.favorites = [];
+    }
+
+    // Remove from favorites
+    config.favorites = config.favorites.filter(fav => fav.path !== favPath);
+
+    // Save to file
+    await fs.writeJSON(configPath, config, { spaces: 2 });
+
+    res.json({ success: true, favorites: config.favorites });
+  } catch (error) {
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
 // Directory Browser API Routes
 app.get('/api/browse/drives', async (req, res) => {
   try {

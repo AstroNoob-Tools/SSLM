@@ -392,6 +392,7 @@ class Dashboard {
         const totalFiles = obj.mainFolder.fileCount + (obj.subFolder ? obj.subFolder.fileCount : 0);
         const totalSize = obj.mainFolder.size + (obj.subFolder ? obj.subFolder.size : 0);
         const bgColor = index % 2 === 0 ? 'transparent' : 'var(--bg-tertiary)';
+        const hoverBgColor = index % 2 === 0 ? 'var(--bg-tertiary)' : 'var(--bg-secondary)';
 
         // Count .fit and non-.fit files in sub-frame folder
         let subFitCount = 0;
@@ -401,36 +402,41 @@ class Dashboard {
             subOtherCount = obj.subFolder.files.filter(f => !f.endsWith('.fit')).length;
         }
 
+        const rowId = `object-row-${obj.name.replace(/\s+/g, '-')}`;
+
         return `
-            <tr class="object-row" data-object-name="${obj.name.toLowerCase()}" data-catalog="${obj.catalog.toLowerCase()}"
-                style="background: ${bgColor}; border-bottom: 1px solid var(--border-color); transition: background 0.2s;">
-                <td style="padding: 1rem;">
-                    <strong>${obj.displayName}</strong>
+            <tr class="object-row" id="${rowId}" data-object-name="${obj.name.toLowerCase()}" data-catalog="${obj.catalog.toLowerCase()}"
+                data-object-id="${obj.name}"
+                style="background: ${bgColor}; border-bottom: 1px solid var(--border-color); transition: all 0.2s; cursor: pointer;"
+                onmouseover="this.style.background='${hoverBgColor}'; this.style.borderLeftColor='var(--primary-color)'; this.style.borderLeftWidth='4px'; this.querySelector('.object-name').style.color='var(--primary-color)'; this.querySelector('.object-name').style.textDecoration='underline';"
+                onmouseout="this.style.background='${bgColor}'; this.style.borderLeftColor='var(--border-color)'; this.style.borderLeftWidth='0px'; this.querySelector('.object-name').style.color=''; this.querySelector('.object-name').style.textDecoration='none';">
+                <td style="padding: 1rem;" class="object-cell">
+                    <strong class="object-name" style="transition: all 0.2s;">${obj.displayName}</strong>
                     ${obj.isMosaic ? '<span style="font-size: 0.75rem; background: var(--accent-color); color: black; padding: 0.125rem 0.5rem; border-radius: 4px; margin-left: 0.5rem;">Mosaic</span>' : ''}
                 </td>
-                <td style="padding: 1rem; color: var(--text-secondary);">${obj.catalog}</td>
-                <td style="padding: 1rem; text-align: center;">
+                <td style="padding: 1rem; color: var(--text-secondary);" class="object-cell">${obj.catalog}</td>
+                <td style="padding: 1rem; text-align: center;" class="object-cell">
                     ${obj.hasSubFrames ? '<span style="color: var(--success-color);">✓</span>' : '<span style="color: var(--text-muted);">✗</span>'}
                 </td>
-                <td style="padding: 1rem; text-align: right; font-family: monospace; color: var(--text-secondary);">
+                <td style="padding: 1rem; text-align: right; font-family: monospace; color: var(--text-secondary);" class="object-cell">
                     ${obj.hasSubFrames ? subFitCount : '-'}
                 </td>
-                <td style="padding: 1rem; text-align: right; font-family: monospace; color: var(--text-secondary);">
+                <td style="padding: 1rem; text-align: right; font-family: monospace; color: var(--text-secondary);" class="object-cell">
                     ${obj.hasSubFrames ? subOtherCount : '-'}
                 </td>
-                <td style="padding: 1rem; text-align: right; font-family: monospace; color: var(--text-secondary);">
+                <td style="padding: 1rem; text-align: right; font-family: monospace; color: var(--text-secondary);" class="object-cell">
                     ${obj.totalIntegrationTime > 0 ? this.formatIntegrationTime(obj.totalIntegrationTime) : '-'}
                 </td>
-                <td style="padding: 1rem; text-align: right; font-family: monospace;">${totalFiles}</td>
-                <td style="padding: 1rem; text-align: right; font-family: monospace;">${app.formatBytes(totalSize)}</td>
+                <td style="padding: 1rem; text-align: right; font-family: monospace;" class="object-cell">${totalFiles}</td>
+                <td style="padding: 1rem; text-align: right; font-family: monospace;" class="object-cell">${app.formatBytes(totalSize)}</td>
                 <td style="padding: 1rem; text-align: center;">
                     ${obj.hasSubFrames && subOtherCount > 0 ? `
                         <button class="cleanup-object-btn" data-object-name="${obj.name}"
                                 style="background: var(--warning-color); color: white; border: none;
                                        border-radius: 6px; padding: 0.375rem 0.75rem; cursor: pointer;
                                        font-size: 0.875rem; font-weight: 600; transition: opacity 0.2s;"
-                                onmouseover="this.style.opacity='0.8'"
-                                onmouseout="this.style.opacity='1'"
+                                onmouseover="event.stopPropagation(); this.style.opacity='0.8';"
+                                onmouseout="event.stopPropagation(); this.style.opacity='1';"
                                 title="Clean up ${subOtherCount} non-.fit file${subOtherCount === 1 ? '' : 's'}">
                             🧹 Clean
                         </button>
@@ -471,6 +477,18 @@ class Dashboard {
                 const btn = e.target.closest('.cleanup-object-btn');
                 const objectName = btn.dataset.objectName;
                 this.handleCleanupObject(objectName);
+            }
+        });
+
+        // Object row click to view details (using event delegation)
+        document.addEventListener('click', (e) => {
+            const objectCell = e.target.closest('.object-cell');
+            if (objectCell) {
+                const row = objectCell.closest('.object-row');
+                if (row) {
+                    const objectId = row.dataset.objectId;
+                    this.showObjectDetail(objectId);
+                }
             }
         });
 
@@ -853,6 +871,508 @@ class Dashboard {
             app.hideLoading();
             console.error('Error refreshing dashboard:', error);
         }
+    }
+
+    // Object Detail View
+
+    showObjectDetail(objectId) {
+        if (!this.data || !this.data.objects) {
+            return;
+        }
+
+        const object = this.data.objects.find(obj => obj.name === objectId);
+        if (!object) {
+            return;
+        }
+
+        this.renderObjectDetail(object);
+
+        // Switch to object detail screen
+        app.showScreen('objectDetailScreen');
+    }
+
+    renderObjectDetail(obj) {
+        const detailContent = document.querySelector('.object-detail-content');
+        if (!detailContent) return;
+
+        const totalFiles = obj.mainFolder.fileCount + (obj.subFolder ? obj.subFolder.fileCount : 0);
+        const totalSize = obj.mainFolder.size + (obj.subFolder ? obj.subFolder.size : 0);
+
+        detailContent.innerHTML = `
+            <div class="object-detail" style="padding: 2rem; max-width: 1400px; margin: 0 auto;">
+                <!-- Header with Back Button -->
+                <div style="margin-bottom: 2rem;">
+                    <button id="backToDashboardBtn" class="btn" style="background: var(--bg-tertiary); color: var(--text-primary);
+                                   padding: 0.75rem 1.5rem; border: 2px solid var(--border-color); border-radius: 8px;
+                                   cursor: pointer; font-weight: 600; transition: all 0.2s; display: inline-flex;
+                                   align-items: center; gap: 0.5rem;"
+                                   onmouseover="this.style.background='var(--bg-secondary)'"
+                                   onmouseout="this.style.background='var(--bg-tertiary)'">
+                        ← Back to Dashboard
+                    </button>
+                </div>
+
+                <!-- Object Header -->
+                <div style="background: var(--bg-card); border-radius: 16px; padding: 2rem; margin-bottom: 2rem;">
+                    <div style="display: flex; justify-content: space-between; align-items: start; flex-wrap: wrap; gap: 2rem;">
+                        <div>
+                            <h1 style="font-size: 2.5rem; margin-bottom: 0.5rem;">
+                                ${obj.displayName}
+                                ${obj.isMosaic ? '<span style="font-size: 1rem; background: var(--accent-color); color: black; padding: 0.25rem 0.75rem; border-radius: 6px; margin-left: 1rem;">Mosaic</span>' : ''}
+                            </h1>
+                            <p style="color: var(--text-secondary); font-size: 1.125rem;">
+                                Catalog: <strong>${obj.catalog}</strong> ${obj.catalogNumber ? `· Number: <strong>${obj.catalogNumber}</strong>` : ''}
+                            </p>
+                        </div>
+                        <div style="text-align: right;">
+                            ${obj.hasSubFrames && obj.subFolder ? `
+                                <button class="cleanup-object-btn" data-object-name="${obj.name}"
+                                        style="background: var(--warning-color); color: white; border: none;
+                                               border-radius: 8px; padding: 0.75rem 1.5rem; cursor: pointer;
+                                               font-size: 1rem; font-weight: 600; transition: opacity 0.2s;"
+                                        onmouseover="this.style.opacity='0.8'"
+                                        onmouseout="this.style.opacity='1'">
+                                    🧹 Clean Up Sub-Frames
+                                </button>
+                            ` : ''}
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Summary Cards -->
+                <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 1.5rem; margin-bottom: 2rem;">
+                    ${this.renderSummaryCard('📄', 'Total Files', totalFiles, 'primary')}
+                    ${this.renderSummaryCard('💾', 'Total Size', app.formatBytes(totalSize), 'success')}
+                    ${this.renderSummaryCard('⏱️', 'Integration Time', obj.totalIntegrationTime > 0 ? this.formatIntegrationTime(obj.totalIntegrationTime) : '-', 'info')}
+                    ${this.renderSummaryCard('📦', 'Sub-Frames', obj.hasSubFrames ? 'Yes' : 'No', obj.hasSubFrames ? 'secondary' : 'accent')}
+                    ${obj.lightFrameCount > 0 ? this.renderSummaryCard('🌟', 'Light Frames', obj.lightFrameCount, 'warning') : ''}
+                </div>
+
+                <!-- Metadata -->
+                ${this.renderObjectMetadata(obj)}
+
+                <!-- Main Folder Details -->
+                <div style="background: var(--bg-card); border-radius: 16px; padding: 1.5rem; margin-bottom: 2rem;">
+                    <h3 style="margin-bottom: 1rem;">📁 Main Folder</h3>
+                    <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 1rem; margin-bottom: 1.5rem;">
+                        <div>
+                            <p style="color: var(--text-secondary); font-size: 0.875rem; margin-bottom: 0.25rem;">Location</p>
+                            <p style="font-family: monospace; font-size: 0.875rem; word-break: break-all;">${obj.mainFolder.path}</p>
+                        </div>
+                        <div>
+                            <p style="color: var(--text-secondary); font-size: 0.875rem; margin-bottom: 0.25rem;">Files</p>
+                            <p style="font-weight: 600;">${obj.mainFolder.fileCount}</p>
+                        </div>
+                        <div>
+                            <p style="color: var(--text-secondary); font-size: 0.875rem; margin-bottom: 0.25rem;">Size</p>
+                            <p style="font-weight: 600;">${app.formatBytes(obj.mainFolder.size)}</p>
+                        </div>
+                    </div>
+                    ${this.renderFileList(obj.mainFolder.files, 'Main Folder Files')}
+                </div>
+
+                <!-- Sub-Frames Folder Details -->
+                ${obj.hasSubFrames && obj.subFolder ? `
+                    <div style="background: var(--bg-card); border-radius: 16px; padding: 1.5rem; margin-bottom: 2rem;">
+                        <h3 style="margin-bottom: 1rem;">📦 Sub-Frames Folder</h3>
+                        <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 1rem; margin-bottom: 1.5rem;">
+                            <div>
+                                <p style="color: var(--text-secondary); font-size: 0.875rem; margin-bottom: 0.25rem;">Location</p>
+                                <p style="font-family: monospace; font-size: 0.875rem; word-break: break-all;">${obj.subFolder.path}</p>
+                            </div>
+                            <div>
+                                <p style="color: var(--text-secondary); font-size: 0.875rem; margin-bottom: 0.25rem;">Files</p>
+                                <p style="font-weight: 600;">${obj.subFolder.fileCount}</p>
+                            </div>
+                            <div>
+                                <p style="color: var(--text-secondary); font-size: 0.875rem; margin-bottom: 0.25rem;">Size</p>
+                                <p style="font-weight: 600;">${app.formatBytes(obj.subFolder.size)}</p>
+                            </div>
+                            <div>
+                                <p style="color: var(--text-secondary); font-size: 0.875rem; margin-bottom: 0.25rem;">.fit Files</p>
+                                <p style="font-weight: 600;">${obj.subFolder.files.filter(f => f.endsWith('.fit')).length}</p>
+                            </div>
+                            <div>
+                                <p style="color: var(--text-secondary); font-size: 0.875rem; margin-bottom: 0.25rem;">Other Files</p>
+                                <p style="font-weight: 600;">${obj.subFolder.files.filter(f => !f.endsWith('.fit')).length}</p>
+                            </div>
+                        </div>
+                        ${this.renderFileList(obj.subFolder.files, 'Sub-Frame Files')}
+                    </div>
+                ` : ''}
+            </div>
+        `;
+
+        // Add back button event listener
+        const backBtn = document.getElementById('backToDashboardBtn');
+        if (backBtn) {
+            backBtn.addEventListener('click', () => {
+                app.showScreen('dashboardScreen');
+            });
+        }
+    }
+
+    parseImagingSessions(obj) {
+        // Parse main folder files to extract imaging sessions
+        const sessions = [];
+        const mainFiles = obj.mainFolder.files.filter(f => f.startsWith('Stacked_') || f.startsWith('DSO_Stacked_'));
+
+        mainFiles.forEach(filename => {
+            // Extract: Stacked_210_NGC 6729_30.0s_IRCUT_20250822-231258.fit
+            const match = filename.match(/(?:DSO_)?Stacked_(\d+)_.*?_([\d.]+)s(?:_([A-Z]+))?_(\d{8}-\d{6})/);
+            if (match) {
+                const stackCount = parseInt(match[1]);
+                const exposure = parseFloat(match[2]);
+                const filter = match[3] || 'N/A';
+                const dateTimeStr = match[4]; // YYYYMMDD-HHMMSS
+
+                // Parse date
+                const year = dateTimeStr.substring(0, 4);
+                const month = dateTimeStr.substring(4, 6);
+                const day = dateTimeStr.substring(6, 8);
+                const hour = dateTimeStr.substring(9, 11);
+                const minute = dateTimeStr.substring(11, 13);
+
+                const date = new Date(`${year}-${month}-${day}T${hour}:${minute}`);
+                const dateStr = date.toLocaleDateString();
+                const timeStr = date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+
+                sessions.push({
+                    stackCount,
+                    exposure,
+                    filter,
+                    date: dateStr,
+                    time: timeStr,
+                    datetime: date,
+                    filename
+                });
+            }
+        });
+
+        // Sort by datetime
+        sessions.sort((a, b) => a.datetime - b.datetime);
+
+        return sessions;
+    }
+
+    renderObjectMetadata(obj) {
+        const sessions = this.parseImagingSessions(obj);
+
+        // Calculate exposure breakdown for stacked images (main folder)
+        const stackedExposureBreakdown = {};
+        sessions.forEach(session => {
+            const key = session.exposure;
+            if (!stackedExposureBreakdown[key]) {
+                stackedExposureBreakdown[key] = 0;
+            }
+            stackedExposureBreakdown[key]++;
+        });
+
+        // Calculate exposure breakdown for light frames (sub-folder)
+        const lightFrameExposureBreakdown = {};
+        if (obj.subFolder && obj.subFolder.files) {
+            obj.subFolder.files.forEach(filename => {
+                // Extract exposure from Light frames: Light_NGC 6729_30.0s_IRCUT_20250822-203353.fit
+                const match = filename.match(/Light_.*?_([\d.]+)s/);
+                if (match) {
+                    const exposure = parseFloat(match[1]);
+                    if (!lightFrameExposureBreakdown[exposure]) {
+                        lightFrameExposureBreakdown[exposure] = 0;
+                    }
+                    lightFrameExposureBreakdown[exposure]++;
+                }
+            });
+        }
+
+        // Basic metadata
+        const metadata = [];
+
+        if (obj.stackingCounts && obj.stackingCounts.length > 0) {
+            metadata.push({
+                label: 'Stacking Counts',
+                value: obj.stackingCounts.sort((a, b) => a - b).join(', '),
+                help: 'Number of sub-frames stacked in each final image. Higher counts typically mean better image quality.'
+            });
+        }
+
+        if (obj.exposures && obj.exposures.length > 0) {
+            metadata.push({
+                label: 'Exposures',
+                value: obj.exposures.sort((a, b) => a - b).map(e => `${e}s`).join(', '),
+                help: 'Exposure time per individual sub-frame.'
+            });
+        }
+
+        if (obj.filters && obj.filters.length > 0) {
+            metadata.push({
+                label: 'Filters',
+                value: obj.filters.join(', '),
+                help: 'Optical filters used during capture (IRCUT = IR Cut filter, LP = Light Pollution filter).'
+            });
+        }
+
+        if (metadata.length === 0 && sessions.length === 0) {
+            return '';
+        }
+
+        return `
+            <div style="background: var(--bg-card); border-radius: 16px; padding: 1.5rem; margin-bottom: 2rem;">
+                <h3 style="margin-bottom: 1rem;">📊 Metadata</h3>
+
+                ${metadata.length > 0 ? `
+                    <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap: 1rem; margin-bottom: ${sessions.length > 0 || Object.keys(stackedExposureBreakdown).length > 0 || Object.keys(lightFrameExposureBreakdown).length > 0 ? '1.5rem' : '0'};">
+                        ${metadata.map(item => `
+                            <div>
+                                <p style="color: var(--text-secondary); font-size: 0.875rem; margin-bottom: 0.5rem;">
+                                    ${item.label}
+                                    ${item.help ? `<span style="cursor: help;" title="${item.help}">ℹ️</span>` : ''}
+                                </p>
+                                <p style="font-weight: 600;">${item.value}</p>
+                            </div>
+                        `).join('')}
+                    </div>
+                ` : ''}
+
+                ${Object.keys(stackedExposureBreakdown).length > 0 || Object.keys(lightFrameExposureBreakdown).length > 0 ? `
+                    <div style="margin-bottom: ${sessions.length > 0 ? '1.5rem' : '0'};">
+                        <h4 style="margin-bottom: 1rem; color: var(--text-secondary); font-size: 0.875rem; text-transform: uppercase;">
+                            Exposure Breakdown
+                        </h4>
+
+                        ${Object.keys(stackedExposureBreakdown).length > 0 ? `
+                            <div style="margin-bottom: ${Object.keys(lightFrameExposureBreakdown).length > 0 ? '1rem' : '0'};">
+                                <h5 style="font-size: 0.875rem; color: var(--text-secondary); margin-bottom: 0.75rem;">
+                                    Main Folder - Stacked Images
+                                    <span style="cursor: help;" title="Number of stacked images at each exposure time">ℹ️</span>
+                                </h5>
+                                <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 1rem;">
+                                    ${Object.entries(stackedExposureBreakdown)
+                                        .sort((a, b) => parseFloat(a[0]) - parseFloat(b[0]))
+                                        .map(([exposure, count]) => `
+                                            <div style="background: var(--bg-tertiary); padding: 1rem; border-radius: 8px; display: flex; justify-content: space-between; align-items: center;">
+                                                <div>
+                                                    <div style="font-size: 0.875rem; color: var(--text-secondary); margin-bottom: 0.25rem;">Exposure</div>
+                                                    <div style="font-size: 1.25rem; font-weight: 600; color: var(--primary-color);">${exposure}s</div>
+                                                </div>
+                                                <div style="text-align: right;">
+                                                    <div style="font-size: 0.875rem; color: var(--text-secondary); margin-bottom: 0.25rem;">Images</div>
+                                                    <div style="font-size: 1.25rem; font-weight: 600;">${count}</div>
+                                                </div>
+                                            </div>
+                                        `).join('')}
+                                </div>
+                            </div>
+                        ` : ''}
+
+                        ${Object.keys(lightFrameExposureBreakdown).length > 0 ? `
+                            <div>
+                                <h5 style="font-size: 0.875rem; color: var(--text-secondary); margin-bottom: 0.75rem;">
+                                    Sub-Frames Folder - Light Frames
+                                    <span style="cursor: help;" title="Number of individual light frames at each exposure time">ℹ️</span>
+                                </h5>
+                                <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 1rem;">
+                                    ${Object.entries(lightFrameExposureBreakdown)
+                                        .sort((a, b) => parseFloat(a[0]) - parseFloat(b[0]))
+                                        .map(([exposure, count]) => `
+                                            <div style="background: var(--bg-tertiary); padding: 1rem; border-radius: 8px; display: flex; justify-content: space-between; align-items: center;">
+                                                <div>
+                                                    <div style="font-size: 0.875rem; color: var(--text-secondary); margin-bottom: 0.25rem;">Exposure</div>
+                                                    <div style="font-size: 1.25rem; font-weight: 600; color: var(--success-color);">${exposure}s</div>
+                                                </div>
+                                                <div style="text-align: right;">
+                                                    <div style="font-size: 0.875rem; color: var(--text-secondary); margin-bottom: 0.25rem;">Frames</div>
+                                                    <div style="font-size: 1.25rem; font-weight: 600;">${count}</div>
+                                                </div>
+                                            </div>
+                                        `).join('')}
+                                </div>
+                            </div>
+                        ` : ''}
+                    </div>
+                ` : ''}
+
+                ${sessions.length > 0 ? `
+                    <div>
+                        <h4 style="margin-bottom: 1rem; color: var(--text-secondary); font-size: 0.875rem; text-transform: uppercase;">
+                            Imaging Sessions (${sessions.length})
+                        </h4>
+                        <div style="max-height: 300px; overflow-y: auto;">
+                            <table style="width: 100%; border-collapse: collapse;">
+                                <thead>
+                                    <tr style="background: var(--bg-tertiary); border-bottom: 2px solid var(--border-color);">
+                                        <th style="padding: 0.75rem; text-align: left; font-size: 0.875rem;">Date</th>
+                                        <th style="padding: 0.75rem; text-align: left; font-size: 0.875rem;">Time</th>
+                                        <th style="padding: 0.75rem; text-align: right; font-size: 0.875rem;">Stacked Frames</th>
+                                        <th style="padding: 0.75rem; text-align: right; font-size: 0.875rem;">Exposure</th>
+                                        <th style="padding: 0.75rem; text-align: center; font-size: 0.875rem;">Filter</th>
+                                        <th style="padding: 0.75rem; text-align: right; font-size: 0.875rem;">Total Integration</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    ${sessions.map((session, idx) => {
+                                        const totalIntegration = session.stackCount * session.exposure;
+                                        const bgColor = idx % 2 === 0 ? 'transparent' : 'var(--bg-tertiary)';
+                                        return `
+                                            <tr style="background: ${bgColor}; border-bottom: 1px solid var(--border-color);">
+                                                <td style="padding: 0.75rem; font-family: monospace; font-size: 0.875rem;">${session.date}</td>
+                                                <td style="padding: 0.75rem; font-family: monospace; font-size: 0.875rem;">${session.time}</td>
+                                                <td style="padding: 0.75rem; text-align: right; font-family: monospace; font-size: 0.875rem; font-weight: 600; color: var(--primary-color);">${session.stackCount}</td>
+                                                <td style="padding: 0.75rem; text-align: right; font-family: monospace; font-size: 0.875rem;">${session.exposure}s</td>
+                                                <td style="padding: 0.75rem; text-align: center; font-size: 0.875rem;">
+                                                    <span style="background: var(--bg-secondary); padding: 0.25rem 0.5rem; border-radius: 4px; font-size: 0.75rem;">${session.filter}</span>
+                                                </td>
+                                                <td style="padding: 0.75rem; text-align: right; font-family: monospace; font-size: 0.875rem; color: var(--success-color); font-weight: 600;">
+                                                    ${this.formatIntegrationTime(totalIntegration)}
+                                                </td>
+                                            </tr>
+                                        `;
+                                    }).join('')}
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                ` : ''}
+            </div>
+        `;
+    }
+
+    extractCaptureDate(filename) {
+        // Extract date from filename in format YYYYMMDD-HHMMSS
+        // Example: "Stacked_210_NGC 6729_30.0s_IRCUT_20250822-231258.fit"
+        const dateMatch = filename.match(/(\d{8})-(\d{6})/);
+        if (dateMatch) {
+            const dateStr = dateMatch[1]; // YYYYMMDD
+            const timeStr = dateMatch[2]; // HHMMSS
+
+            const year = dateStr.substring(0, 4);
+            const month = dateStr.substring(4, 6);
+            const day = dateStr.substring(6, 8);
+            const hour = timeStr.substring(0, 2);
+            const minute = timeStr.substring(2, 4);
+            const second = timeStr.substring(4, 6);
+
+            const date = new Date(`${year}-${month}-${day}T${hour}:${minute}:${second}`);
+            return date.toLocaleString();
+        }
+        return null;
+    }
+
+    renderFileList(files, title) {
+        if (!files || files.length === 0) {
+            return '';
+        }
+
+        // Group files by type
+        const fitFiles = files.filter(f => f.endsWith('.fit'));
+        const jpgFiles = files.filter(f => f.endsWith('.jpg') && !f.endsWith('_thn.jpg'));
+        const thnFiles = files.filter(f => f.endsWith('_thn.jpg'));
+        const mp4Files = files.filter(f => f.endsWith('.mp4'));
+        const otherFiles = files.filter(f =>
+            !f.endsWith('.fit') &&
+            !f.endsWith('.jpg') &&
+            !f.endsWith('.mp4')
+        );
+
+        return `
+            <details style="cursor: pointer;">
+                <summary style="padding: 0.75rem 1rem; background: var(--bg-tertiary); border-radius: 8px;
+                                user-select: none; font-weight: 600;">
+                    ${title} (${files.length})
+                </summary>
+                <div style="margin-top: 1rem; max-height: 400px; overflow-y: auto;">
+                    ${fitFiles.length > 0 ? `
+                        <div style="margin-bottom: 1rem;">
+                            <h4 style="font-size: 0.875rem; color: var(--text-secondary); margin-bottom: 0.5rem;">
+                                .FIT Files (${fitFiles.length})
+                            </h4>
+                            ${fitFiles.map(file => {
+                                const captureDate = this.extractCaptureDate(file);
+                                return `
+                                    <div style="padding: 0.5rem; border-bottom: 1px solid var(--border-color);
+                                                font-family: monospace; font-size: 0.875rem; display: flex;
+                                                justify-content: space-between; align-items: center; gap: 1rem;">
+                                        <span style="flex: 1; word-break: break-all;">${file}</span>
+                                        ${captureDate ? `<span style="color: var(--text-secondary); font-size: 0.75rem; white-space: nowrap;">${captureDate}</span>` : ''}
+                                    </div>
+                                `;
+                            }).join('')}
+                        </div>
+                    ` : ''}
+                    ${jpgFiles.length > 0 ? `
+                        <div style="margin-bottom: 1rem;">
+                            <h4 style="font-size: 0.875rem; color: var(--text-secondary); margin-bottom: 0.5rem;">
+                                .JPG Files (${jpgFiles.length})
+                            </h4>
+                            ${jpgFiles.map(file => {
+                                const captureDate = this.extractCaptureDate(file);
+                                return `
+                                    <div style="padding: 0.5rem; border-bottom: 1px solid var(--border-color);
+                                                font-family: monospace; font-size: 0.875rem; display: flex;
+                                                justify-content: space-between; align-items: center; gap: 1rem;">
+                                        <span style="flex: 1; word-break: break-all;">${file}</span>
+                                        ${captureDate ? `<span style="color: var(--text-secondary); font-size: 0.75rem; white-space: nowrap;">${captureDate}</span>` : ''}
+                                    </div>
+                                `;
+                            }).join('')}
+                        </div>
+                    ` : ''}
+                    ${thnFiles.length > 0 ? `
+                        <div style="margin-bottom: 1rem;">
+                            <h4 style="font-size: 0.875rem; color: var(--text-secondary); margin-bottom: 0.5rem;">
+                                Thumbnails (${thnFiles.length})
+                            </h4>
+                            ${thnFiles.map(file => {
+                                const captureDate = this.extractCaptureDate(file);
+                                return `
+                                    <div style="padding: 0.5rem; border-bottom: 1px solid var(--border-color);
+                                                font-family: monospace; font-size: 0.875rem; display: flex;
+                                                justify-content: space-between; align-items: center; gap: 1rem;">
+                                        <span style="flex: 1; word-break: break-all;">${file}</span>
+                                        ${captureDate ? `<span style="color: var(--text-secondary); font-size: 0.75rem; white-space: nowrap;">${captureDate}</span>` : ''}
+                                    </div>
+                                `;
+                            }).join('')}
+                        </div>
+                    ` : ''}
+                    ${mp4Files.length > 0 ? `
+                        <div style="margin-bottom: 1rem;">
+                            <h4 style="font-size: 0.875rem; color: var(--text-secondary); margin-bottom: 0.5rem;">
+                                Videos (${mp4Files.length})
+                            </h4>
+                            ${mp4Files.map(file => {
+                                const captureDate = this.extractCaptureDate(file);
+                                return `
+                                    <div style="padding: 0.5rem; border-bottom: 1px solid var(--border-color);
+                                                font-family: monospace; font-size: 0.875rem; display: flex;
+                                                justify-content: space-between; align-items: center; gap: 1rem;">
+                                        <span style="flex: 1; word-break: break-all;">${file}</span>
+                                        ${captureDate ? `<span style="color: var(--text-secondary); font-size: 0.75rem; white-space: nowrap;">${captureDate}</span>` : ''}
+                                    </div>
+                                `;
+                            }).join('')}
+                        </div>
+                    ` : ''}
+                    ${otherFiles.length > 0 ? `
+                        <div style="margin-bottom: 1rem;">
+                            <h4 style="font-size: 0.875rem; color: var(--text-secondary); margin-bottom: 0.5rem;">
+                                Other Files (${otherFiles.length})
+                            </h4>
+                            ${otherFiles.map(file => {
+                                const captureDate = this.extractCaptureDate(file);
+                                return `
+                                    <div style="padding: 0.5rem; border-bottom: 1px solid var(--border-color);
+                                                font-family: monospace; font-size: 0.875rem; display: flex;
+                                                justify-content: space-between; align-items: center; gap: 1rem;">
+                                        <span style="flex: 1; word-break: break-all;">${file}</span>
+                                        ${captureDate ? `<span style="color: var(--text-secondary); font-size: 0.75rem; white-space: nowrap;">${captureDate}</span>` : ''}
+                                    </div>
+                                `;
+                            }).join('')}
+                        </div>
+                    ` : ''}
+                </div>
+            </details>
+        `;
     }
 }
 
