@@ -24,50 +24,92 @@ class Dashboard {
         const { summary, catalogBreakdown, objects, emptyDirectories, dateRange } = this.data;
 
         dashboardContent.innerHTML = `
-            <div class="dashboard">
-                <!-- Header -->
-                <div class="dashboard-header" style="margin-bottom: 2rem;">
-                    <h2 style="font-size: 2rem; margin-bottom: 0.5rem;">📊 Collection Dashboard</h2>
-                    <p style="color: var(--text-secondary);">
-                        ${this.data.path}
-                    </p>
-                </div>
+            <div class="dashboard" style="display: flex; gap: 2rem; position: relative;">
+                <!-- Left Sidebar Navigation -->
+                <aside class="dashboard-nav" style="width: 220px; position: sticky; top: 5rem; align-self: flex-start; max-height: calc(100vh - 8rem); overflow-y: auto;">
+                    <h3 style="font-size: 1rem; margin-bottom: 1rem; color: var(--text-secondary); text-transform: uppercase; font-weight: 600;">Navigation</h3>
+                    <nav style="display: flex; flex-direction: column; gap: 0.5rem;">
+                        <a href="#summary" class="nav-link" style="padding: 0.75rem 1rem; background: var(--bg-tertiary); border-radius: 8px; text-decoration: none; color: var(--text-primary); transition: all 0.2s; display: flex; align-items: center; gap: 0.5rem;">
+                            <span>📊</span> Summary
+                        </a>
+                        <a href="#file-types" class="nav-link" style="padding: 0.75rem 1rem; background: var(--bg-tertiary); border-radius: 8px; text-decoration: none; color: var(--text-primary); transition: all 0.2s; display: flex; align-items: center; gap: 0.5rem;">
+                            <span>📄</span> File Types
+                        </a>
+                        <a href="#catalogs" class="nav-link" style="padding: 0.75rem 1rem; background: var(--bg-tertiary); border-radius: 8px; text-decoration: none; color: var(--text-primary); transition: all 0.2s; display: flex; align-items: center; gap: 0.5rem;">
+                            <span>📚</span> Catalogs
+                        </a>
+                        ${emptyDirectories && emptyDirectories.length > 0 ? `
+                        <a href="#empty-dirs" class="nav-link" style="padding: 0.75rem 1rem; background: var(--bg-tertiary); border-radius: 8px; text-decoration: none; color: var(--text-primary); transition: all 0.2s; display: flex; align-items: center; gap: 0.5rem;">
+                            <span>⚠️</span> Empty Dirs
+                        </a>
+                        ` : ''}
+                        ${this.hasSubFrameCleanup(objects) ? `
+                        <a href="#cleanup" class="nav-link" style="padding: 0.75rem 1rem; background: var(--bg-tertiary); border-radius: 8px; text-decoration: none; color: var(--text-primary); transition: all 0.2s; display: flex; align-items: center; gap: 0.5rem;">
+                            <span>🧹</span> Cleanup
+                        </a>
+                        ` : ''}
+                        <a href="#objects" class="nav-link" style="padding: 0.75rem 1rem; background: var(--bg-tertiary); border-radius: 8px; text-decoration: none; color: var(--text-primary); transition: all 0.2s; display: flex; align-items: center; gap: 0.5rem;">
+                            <span>🎯</span> Objects
+                        </a>
+                    </nav>
+                </aside>
 
-                <!-- Summary Cards -->
-                <div class="summary-cards" style="display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 1.5rem; margin-bottom: 2rem;">
-                    ${this.renderSummaryCard('🎯', 'Total Objects', summary.totalObjects, 'primary')}
-                    ${this.renderSummaryCard('📦', 'With Sub-Frames', summary.withSubFrames, 'secondary')}
-                    ${this.renderSummaryCard('📁', 'Without Sub-Frames', summary.withoutSubFrames, 'accent')}
-                    ${this.renderSummaryCard('💾', 'Total Size', summary.totalSizeFormatted, 'success')}
-                    ${this.renderSummaryCard('📄', 'Total Files', summary.totalFiles, 'info')}
-                    ${summary.emptyDirectories > 0 ? this.renderSummaryCard('⚠️', 'Empty Folders', summary.emptyDirectories, 'warning') : ''}
-                </div>
-
-                <!-- File Type Breakdown -->
-                <div class="file-breakdown" style="background: var(--bg-card); border-radius: 16px; padding: 1.5rem; margin-bottom: 2rem;">
-                    <h3 style="margin-bottom: 1rem;">📊 File Types</h3>
-                    <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 1rem;">
-                        ${this.renderFileStat('.FIT Files', summary.fitFiles)}
-                        ${this.renderFileStat('.JPG Files', summary.jpgFiles)}
-                        ${summary.mp4Files > 0 ? this.renderFileStat('🎥 Videos (.MP4)', summary.mp4Files) : ''}
-                        ${this.renderFileStat('Thumbnails', summary.thumbnails)}
+                <!-- Main Content -->
+                <div class="dashboard-main" style="flex: 1; min-width: 0;">
+                    <!-- Header -->
+                    <div class="dashboard-header" style="margin-bottom: 2rem; display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 1rem;">
+                        <div>
+                            <h2 style="font-size: 2rem; margin-bottom: 0.5rem;">📊 Collection Dashboard</h2>
+                            <p style="color: var(--text-secondary); font-size: 0.875rem;">
+                                ${this.data.path}
+                            </p>
+                        </div>
+                        ${dateRange.oldest && dateRange.newest ? this.renderDateRangeInline(dateRange) : ''}
                     </div>
+
+                    <!-- Summary Cards -->
+                    <section id="summary" style="scroll-margin-top: 100px;">
+                        <div class="summary-cards" style="display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 1.5rem; margin-bottom: 2rem;">
+                            ${this.renderSummaryCard('🎯', 'Total Objects', summary.totalObjects, 'primary')}
+                            ${this.renderSummaryCard('📦', 'With Sub-Frames', summary.withSubFrames, 'secondary')}
+                            ${this.renderSummaryCard('📁', 'Without Sub-Frames', summary.withoutSubFrames, 'accent')}
+                            ${this.renderSummaryCard('💾', 'Total Size', summary.totalSizeFormatted, 'success')}
+                            ${this.renderSummaryCard('📄', 'Total Files', summary.totalFiles, 'info')}
+                            ${summary.emptyDirectories > 0 ? this.renderSummaryCard('⚠️', 'Empty Folders', summary.emptyDirectories, 'warning') : ''}
+                        </div>
+                    </section>
+
+                    <!-- File Type Breakdown -->
+                    <section id="file-types" style="scroll-margin-top: 100px;">
+                        <div class="file-breakdown" style="background: var(--bg-card); border-radius: 16px; padding: 1.5rem; margin-bottom: 2rem;">
+                            <h3 style="margin-bottom: 1rem;">📊 File Types</h3>
+                            <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 1rem;">
+                                ${this.renderFileStat('.FIT Files', summary.fitFiles)}
+                                ${this.renderFileStat('.JPG Files', summary.jpgFiles)}
+                                ${summary.mp4Files > 0 ? this.renderFileStat('🎥 Videos (.MP4)', summary.mp4Files) : ''}
+                                ${this.renderFileStat('Thumbnails', summary.thumbnails)}
+                            </div>
+                        </div>
+                    </section>
+
+                    <!-- Catalog Breakdown -->
+                    <section id="catalogs" style="scroll-margin-top: 100px;">
+                        ${this.renderCatalogBreakdown(catalogBreakdown)}
+                    </section>
+
+                    <!-- Empty Directories Warning -->
+                    ${emptyDirectories && emptyDirectories.length > 0 ? `<section id="empty-dirs" style="scroll-margin-top: 100px;">${this.renderEmptyDirectories(emptyDirectories)}</section>` : ''}
+
+                    <!-- Sub-Frame Cleanup Section -->
+                    <section id="cleanup" style="scroll-margin-top: 100px;">
+                        ${this.renderSubFrameCleanup(objects)}
+                    </section>
+
+                    <!-- Objects List -->
+                    <section id="objects" style="scroll-margin-top: 100px;">
+                        ${this.renderObjectsList(objects)}
+                    </section>
                 </div>
-
-                <!-- Catalog Breakdown -->
-                ${this.renderCatalogBreakdown(catalogBreakdown)}
-
-                <!-- Date Range -->
-                ${dateRange.oldest && dateRange.newest ? this.renderDateRange(dateRange) : ''}
-
-                <!-- Empty Directories Warning -->
-                ${emptyDirectories && emptyDirectories.length > 0 ? this.renderEmptyDirectories(emptyDirectories) : ''}
-
-                <!-- Sub-Frame Cleanup Section -->
-                ${this.renderSubFrameCleanup(objects)}
-
-                <!-- Objects List -->
-                ${this.renderObjectsList(objects)}
             </div>
         `;
 
@@ -135,25 +177,35 @@ class Dashboard {
         `;
     }
 
-    renderDateRange(dateRange) {
+    renderDateRangeInline(dateRange) {
         const oldest = new Date(dateRange.oldest);
         const newest = new Date(dateRange.newest);
 
         return `
-            <div class="date-range" style="background: var(--bg-card); border-radius: 16px; padding: 1.5rem; margin-bottom: 2rem;">
-                <h3 style="margin-bottom: 1rem;">📅 Date Range</h3>
-                <div style="display: flex; justify-content: space-around; flex-wrap: wrap; gap: 2rem;">
-                    <div style="text-align: center;">
-                        <div style="font-size: 0.875rem; color: var(--text-secondary); margin-bottom: 0.5rem;">Oldest Capture</div>
-                        <div style="font-size: 1.25rem; font-weight: 600;">${oldest.toLocaleDateString()}</div>
-                    </div>
-                    <div style="text-align: center;">
-                        <div style="font-size: 0.875rem; color: var(--text-secondary); margin-bottom: 0.5rem;">Newest Capture</div>
-                        <div style="font-size: 1.25rem; font-weight: 600;">${newest.toLocaleDateString()}</div>
-                    </div>
+            <div class="date-range-inline" style="display: flex; gap: 2rem; flex-wrap: wrap; align-items: center;">
+                <div style="display: flex; align-items: center; gap: 0.5rem;">
+                    <span style="font-size: 0.875rem; color: var(--text-secondary);">From:</span>
+                    <span style="font-size: 0.875rem; font-weight: 600;">${oldest.toLocaleDateString()}</span>
+                </div>
+                <div style="display: flex; align-items: center; gap: 0.5rem;">
+                    <span style="font-size: 0.875rem; color: var(--text-secondary);">To:</span>
+                    <span style="font-size: 0.875rem; font-weight: 600;">${newest.toLocaleDateString()}</span>
                 </div>
             </div>
         `;
+    }
+
+    hasSubFrameCleanup(objects) {
+        const objectsWithSubFrames = objects.filter(obj => obj.hasSubFrames);
+        if (objectsWithSubFrames.length === 0) return false;
+
+        for (const obj of objectsWithSubFrames) {
+            if (obj.subFolder) {
+                const nonFitFiles = obj.subFolder.files.filter(f => !f.endsWith('.fit'));
+                if (nonFitFiles.length > 0) return true;
+            }
+        }
+        return false;
     }
 
     renderEmptyDirectories(emptyDirectories) {
@@ -321,9 +373,12 @@ class Dashboard {
                         <th style="padding: 1rem; text-align: left;">Object</th>
                         <th style="padding: 1rem; text-align: left;">Catalog</th>
                         <th style="padding: 1rem; text-align: center;">Sub-Frames</th>
+                        <th style="padding: 1rem; text-align: right;">Sub .fit</th>
+                        <th style="padding: 1rem; text-align: right;">Sub Other</th>
                         <th style="padding: 1rem; text-align: right;">Integration</th>
-                        <th style="padding: 1rem; text-align: right;">Files</th>
-                        <th style="padding: 1rem; text-align: right;">Size</th>
+                        <th style="padding: 1rem; text-align: right;">Total Files</th>
+                        <th style="padding: 1rem; text-align: right;">Total Size</th>
+                        <th style="padding: 1rem; text-align: center;">Actions</th>
                     </tr>
                 </thead>
                 <tbody>
@@ -338,11 +393,17 @@ class Dashboard {
         const totalSize = obj.mainFolder.size + (obj.subFolder ? obj.subFolder.size : 0);
         const bgColor = index % 2 === 0 ? 'transparent' : 'var(--bg-tertiary)';
 
+        // Count .fit and non-.fit files in sub-frame folder
+        let subFitCount = 0;
+        let subOtherCount = 0;
+        if (obj.subFolder) {
+            subFitCount = obj.subFolder.files.filter(f => f.endsWith('.fit')).length;
+            subOtherCount = obj.subFolder.files.filter(f => !f.endsWith('.fit')).length;
+        }
+
         return `
             <tr class="object-row" data-object-name="${obj.name.toLowerCase()}" data-catalog="${obj.catalog.toLowerCase()}"
-                style="background: ${bgColor}; border-bottom: 1px solid var(--border-color); cursor: pointer; transition: background 0.2s;"
-                onmouseenter="this.style.background='var(--bg-secondary)'"
-                onmouseleave="this.style.background='${bgColor}'">
+                style="background: ${bgColor}; border-bottom: 1px solid var(--border-color); transition: background 0.2s;">
                 <td style="padding: 1rem;">
                     <strong>${obj.displayName}</strong>
                     ${obj.isMosaic ? '<span style="font-size: 0.75rem; background: var(--accent-color); color: black; padding: 0.125rem 0.5rem; border-radius: 4px; margin-left: 0.5rem;">Mosaic</span>' : ''}
@@ -352,10 +413,29 @@ class Dashboard {
                     ${obj.hasSubFrames ? '<span style="color: var(--success-color);">✓</span>' : '<span style="color: var(--text-muted);">✗</span>'}
                 </td>
                 <td style="padding: 1rem; text-align: right; font-family: monospace; color: var(--text-secondary);">
+                    ${obj.hasSubFrames ? subFitCount : '-'}
+                </td>
+                <td style="padding: 1rem; text-align: right; font-family: monospace; color: var(--text-secondary);">
+                    ${obj.hasSubFrames ? subOtherCount : '-'}
+                </td>
+                <td style="padding: 1rem; text-align: right; font-family: monospace; color: var(--text-secondary);">
                     ${obj.totalIntegrationTime > 0 ? this.formatIntegrationTime(obj.totalIntegrationTime) : '-'}
                 </td>
                 <td style="padding: 1rem; text-align: right; font-family: monospace;">${totalFiles}</td>
                 <td style="padding: 1rem; text-align: right; font-family: monospace;">${app.formatBytes(totalSize)}</td>
+                <td style="padding: 1rem; text-align: center;">
+                    ${obj.hasSubFrames && subOtherCount > 0 ? `
+                        <button class="cleanup-object-btn" data-object-name="${obj.name}"
+                                style="background: var(--warning-color); color: white; border: none;
+                                       border-radius: 6px; padding: 0.375rem 0.75rem; cursor: pointer;
+                                       font-size: 0.875rem; font-weight: 600; transition: opacity 0.2s;"
+                                onmouseover="this.style.opacity='0.8'"
+                                onmouseout="this.style.opacity='1'"
+                                title="Clean up ${subOtherCount} non-.fit file${subOtherCount === 1 ? '' : 's'}">
+                            🧹 Clean
+                        </button>
+                    ` : '-'}
+                </td>
             </tr>
         `;
     }
@@ -384,6 +464,63 @@ class Dashboard {
                 this.handleCleanupSubFrames();
             });
         }
+
+        // Individual object cleanup buttons (using event delegation)
+        document.addEventListener('click', (e) => {
+            if (e.target.closest('.cleanup-object-btn')) {
+                const btn = e.target.closest('.cleanup-object-btn');
+                const objectName = btn.dataset.objectName;
+                this.handleCleanupObject(objectName);
+            }
+        });
+
+        // Navigation links - smooth scrolling with header offset
+        const navLinks = document.querySelectorAll('.nav-link');
+        navLinks.forEach(link => {
+            link.addEventListener('click', (e) => {
+                e.preventDefault();
+                const targetId = link.getAttribute('href').substring(1);
+                const targetElement = document.getElementById(targetId);
+
+                if (targetElement) {
+                    // Get header height and add some padding
+                    const header = document.querySelector('.app-header');
+                    const headerHeight = header ? header.offsetHeight : 0;
+                    const offset = headerHeight + 20; // 20px extra padding
+
+                    // Calculate position accounting for header
+                    const elementPosition = targetElement.getBoundingClientRect().top;
+                    const offsetPosition = elementPosition + window.pageYOffset - offset;
+
+                    // Smooth scroll to position
+                    window.scrollTo({
+                        top: offsetPosition,
+                        behavior: 'smooth'
+                    });
+
+                    // Update active state
+                    navLinks.forEach(l => {
+                        l.style.background = 'var(--bg-tertiary)';
+                        l.style.color = 'var(--text-primary)';
+                    });
+                    link.style.background = 'var(--primary-color)';
+                    link.style.color = 'white';
+                }
+            });
+
+            // Hover effects
+            link.addEventListener('mouseenter', function() {
+                if (this.style.background !== 'var(--primary-color)') {
+                    this.style.background = 'var(--bg-secondary)';
+                }
+            });
+
+            link.addEventListener('mouseleave', function() {
+                if (this.style.background !== 'var(--primary-color)') {
+                    this.style.background = 'var(--bg-tertiary)';
+                }
+            });
+        });
     }
 
     filterObjects(searchTerm) {
@@ -453,6 +590,13 @@ class Dashboard {
                     directories: this.data.emptyDirectories
                 })
             });
+
+            // Check if response is JSON
+            const contentType = response.headers.get('content-type');
+            if (!contentType || !contentType.includes('application/json')) {
+                const text = await response.text();
+                throw new Error(`Server returned non-JSON response: ${text.substring(0, 200)}`);
+            }
 
             const result = await response.json();
 
@@ -546,6 +690,13 @@ class Dashboard {
                 })
             });
 
+            // Check if response is JSON
+            const contentType = response.headers.get('content-type');
+            if (!contentType || !contentType.includes('application/json')) {
+                const text = await response.text();
+                throw new Error(`Server returned non-JSON response: ${text.substring(0, 200)}`);
+            }
+
             const result = await response.json();
 
             app.hideLoading();
@@ -582,6 +733,106 @@ class Dashboard {
         } catch (error) {
             app.hideLoading();
             console.error('Error cleaning up sub-frames:', error);
+            app.showModal('Error', `<p>An error occurred: ${error.message}</p>`, null, 'Close');
+        }
+    }
+
+    async handleCleanupObject(objectName) {
+        if (!this.data || !this.data.objects) {
+            return;
+        }
+
+        // Find the specific object
+        const object = this.data.objects.find(obj => obj.name === objectName);
+
+        if (!object || !object.hasSubFrames || !object.subFolder) {
+            return;
+        }
+
+        // Count non-.fit files
+        const nonFitFiles = object.subFolder.files.filter(f => !f.endsWith('.fit'));
+
+        if (nonFitFiles.length === 0) {
+            app.showModal('Nothing to Clean', '<p>This object has no non-.fit files to clean up.</p>', null, 'Close');
+            return;
+        }
+
+        const confirmMessage = `
+            <div style="text-align: left;">
+                <p>Clean up sub-frame directory for <strong>${object.displayName}</strong>?</p>
+                <p style="margin-top: 1rem;">
+                    This will delete <strong>${nonFitFiles.length}</strong> file${nonFitFiles.length === 1 ? '' : 's'} (JPG and thumbnail files).
+                </p>
+                <p style="margin-top: 1rem; color: var(--text-secondary); font-size: 0.875rem;">
+                    <strong>What will be deleted:</strong> All files except .fit files in the _sub directory.
+                </p>
+                <p style="margin-top: 0.5rem; color: var(--success-color); font-size: 0.875rem;">
+                    <strong>Safe:</strong> Your .fit files will NOT be touched.
+                </p>
+            </div>
+        `;
+
+        app.showModal(
+            `🧹 Clean Up ${object.displayName}`,
+            confirmMessage,
+            async () => {
+                await this.cleanupSingleObject(object);
+            },
+            'Clean Up'
+        );
+    }
+
+    async cleanupSingleObject(object) {
+        try {
+            app.showLoading(`Cleaning up ${object.displayName}...`);
+
+            const response = await fetch('/api/cleanup/subframe-directories', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    objects: [object]  // Send only this single object
+                })
+            });
+
+            // Check if response is JSON
+            const contentType = response.headers.get('content-type');
+            if (!contentType || !contentType.includes('application/json')) {
+                const text = await response.text();
+                throw new Error(`Server returned non-JSON response: ${text.substring(0, 200)}`);
+            }
+
+            const result = await response.json();
+
+            app.hideLoading();
+
+            if (result.success || result.totalFilesDeleted > 0) {
+                const cleanedObj = result.cleaned[0];
+                const message = `
+                    <div style="text-align: left;">
+                        <p style="color: var(--success-color); font-weight: 600; margin-bottom: 1rem;">
+                            ✓ Cleanup Complete!
+                        </p>
+                        <p style="margin-bottom: 0.5rem;">Object: <strong>${object.displayName}</strong></p>
+                        <ul style="list-style: none; padding: 0;">
+                            <li style="margin-bottom: 0.5rem;">🗑️ Files deleted: <strong>${cleanedObj ? cleanedObj.filesDeleted : result.totalFilesDeleted}</strong></li>
+                            <li style="margin-bottom: 0.5rem;">💾 Space freed: <strong>${app.formatBytes(result.totalSpaceFreed)}</strong></li>
+                        </ul>
+                    </div>
+                `;
+
+                app.showModal('Cleanup Complete', message, null, 'Close');
+
+                // Refresh the dashboard
+                setTimeout(() => {
+                    this.refreshDashboard();
+                }, 2000);
+            } else {
+                app.showModal('Error', `<p>Failed to clean up: ${result.error || 'Unknown error'}</p>`, null, 'Close');
+            }
+
+        } catch (error) {
+            app.hideLoading();
+            console.error('Error cleaning up object:', error);
             app.showModal('Error', `<p>An error occurred: ${error.message}</p>`, null, 'Close');
         }
     }
