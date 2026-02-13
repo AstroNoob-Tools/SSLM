@@ -163,8 +163,12 @@ class Dashboard {
                 <h3 style="margin-bottom: 1rem;">📚 Catalog Breakdown</h3>
                 <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 1rem;">
                     ${catalogs.map(([catalog, count]) => `
-                        <div style="display: flex; align-items: center; gap: 1rem; padding: 1rem;
-                                    background: var(--bg-tertiary); border-radius: 8px;">
+                        <div class="catalog-card" data-catalog="${catalog}"
+                             style="display: flex; align-items: center; gap: 1rem; padding: 1rem;
+                                    background: var(--bg-tertiary); border-radius: 8px; cursor: pointer;
+                                    transition: all 0.2s; border: 2px solid transparent;"
+                             onmouseover="this.style.background='var(--bg-secondary)'; this.style.borderColor='var(--primary-color)';"
+                             onmouseout="this.style.background='var(--bg-tertiary)'; this.style.borderColor='transparent';">
                             <span style="font-size: 2rem;">${catalogIcons[catalog] || '📁'}</span>
                             <div>
                                 <div style="font-weight: 600; font-size: 1.25rem; color: var(--primary-color);">${count}</div>
@@ -489,6 +493,15 @@ class Dashboard {
                     const objectId = row.dataset.objectId;
                     this.showObjectDetail(objectId);
                 }
+            }
+        });
+
+        // Catalog card click to view catalog details (using event delegation)
+        document.addEventListener('click', (e) => {
+            const catalogCard = e.target.closest('.catalog-card');
+            if (catalogCard) {
+                const catalog = catalogCard.dataset.catalog;
+                this.showCatalogDetail(catalog);
             }
         });
 
@@ -871,6 +884,184 @@ class Dashboard {
             app.hideLoading();
             console.error('Error refreshing dashboard:', error);
         }
+    }
+
+    // Catalog Detail View
+
+    showCatalogDetail(catalogName) {
+        if (!this.data || !this.data.objects) {
+            return;
+        }
+
+        // Filter objects by catalog
+        const filteredObjects = this.data.objects.filter(obj => obj.catalog === catalogName);
+
+        if (filteredObjects.length === 0) {
+            return;
+        }
+
+        this.renderCatalogDetail(catalogName, filteredObjects);
+    }
+
+    renderCatalogDetail(catalogName, filteredObjects) {
+        const dashboardContent = document.querySelector('.dashboard-content');
+        if (!dashboardContent) return;
+
+        const catalogIcons = {
+            'Messier': '🌟',
+            'NGC': '🌌',
+            'IC': '⭐',
+            'Sharpless': '☁️',
+            'Caldwell': '✨',
+            'Named': '📍'
+        };
+
+        // Calculate summary statistics for filtered objects
+        const totalObjects = filteredObjects.length;
+        const withSubFrames = filteredObjects.filter(obj => obj.hasSubFrames).length;
+        const withoutSubFrames = filteredObjects.filter(obj => !obj.hasSubFrames).length;
+        const totalFiles = filteredObjects.reduce((sum, obj) => {
+            return sum + obj.mainFolder.fileCount + (obj.subFolder ? obj.subFolder.fileCount : 0);
+        }, 0);
+        const totalSize = filteredObjects.reduce((sum, obj) => {
+            return sum + obj.mainFolder.size + (obj.subFolder ? obj.subFolder.size : 0);
+        }, 0);
+        const totalIntegration = filteredObjects.reduce((sum, obj) => sum + obj.totalIntegrationTime, 0);
+
+        // Get date range
+        let oldestDate = null;
+        let newestDate = null;
+        filteredObjects.forEach(obj => {
+            const sessions = this.parseImagingSessions(obj);
+            sessions.forEach(session => {
+                if (!oldestDate || session.datetime < oldestDate) {
+                    oldestDate = session.datetime;
+                }
+                if (!newestDate || session.datetime > newestDate) {
+                    newestDate = session.datetime;
+                }
+            });
+        });
+
+        dashboardContent.innerHTML = `
+            <div class="catalog-detail" style="padding: 2rem; max-width: 1400px; margin: 0 auto;">
+                <!-- Header with Back Button -->
+                <div style="margin-bottom: 2rem;">
+                    <button id="backToMainDashboardBtn" class="btn" style="background: var(--bg-tertiary); color: var(--text-primary);
+                                   padding: 0.75rem 1.5rem; border: 2px solid var(--border-color); border-radius: 8px;
+                                   cursor: pointer; font-weight: 600; transition: all 0.2s; display: inline-flex;
+                                   align-items: center; gap: 0.5rem;"
+                                   onmouseover="this.style.background='var(--bg-secondary)'"
+                                   onmouseout="this.style.background='var(--bg-tertiary)'">
+                        ← Back to All Catalogs
+                    </button>
+                </div>
+
+                <!-- Catalog Header -->
+                <div style="background: var(--bg-card); border-radius: 16px; padding: 2rem; margin-bottom: 2rem;">
+                    <div style="display: flex; align-items: center; gap: 1.5rem; margin-bottom: 1rem;">
+                        <span style="font-size: 3rem;">${catalogIcons[catalogName] || '📁'}</span>
+                        <div>
+                            <h1 style="font-size: 2.5rem; margin-bottom: 0.5rem;">${catalogName} Catalog</h1>
+                            <p style="color: var(--text-secondary); font-size: 1.125rem;">
+                                ${totalObjects} ${totalObjects === 1 ? 'object' : 'objects'} in this catalog
+                            </p>
+                        </div>
+                    </div>
+                    ${oldestDate && newestDate ? `
+                        <div style="display: flex; gap: 2rem; flex-wrap: wrap; margin-top: 1.5rem; padding-top: 1.5rem; border-top: 1px solid var(--border-color);">
+                            <div style="display: flex; align-items: center; gap: 0.5rem;">
+                                <span style="font-size: 0.875rem; color: var(--text-secondary);">First Capture:</span>
+                                <span style="font-size: 0.875rem; font-weight: 600;">${oldestDate.toLocaleDateString()}</span>
+                            </div>
+                            <div style="display: flex; align-items: center; gap: 0.5rem;">
+                                <span style="font-size: 0.875rem; color: var(--text-secondary);">Latest Capture:</span>
+                                <span style="font-size: 0.875rem; font-weight: 600;">${newestDate.toLocaleDateString()}</span>
+                            </div>
+                        </div>
+                    ` : ''}
+                </div>
+
+                <!-- Summary Cards -->
+                <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 1.5rem; margin-bottom: 2rem;">
+                    ${this.renderSummaryCard('🎯', 'Total Objects', totalObjects, 'primary')}
+                    ${this.renderSummaryCard('📦', 'With Sub-Frames', withSubFrames, 'secondary')}
+                    ${this.renderSummaryCard('📁', 'Without Sub-Frames', withoutSubFrames, 'accent')}
+                    ${this.renderSummaryCard('💾', 'Total Size', app.formatBytes(totalSize), 'success')}
+                    ${this.renderSummaryCard('📄', 'Total Files', totalFiles, 'info')}
+                    ${this.renderSummaryCard('⏱️', 'Total Integration', this.formatIntegrationTime(totalIntegration), 'warning')}
+                </div>
+
+                <!-- Objects List -->
+                <div class="objects-list" style="background: var(--bg-card); border-radius: 16px; padding: 1.5rem;">
+                    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 1rem;">
+                        <h3>🎯 Objects in ${catalogName}</h3>
+                        <input type="text" id="objectSearch" placeholder="Search objects..."
+                               style="padding: 0.5rem 1rem; background: var(--bg-tertiary); border: 2px solid var(--border-color);
+                                      border-radius: 8px; color: var(--text-primary); width: 300px;">
+                    </div>
+                    <div id="objectsContainer">
+                        ${this.renderCatalogObjectsTable(filteredObjects)}
+                    </div>
+                </div>
+            </div>
+        `;
+
+        // Add back button event listener
+        const backBtn = document.getElementById('backToMainDashboardBtn');
+        if (backBtn) {
+            backBtn.addEventListener('click', () => {
+                this.render(); // Re-render the main dashboard
+            });
+        }
+
+        // Add search functionality
+        const searchInput = document.getElementById('objectSearch');
+        if (searchInput) {
+            searchInput.addEventListener('input', (e) => {
+                this.filterObjects(e.target.value.toLowerCase());
+            });
+        }
+    }
+
+    renderCatalogObjectsTable(objects) {
+        if (objects.length === 0) {
+            return `<p style="text-align: center; color: var(--text-muted); padding: 2rem;">No objects found</p>`;
+        }
+
+        // Split objects into two groups
+        const withSubFrames = objects.filter(obj => obj.hasSubFrames);
+        const withoutSubFrames = objects.filter(obj => !obj.hasSubFrames);
+
+        let html = '';
+
+        if (withSubFrames.length > 0) {
+            html += `
+                <div style="margin-bottom: 2rem;">
+                    <h4 style="margin-bottom: 0.75rem; color: var(--success-color); display: flex; align-items: center; gap: 0.5rem;">
+                        <span>✓</span> Objects with Sub-Frames (${withSubFrames.length})
+                    </h4>
+                    <div style="max-height: 400px; overflow-y: auto;">
+                        ${this.renderObjectsTable(withSubFrames)}
+                    </div>
+                </div>
+            `;
+        }
+
+        if (withoutSubFrames.length > 0) {
+            html += `
+                <div>
+                    <h4 style="margin-bottom: 0.75rem; color: var(--text-muted); display: flex; align-items: center; gap: 0.5rem;">
+                        <span>✗</span> Objects without Sub-Frames (${withoutSubFrames.length})
+                    </h4>
+                    <div style="max-height: 400px; overflow-y: auto;">
+                        ${this.renderObjectsTable(withoutSubFrames)}
+                    </div>
+                </div>
+            `;
+        }
+
+        return html;
     }
 
     // Object Detail View
