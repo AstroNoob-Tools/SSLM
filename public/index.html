@@ -61,12 +61,39 @@
 
             <!-- Import Wizard Screen -->
             <div class="screen" id="importWizardScreen">
-                <div class="wizard-content">
+                <div class="import-wizard-header">
                     <h2>Import from SeeStar</h2>
-                    <div id="importWizardContent">
-                        <!-- Will be populated by importWizard.js -->
-                        <p>Loading import wizard...</p>
+                    <div class="step-indicators">
+                        <div class="step active" data-step="1">
+                            <span class="step-number">1</span>
+                            <span class="step-label">Device</span>
+                        </div>
+                        <div class="step" data-step="2">
+                            <span class="step-number">2</span>
+                            <span class="step-label">Strategy</span>
+                        </div>
+                        <div class="step" data-step="3">
+                            <span class="step-number">3</span>
+                            <span class="step-label">Destination</span>
+                        </div>
+                        <div class="step" data-step="4">
+                            <span class="step-number">4</span>
+                            <span class="step-label">Confirm</span>
+                        </div>
+                        <div class="step" data-step="5">
+                            <span class="step-number">5</span>
+                            <span class="step-label">Import</span>
+                        </div>
                     </div>
+                </div>
+                <div id="importWizardContent"></div>
+                <div class="import-wizard-footer">
+                    <button class="btn btn-secondary" id="wizardBackBtn" style="display: none;">
+                        ← Back
+                    </button>
+                    <button class="btn btn-primary" id="wizardNextBtn" style="display: none;">
+                        Next →
+                    </button>
                 </div>
             </div>
 

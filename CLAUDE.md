@@ -12,25 +12,35 @@ SSLM (SeaStar Library Manager) is an application that manages astrophotography f
 ### Current Development Phase
 **Phase 1 - COMPLETE**: Initial setup workflow and dashboard implementation
 - ✅ User selection: Import from SeeStar or use existing local copy
-- ✅ File import process with progress indication
 - ✅ Interactive dashboard with collection statistics
 - ✅ Object detail pages with comprehensive metadata
 - ✅ Catalog detail pages for catalog-specific views
 - ✅ Cleanup operations for optimizing storage
 - ✅ Favorites system for quick folder access
 
+**Phase 2 - COMPLETE**: Direct import functionality from SeeStar device
+- ✅ Automatic device detection (removable drives and network paths)
+- ✅ Configurable SeeStar directory name (MyWorks)
+- ✅ Full copy and incremental copy strategies
+- ✅ Real-time progress tracking with Socket.IO
+- ✅ Disk space validation before import (strategy-aware for incremental)
+- ✅ Folder creation capability during import
+- ✅ 5-step wizard workflow with visual feedback
+- ✅ Transfer validation with real-time progress display
+- ✅ Post-import completion UI with "Done" button
+
 ## Domain Context
 
 ### SeeStar Device
-SeeStar is an astrophotography telescope that captures images of celestial objects. Files are stored on the device under a root directory called `MyWork`.
+SeeStar is an astrophotography telescope that captures images of celestial objects. Files are stored on the device under a root directory called `MyWorks`.
 
 **Connection Methods**:
 1. **Removable/External Drive** (default): SeeStar appears as a drive letter (e.g., E:\, F:\)
-   - Access path: `E:\MyWork` or `F:\MyWork` (depending on assigned drive letter)
+   - Access path: `E:\MyWorks` or `F:\MyWorks` (depending on assigned drive letter)
    - Most common connection method
 
 2. **Network Drive** (station mode): SeeStar accessible via network
-   - Network path: `\\seestar\MyWork`
+   - Network path: `\\seestar\MyWorks`
    - Available when SeeStar is in station mode with network connectivity
    - Application should offer this as an alternative connection option
 
@@ -94,7 +104,7 @@ When the user chooses to import from SeeStar:
 1. **Device Detection**:
    - Check for SeeStar as removable drive (E:\, F:\, etc.)
    - OR allow user to specify network path (`\\seestar`)
-   - Verify `/MyWork` directory exists on device
+   - Verify `/MyWorks` directory exists on device
 
 2. **Import Type Selection**:
    - **Copy Everything**: Fresh full copy of all files (for new imports)
@@ -141,7 +151,7 @@ When the user has an existing local copy:
    a. **Device Connection**:
    - Detect SeeStar as removable drive (auto-detect E:\, F:\, etc.)
    - OR allow manual network path entry: `\\seestar`
-   - Verify `/MyWork` directory exists
+   - Verify `/MyWorks` directory exists
 
    b. **Import Strategy**:
    - Ask: "Is this a fresh copy or updating an existing repository?"
@@ -156,7 +166,7 @@ When the user has an existing local copy:
      - Recommended to use a dedicated directory for organization
 
    d. **Copy Operation**:
-   - Copy files from SeeStar `/MyWork` to chosen local directory
+   - Copy files from SeeStar `/MyWorks` to chosen local directory
    - Show real-time progress:
      - Current file being copied
      - Number of files copied / total files
@@ -276,7 +286,7 @@ Use this as a reference for testing and understanding actual file organization p
 **Device Access**:
 - Primary: Removable drive detection (E:\, F:\, G:\, etc.)
 - Secondary: Network path support (`\\seestar`)
-- Validate `/MyWork` directory exists before operations
+- Validate `/MyWorks` directory exists before operations
 
 **File Operations**:
 - File paths use backslashes on Windows
@@ -292,7 +302,257 @@ Use this as a reference for testing and understanding actual file organization p
 - All operations read-only on source, write to local destination only
 - Validate paths before copy operations to prevent accidental overwrites
 
-## Implemented Features (Phase 1 Complete)
+## Implemented Features
+
+### Import Functionality (Phase 2 Complete)
+
+#### 5-Step Import Wizard
+The import wizard guides users through the process of importing files from a connected SeeStar device to local storage.
+
+**Step 1: Device Detection & Selection**
+- **Automatic Drive Detection**: Scans drives C: through Z: for SeeStar devices
+- **MyWorks Directory Check**: Only displays drives that contain the configured SeeStar directory (MyWorks)
+- **Network Path Support**: Includes network path option (`\\seestar\MyWorks`)
+- **Configurable Directory Name**: SeeStar directory name is configurable in settings.json (`seestar.directoryName`)
+- **Device Filtering**: Shows only valid SeeStar sources (drives with MyWorks + network path)
+- **Visual Feedback**: Device cards with hover effects and selection states
+- **Proceed Button**: Appears on right side when device is selected
+
+**Step 2: Import Strategy Selection**
+- **Full Copy**: Copies all files from source (for fresh imports)
+  - Copies every file regardless of destination state
+  - Suitable for initial imports or when starting fresh
+- **Incremental Copy**: Copies only new or modified files (for updates)
+  - Compares file size and modification time
+  - Skips files that already exist and are up-to-date
+  - Suitable for updating existing repositories
+- **Strategy Cards**: Visual selection with hover effects and descriptions
+- **Default Strategy**: Pre-selects based on user preference in config
+
+**Step 3: Destination Selection**
+- **Folder Browser**: Reuses existing folder browser component
+- **Drive Selection**: Shows available drives with space information
+- **Directory Navigation**: Browse subdirectories with up button
+- **Create New Folder**: Button to create new directories on-the-fly
+  - Modal dialog for folder name input
+  - Validation to prevent invalid names
+  - Automatic refresh after creation
+- **Space Validation**: Real-time display of available vs required space
+- **Favorites Integration**: Quick access to favorite folders
+
+**Step 4: Confirmation Summary**
+- **Source Information**: Selected device and path
+- **Strategy Display**: Chosen import strategy (Full or Incremental)
+- **Destination Path**: Where files will be copied
+- **Space Requirements**: Required space vs available space
+- **Estimated File Count**: Preliminary scan results
+- **Start Import Button**: Initiates the import operation
+
+**Step 5: Progress Display**
+- **Real-Time Progress Bar**: Visual progress indicator (0-100%)
+- **Current File Display**: Shows which file is currently being copied
+- **File Statistics**:
+  - Files copied / total files (count and percentage)
+  - Files skipped (for incremental imports)
+- **Byte Statistics**:
+  - Bytes copied / total bytes (count and percentage)
+  - Formatted display (MB, GB)
+- **Performance Metrics**:
+  - Transfer speed (calculated with moving average)
+  - Time remaining (ETA based on current speed)
+  - Elapsed time
+- **Cancel Button**: Ability to stop import mid-operation
+- **Completion Message**: Shows summary statistics when finished
+- **Post-Import Actions**:
+  - Saves paths to config for future reference
+  - Analyzes imported directory
+  - Transitions to dashboard with imported data
+
+#### Backend Services
+
+**ImportService** ([src/services/importService.js](src/services/importService.js))
+- **Device Detection**: Scans Windows drives and network paths for SeeStar devices
+  - Configurable directory name from settings.json
+  - Only returns devices with valid SeeStar directory
+- **File Scanning**: Recursively enumerates all files in source directory
+  - `scanDirectory(dirPath, basePath, destinationPath)` - Scans files and constructs paths
+  - Now accepts optional `destinationPath` parameter for validation scenarios
+  - Falls back to `currentOperation.destinationPath` during active imports
+- **Copy Strategies**:
+  - Full Copy: Always copies all files
+  - Incremental Copy: Compares file stats (size, mtime) to skip unchanged files
+  - Pre-filters files before calculating totals for accurate progress display
+- **Stream-Based Copying**: Uses Node.js streams for memory-efficient file copying
+  - Handles large files (50GB+) without memory issues
+  - Built-in backpressure handling
+- **Progress Tracking**:
+  - Tracks files copied, bytes copied, current file
+  - Calculates transfer speed using 5-second moving average
+  - Calculates ETA based on bytes remaining and current speed
+  - Throttled Socket.IO emission (max every 500ms)
+  - Shows accurate differential totals for incremental copies
+- **Transfer Validation**: `validateTransfer(sourcePath, destinationPath, socketId, operationId)`
+  - Verifies all source files exist in destination with correct size
+  - Real-time progress updates via Socket.IO
+  - Returns validation results with mismatch details
+- **Cancellation Support**: Can stop import mid-operation safely
+- **Error Handling**: Continues on individual file errors, reports at end
+- **Debug Logging**: Detailed incremental copy decision logging ([COPY]/[SKIP] with reasons)
+- **Socket.IO Events**:
+  - `import:progress` - Regular progress updates during copy
+  - `import:complete` - Emitted when all files copied successfully
+  - `import:error` - Emitted if fatal error occurs
+  - `import:cancelled` - Emitted if user cancels operation
+  - `validate:progress` - Validation progress updates
+  - `validate:complete` - Validation finished with results
+  - `validate:error` - Validation error
+
+**DiskSpaceValidator** ([src/utils/diskSpaceValidator.js](src/utils/diskSpaceValidator.js))
+- **Strategy-Aware Space Calculation**:
+  - Full Copy: Recursively calculates total size of all source files
+  - Incremental Copy: Calculates size only for files that need copying (uses `shouldCopyFile` logic)
+- **Available Space Check**: Uses Windows `wmic` command to get free space on destination drive
+- **Safety Buffer**: Applies 10% buffer to required space to prevent edge cases
+- **Formatted Output**: Converts bytes to human-readable format (KB, MB, GB, TB)
+- **Validation Result**: Returns hasEnoughSpace boolean with detailed metrics
+- **Methods**:
+  - `hasEnoughSpace(sourcePath, destinationPath, strategy, buffer)` - Main validation method
+  - `getIncrementalRequiredSpace(sourcePath, destinationPath)` - Calculates differential size
+  - `shouldCopyFile(sourceFile, destFile, sourceStats)` - Determines if file needs copying
+
+#### API Endpoints
+
+**Import Operations**
+- `GET /api/import/detect-seestar` - Detect SeeStar devices (removable and network)
+  - Returns array of devices with MyWorks directory
+  - Filters out devices without valid SeeStar directory
+- `POST /api/import/validate-space` - Validate disk space before import
+  - Body: `{sourcePath, destinationPath}`
+  - Returns space availability and formatted metrics
+- `POST /api/import/start` - Start import operation
+  - Body: `{sourcePath, destinationPath, strategy, socketId}`
+  - Returns operation ID immediately, progress via Socket.IO
+- `POST /api/import/cancel` - Cancel ongoing import operation
+  - Stops file copying, emits cancellation event
+
+**Directory Management**
+- `POST /api/browse/create-directory` - Create new directory
+  - Body: `{parentPath, folderName}`
+  - Returns new directory path on success
+
+#### Configuration
+
+**Settings** ([config/settings.json](config/settings.json))
+```json
+{
+  "seestar": {
+    "directoryName": "MyWorks"
+  },
+  "paths": {
+    "lastSourcePath": "",
+    "lastDestinationPath": ""
+  },
+  "preferences": {
+    "defaultImportStrategy": "incremental"
+  }
+}
+```
+
+- **seestar.directoryName**: Configurable directory name for SeeStar devices (default: "MyWorks")
+- **paths.lastSourcePath**: Remembers last source for future imports
+- **paths.lastDestinationPath**: Remembers last destination for future imports
+- **preferences.defaultImportStrategy**: Default import strategy ("full" or "incremental")
+
+#### Safety Features
+
+**Read-Only Source Operations**
+- All import operations are read-only on source device
+- Never modifies or deletes files on SeeStar device
+- Copies files to local destination only
+
+**Disk Space Validation**
+- Validates sufficient space before starting import
+- Applies 10% safety buffer to prevent disk full errors
+- Shows clear error message if insufficient space
+
+**Error Recovery**
+- Continues copying on individual file errors
+- Reports all errors at completion
+- Skips inaccessible files without stopping operation
+
+**Cancellation**
+- Clean cancellation support during import
+- Stops immediately when requested
+- Reports progress at cancellation point
+- No partial/corrupted files
+
+#### Import Completion & Validation
+
+**Post-Import Completion UI**
+- **Done Button**: Appears when import reaches 100% completion
+  - Hidden during active import, visible only at completion
+  - Prevents user from feeling stuck on progress screen
+  - Opens import complete modal with validation options
+- **Import Complete Modal**: Shows import summary and next steps
+  - Files copied count (with skipped count for incremental)
+  - Total data transferred (formatted)
+  - Import duration
+  - Error count (if any failures occurred)
+  - Two action options: Skip to Dashboard or Validate Transfer
+
+**Transfer Validation** ([src/services/importService.js](src/services/importService.js))
+- **Purpose**: Verifies all source files exist in destination with correct size
+- **Validation Strategy**: Compares ALL files in source against destination
+  - Independent of import type (full or incremental)
+  - Validates complete directory integrity, not just transferred files
+  - Example: After incremental copy of 100 files, validates all 1,250 source files exist in destination
+- **Real-Time Progress Display**:
+  - Progress bar (0-100%)
+  - Files validated count (e.g., "1,234 / 1,250")
+  - Issues found count (color-coded: green if 0, red if issues)
+  - Current status message ("Scanning files...", "Validating files...")
+- **Validation Logic**:
+  - Scans all files in source directory
+  - For each file, checks if it exists in destination
+  - Compares file sizes (source vs destination)
+  - Reports missing files or size mismatches
+- **Results Modal**:
+  - Validation successful: Shows checkmark, files validated, duration
+  - Validation failed: Shows warning, lists issues (up to 50), suggests re-import
+  - "View Dashboard" button to proceed
+- **Socket.IO Events**:
+  - `validate:progress` - Real-time progress updates
+  - `validate:complete` - Validation finished with results
+  - `validate:error` - Fatal validation error
+- **Bug Fix**: `scanDirectory()` method now accepts optional `destinationPath` parameter
+  - Previously used `this.currentOperation?.destinationPath` which was null after import
+  - Now explicitly passes destination path during validation
+  - Ensures correct file path construction for validation
+
+**Modal System Improvements**
+- **Clean Modal Footer**: `app.showModal()` now clears footer before displaying
+  - Removes leftover buttons from previous modals
+  - Prevents "Create New Folder" and other buttons appearing in wrong modals
+  - Each modal shows only intended buttons (Cancel + primary action)
+- **Modal Width**: Increased from 500px to 700px for better content visibility
+- **Dashboard Reference Fix**: Changed `app.dashboard` to `window.dashboard`
+  - Dashboard exposes itself as `window.dashboard` (global)
+  - Fixed "Cannot read properties of undefined (reading 'displayResults')" error
+
+**Strategy-Aware Space Validation**
+- **Full Copy**: Calculates total size of all source files
+- **Incremental Copy**: Calculates only size of files that need copying
+  - Uses `shouldCopyFile()` logic to determine which files differ
+  - Shows accurate differential size (e.g., 9GB instead of 22GB full size)
+  - Applies to both validation step and progress display
+- **Implementation**: `DiskSpaceValidator.hasEnoughSpace()` accepts strategy parameter
+
+**Incremental Copy Debugging**
+- Added detailed console logging for troubleshooting
+- Logs each file decision: [COPY] or [SKIP] with reason
+- Shows size differences, modification time comparisons
+- Summary statistics of files to copy vs skip
+- Helps identify incorrect skipping behavior
 
 ### Dashboard Features
 
@@ -464,10 +724,18 @@ Use this as a reference for testing and understanding actual file organization p
 - POST /api/cleanup/subframe-directories - Clean sub-frame directories (body: {objects})
 - GET /api/cleanup/subframe-info?path={path} - Get sub-frame cleanup information
 
+#### Import Operations
+- GET /api/import/detect-seestar - Detect SeeStar devices (returns devices with MyWorks directory)
+- POST /api/import/validate-space - Validate disk space (body: {sourcePath, destinationPath, strategy})
+- POST /api/import/start - Start import operation (body: {sourcePath, destinationPath, strategy, socketId})
+- POST /api/import/cancel - Cancel ongoing import operation
+- POST /api/import/validate - Validate transfer integrity (body: {sourcePath, destinationPath, socketId})
+
 #### Directory Browsing
 - GET /api/browse/drives - Get available drives and common paths
 - GET /api/browse/directory?path={path} - Get directory contents
-- GET /api/browse/validate?path={path}&checkMyWork={bool} - Validate path
+- GET /api/browse/validate?path={path}&checkMyWorks={bool} - Validate path
+- POST /api/browse/create-directory - Create new directory (body: {parentPath, folderName})
 
 ### Known Patterns & Parsing
 
@@ -488,8 +756,6 @@ Use this as a reference for testing and understanding actual file organization p
 ### Future Enhancement Ideas
 - Cross-platform support (macOS, Linux)
 - Windows installer package
-- Incremental import functionality (in progress)
-- File import with real-time progress tracking
 - Backup and restore features
 - Advanced filtering and sorting options
 - Export capabilities (CSV, reports)
@@ -497,3 +763,5 @@ Use this as a reference for testing and understanding actual file organization p
 - Image preview/thumbnail display
 - Stacking quality metrics
 - Weather and seeing condition logging
+- Image comparison and quality assessment
+- Session planning and scheduling

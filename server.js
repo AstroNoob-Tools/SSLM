@@ -6,6 +6,8 @@ const fs = require('fs-extra');
 const DirectoryBrowser = require('./src/utils/directoryBrowser');
 const FileAnalyzer = require('./src/services/fileAnalyzer');
 const FileCleanup = require('./src/services/fileCleanup');
+const ImportService = require('./src/services/importService');
+const DiskSpaceValidator = require('./src/utils/diskSpaceValidator');
 
 // Create Express app
 const app = express();
@@ -23,10 +25,14 @@ try {
   config = {
     server: { port: 3000, host: 'localhost' },
     mode: { online: false },
+    seestar: { directoryName: 'MyWorks' },
     paths: { lastSourcePath: '', lastDestinationPath: '' },
     preferences: { defaultImportStrategy: 'incremental' }
   };
 }
+
+// Initialize ImportService with Socket.IO and config
+const importService = new ImportService(io, config);
 
 const PORT = process.env.PORT || config.server.port || 3000;
 const HOST = config.server.host || 'localhost';
@@ -54,6 +60,7 @@ app.get('/api/config', (req, res) => {
   res.json({
     mode: config.mode,
     preferences: config.preferences,
+    seestar: config.seestar,
     paths: {
       hasLastSource: !!config.paths.lastSourcePath,
       hasLastDestination: !!config.paths.lastDestinationPath
@@ -172,9 +179,58 @@ app.get('/api/browse/directory', async (req, res) => {
 
     res.json({
       success: !result.error,
-      ...result
+      currentPath: result.currentPath,
+      parentPath: result.parentPath,
+      directories: result.items || [],
+      error: result.error
     });
   } catch (error) {
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
+app.post('/api/browse/create-directory', async (req, res) => {
+  try {
+    const { parentPath, folderName } = req.body;
+
+    if (!parentPath || !folderName) {
+      return res.status(400).json({
+        success: false,
+        error: 'parentPath and folderName required'
+      });
+    }
+
+    // Validate parent path exists
+    const parentExists = await fs.pathExists(parentPath);
+    if (!parentExists) {
+      return res.status(400).json({
+        success: false,
+        error: 'Parent directory does not exist'
+      });
+    }
+
+    // Create the new directory path
+    const newDirPath = path.join(parentPath, folderName);
+
+    // Check if it already exists
+    const alreadyExists = await fs.pathExists(newDirPath);
+    if (alreadyExists) {
+      return res.status(400).json({
+        success: false,
+        error: 'Directory already exists'
+      });
+    }
+
+    // Create the directory
+    await fs.ensureDir(newDirPath);
+
+    res.json({
+      success: true,
+      path: newDirPath,
+      message: 'Directory created successfully'
+    });
+  } catch (error) {
+    console.error('Error creating directory:', error);
     res.status(500).json({ success: false, error: error.message });
   }
 });
@@ -318,6 +374,123 @@ app.get('/api/cleanup/subframe-info', async (req, res) => {
       info
     });
   } catch (error) {
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
+// Import API Routes
+app.get('/api/import/detect-seestar', async (req, res) => {
+  try {
+    console.log('Detecting SeeStar devices...');
+    const devices = await importService.detectSeeStarDevices();
+    console.log(`Found ${devices.length} devices`);
+    res.json({ success: true, devices });
+  } catch (error) {
+    console.error('Error detecting devices:', error);
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
+app.post('/api/import/validate-space', async (req, res) => {
+  try {
+    const { sourcePath, destinationPath, strategy } = req.body;
+
+    if (!sourcePath || !destinationPath) {
+      return res.status(400).json({
+        success: false,
+        error: 'sourcePath and destinationPath required'
+      });
+    }
+
+    const importStrategy = strategy || 'full'; // Default to full if not specified
+    console.log(`Validating disk space (${importStrategy}): ${sourcePath} -> ${destinationPath}`);
+    const result = await DiskSpaceValidator.hasEnoughSpace(
+      sourcePath,
+      destinationPath,
+      importStrategy,
+      1.1  // 10% safety buffer
+    );
+
+    console.log(`Space validation: ${result.hasEnoughSpace ? 'OK' : 'INSUFFICIENT'} - Required: ${result.requiredFormatted}`);
+    res.json({ success: true, ...result });
+  } catch (error) {
+    console.error('Error validating space:', error);
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
+app.post('/api/import/start', async (req, res) => {
+  try {
+    const { sourcePath, destinationPath, strategy, socketId } = req.body;
+
+    if (!sourcePath || !destinationPath || !strategy || !socketId) {
+      return res.status(400).json({
+        success: false,
+        error: 'sourcePath, destinationPath, strategy, and socketId required'
+      });
+    }
+
+    console.log(`Starting import: ${sourcePath} -> ${destinationPath} (${strategy})`);
+
+    // Start import asynchronously (don't await - it's long-running)
+    const operationId = Date.now().toString();
+    importService.startImport(sourcePath, destinationPath, strategy, socketId, operationId)
+      .then(() => {
+        console.log(`Import completed successfully`);
+      })
+      .catch(error => {
+        console.error(`Import failed:`, error);
+        io.to(socketId).emit('import:error', {
+          error: error.message,
+          operationId
+        });
+      });
+
+    res.json({ success: true, operationId, message: 'Import started' });
+  } catch (error) {
+    console.error('Error starting import:', error);
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
+app.post('/api/import/cancel', async (req, res) => {
+  try {
+    console.log('Cancelling import...');
+    const result = await importService.cancelImport();
+    console.log(`Import ${result.cancelled ? 'cancelled' : 'not active'}`);
+    res.json(result);
+  } catch (error) {
+    console.error('Error cancelling import:', error);
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
+app.post('/api/import/validate', async (req, res) => {
+  try {
+    const { sourcePath, destinationPath, socketId } = req.body;
+
+    if (!sourcePath || !destinationPath || !socketId) {
+      return res.status(400).json({
+        success: false,
+        error: 'sourcePath, destinationPath, and socketId required'
+      });
+    }
+
+    const operationId = Date.now().toString();
+    console.log(`Starting transfer validation: ${sourcePath} -> ${destinationPath}`);
+
+    // Start validation asynchronously
+    importService.validateTransfer(sourcePath, destinationPath, socketId, operationId)
+      .catch(error => {
+        io.to(socketId).emit('validate:error', {
+          error: error.message,
+          operationId
+        });
+      });
+
+    res.json({ success: true, operationId, message: 'Validation started' });
+  } catch (error) {
+    console.error('Error starting validation:', error);
     res.status(500).json({ success: false, error: error.message });
   }
 });

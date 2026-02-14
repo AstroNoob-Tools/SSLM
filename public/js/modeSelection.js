@@ -342,7 +342,7 @@ class ModeSelection {
         if (currentPathInput) currentPathInput.value = 'Select a drive or location';
 
         // Render common paths
-        if (commonPaths) {
+        if (commonPaths && common && Array.isArray(common)) {
             commonPaths.innerHTML = common.map(item => `
                 <button class="btn btn-secondary" data-path="${item.path}" style="padding: 0.5rem 1rem; font-size: 0.875rem;">
                     ${item.name}
@@ -358,7 +358,7 @@ class ModeSelection {
         }
 
         // Render drives
-        if (browserList) {
+        if (browserList && drives && Array.isArray(drives)) {
             browserList.innerHTML = drives.map(drive => `
                 <div class="browser-item" data-path="${drive.path}" style="padding: 1rem; border-bottom: 1px solid var(--border-color);
                                                                             cursor: pointer; display: flex; align-items: center; gap: 0.5rem;">
@@ -407,14 +407,16 @@ class ModeSelection {
         }
 
         if (browserList) {
-            if (data.items.length === 0) {
+            // Fix: Use 'directories' instead of 'items' and add null check
+            const directories = data.directories || [];
+            if (directories.length === 0) {
                 browserList.innerHTML = `
                     <div style="padding: 2rem; text-align: center; color: var(--text-muted);">
                         No subdirectories found
                     </div>
                 `;
             } else {
-                browserList.innerHTML = data.items.map(item => `
+                browserList.innerHTML = directories.map(item => `
                     <div class="browser-item" data-path="${item.path}"
                          style="padding: 1rem; border-bottom: 1px solid var(--border-color);
                                 cursor: pointer; display: flex; align-items: center; gap: 0.5rem;
