@@ -148,9 +148,11 @@ class App {
         const modal = document.getElementById('modalContainer');
         const modalTitle = document.getElementById('modalTitle');
         const modalBody = document.getElementById('modalBody');
+        const modalFooter = document.getElementById('modalFooter');
+        const modalCancel = document.getElementById('modalCancel');
         const modalConfirm = document.getElementById('modalConfirm');
 
-        if (modal && modalTitle && modalBody && modalConfirm) {
+        if (modal && modalTitle && modalBody && modalFooter && modalCancel && modalConfirm) {
             modalTitle.textContent = title;
 
             if (typeof body === 'string') {
@@ -160,13 +162,19 @@ class App {
                 modalBody.appendChild(body);
             }
 
-            modalConfirm.textContent = confirmText;
+            // Clear modal footer and restore only default buttons
+            modalFooter.innerHTML = '';
 
-            // Remove old event listeners
+            // Re-add Cancel button
+            const newCancelBtn = modalCancel.cloneNode(true);
+            modalFooter.appendChild(newCancelBtn);
+
+            // Re-add Confirm button
             const newConfirmBtn = modalConfirm.cloneNode(true);
-            modalConfirm.parentNode.replaceChild(newConfirmBtn, modalConfirm);
+            newConfirmBtn.textContent = confirmText;
+            modalFooter.appendChild(newConfirmBtn);
 
-            // Add new event listener
+            // Add new event listener to confirm button
             if (confirmCallback) {
                 newConfirmBtn.style.display = '';  // Ensure button is visible
                 newConfirmBtn.addEventListener('click', () => {
