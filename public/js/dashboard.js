@@ -69,7 +69,7 @@ class Dashboard {
 
                     <!-- Summary Cards -->
                     <section id="summary" style="scroll-margin-top: 100px;">
-                        <div class="summary-cards" style="display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 1.5rem; margin-bottom: 2rem;">
+                        <div class="summary-cards" style="display: grid; grid-template-columns: repeat(6, 1fr); gap: 1rem; margin-bottom: 2rem;">
                             ${this.renderSummaryCard('🎯', 'Total Objects', summary.totalObjects, 'primary')}
                             ${this.renderSummaryCard('📦', 'With Sub-Frames', summary.withSubFrames, 'secondary')}
                             ${this.renderSummaryCard('📁', 'Without Sub-Frames', summary.withoutSubFrames, 'accent')}
@@ -540,13 +540,13 @@ class Dashboard {
             });
 
             // Hover effects
-            link.addEventListener('mouseenter', function() {
+            link.addEventListener('mouseenter', function () {
                 if (this.style.background !== 'var(--primary-color)') {
                     this.style.background = 'var(--bg-secondary)';
                 }
             });
 
-            link.addEventListener('mouseleave', function() {
+            link.addEventListener('mouseleave', function () {
                 if (this.style.background !== 'var(--primary-color)') {
                     this.style.background = 'var(--bg-tertiary)';
                 }
@@ -1080,6 +1080,9 @@ class Dashboard {
 
         // Switch to object detail screen
         app.showScreen('objectDetailScreen');
+
+        // Scroll to top of page
+        window.scrollTo(0, 0);
     }
 
     renderObjectDetail(obj) {
@@ -1205,12 +1208,12 @@ class Dashboard {
 
     parseImagingSessions(obj) {
         // Parse main folder files to extract imaging sessions
-        const sessions = [];
+        const sessionMap = new Map(); // Use Map to group sessions by unique key
         const mainFiles = obj.mainFolder.files.filter(f => f.startsWith('Stacked_') || f.startsWith('DSO_Stacked_'));
 
         mainFiles.forEach(filename => {
             // Extract: Stacked_210_NGC 6729_30.0s_IRCUT_20250822-231258.fit
-            const match = filename.match(/(?:DSO_)?Stacked_(\d+)_.*?_([\d.]+)s(?:_([A-Z]+))?_(\d{8}-\d{6})/);
+            const match = filename.match(/(?:DSO_)?Stacked_(\d+)_.*?([\d.]+)s(?:_([A-Z]+))?_(\d{8}-\d{6})/);
             if (match) {
                 const stackCount = parseInt(match[1]);
                 const exposure = parseFloat(match[2]);
@@ -1228,19 +1231,32 @@ class Dashboard {
                 const dateStr = date.toLocaleDateString();
                 const timeStr = date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
 
-                sessions.push({
-                    stackCount,
-                    exposure,
-                    filter,
-                    date: dateStr,
-                    time: timeStr,
-                    datetime: date,
-                    filename
-                });
+                // Create a unique key for this session (date + time + exposure + filter)
+                const sessionKey = `${dateStr}_${timeStr}_${exposure}_${filter}`;
+
+                if (sessionMap.has(sessionKey)) {
+                    // Session already exists, add to stack count
+                    const existingSession = sessionMap.get(sessionKey);
+                    existingSession.stackCount += stackCount;
+                    existingSession.fileCount++;
+                } else {
+                    // New session
+                    sessionMap.set(sessionKey, {
+                        stackCount,
+                        exposure,
+                        filter,
+                        date: dateStr,
+                        time: timeStr,
+                        datetime: date,
+                        fileCount: 1,
+                        filename
+                    });
+                }
             }
         });
 
-        // Sort by datetime
+        // Convert Map to array and sort by datetime
+        const sessions = Array.from(sessionMap.values());
         sessions.sort((a, b) => a.datetime - b.datetime);
 
         return sessions;
@@ -1338,8 +1354,8 @@ class Dashboard {
                                 </h5>
                                 <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 1rem;">
                                     ${Object.entries(stackedExposureBreakdown)
-                                        .sort((a, b) => parseFloat(a[0]) - parseFloat(b[0]))
-                                        .map(([exposure, count]) => `
+                        .sort((a, b) => parseFloat(a[0]) - parseFloat(b[0]))
+                        .map(([exposure, count]) => `
                                             <div style="background: var(--bg-tertiary); padding: 1rem; border-radius: 8px; display: flex; justify-content: space-between; align-items: center;">
                                                 <div>
                                                     <div style="font-size: 0.875rem; color: var(--text-secondary); margin-bottom: 0.25rem;">Exposure</div>
@@ -1363,8 +1379,8 @@ class Dashboard {
                                 </h5>
                                 <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 1rem;">
                                     ${Object.entries(lightFrameExposureBreakdown)
-                                        .sort((a, b) => parseFloat(a[0]) - parseFloat(b[0]))
-                                        .map(([exposure, count]) => `
+                        .sort((a, b) => parseFloat(a[0]) - parseFloat(b[0]))
+                        .map(([exposure, count]) => `
                                             <div style="background: var(--bg-tertiary); padding: 1rem; border-radius: 8px; display: flex; justify-content: space-between; align-items: center;">
                                                 <div>
                                                     <div style="font-size: 0.875rem; color: var(--text-secondary); margin-bottom: 0.25rem;">Exposure</div>
@@ -1401,9 +1417,9 @@ class Dashboard {
                                 </thead>
                                 <tbody>
                                     ${sessions.map((session, idx) => {
-                                        const totalIntegration = session.stackCount * session.exposure;
-                                        const bgColor = idx % 2 === 0 ? 'transparent' : 'var(--bg-tertiary)';
-                                        return `
+                            const totalIntegration = session.stackCount * session.exposure;
+                            const bgColor = idx % 2 === 0 ? 'transparent' : 'var(--bg-tertiary)';
+                            return `
                                             <tr style="background: ${bgColor}; border-bottom: 1px solid var(--border-color);">
                                                 <td style="padding: 0.75rem; font-family: monospace; font-size: 0.875rem;">${session.date}</td>
                                                 <td style="padding: 0.75rem; font-family: monospace; font-size: 0.875rem;">${session.time}</td>
@@ -1417,7 +1433,7 @@ class Dashboard {
                                                 </td>
                                             </tr>
                                         `;
-                                    }).join('')}
+                        }).join('')}
                                 </tbody>
                             </table>
                         </div>
@@ -1477,8 +1493,8 @@ class Dashboard {
                                 .FIT Files (${fitFiles.length})
                             </h4>
                             ${fitFiles.map(file => {
-                                const captureDate = this.extractCaptureDate(file);
-                                return `
+            const captureDate = this.extractCaptureDate(file);
+            return `
                                     <div style="padding: 0.5rem; border-bottom: 1px solid var(--border-color);
                                                 font-family: monospace; font-size: 0.875rem; display: flex;
                                                 justify-content: space-between; align-items: center; gap: 1rem;">
@@ -1486,7 +1502,7 @@ class Dashboard {
                                         ${captureDate ? `<span style="color: var(--text-secondary); font-size: 0.75rem; white-space: nowrap;">${captureDate}</span>` : ''}
                                     </div>
                                 `;
-                            }).join('')}
+        }).join('')}
                         </div>
                     ` : ''}
                     ${jpgFiles.length > 0 ? `
@@ -1495,8 +1511,8 @@ class Dashboard {
                                 .JPG Files (${jpgFiles.length})
                             </h4>
                             ${jpgFiles.map(file => {
-                                const captureDate = this.extractCaptureDate(file);
-                                return `
+            const captureDate = this.extractCaptureDate(file);
+            return `
                                     <div style="padding: 0.5rem; border-bottom: 1px solid var(--border-color);
                                                 font-family: monospace; font-size: 0.875rem; display: flex;
                                                 justify-content: space-between; align-items: center; gap: 1rem;">
@@ -1504,7 +1520,7 @@ class Dashboard {
                                         ${captureDate ? `<span style="color: var(--text-secondary); font-size: 0.75rem; white-space: nowrap;">${captureDate}</span>` : ''}
                                     </div>
                                 `;
-                            }).join('')}
+        }).join('')}
                         </div>
                     ` : ''}
                     ${thnFiles.length > 0 ? `
@@ -1513,8 +1529,8 @@ class Dashboard {
                                 Thumbnails (${thnFiles.length})
                             </h4>
                             ${thnFiles.map(file => {
-                                const captureDate = this.extractCaptureDate(file);
-                                return `
+            const captureDate = this.extractCaptureDate(file);
+            return `
                                     <div style="padding: 0.5rem; border-bottom: 1px solid var(--border-color);
                                                 font-family: monospace; font-size: 0.875rem; display: flex;
                                                 justify-content: space-between; align-items: center; gap: 1rem;">
@@ -1522,7 +1538,7 @@ class Dashboard {
                                         ${captureDate ? `<span style="color: var(--text-secondary); font-size: 0.75rem; white-space: nowrap;">${captureDate}</span>` : ''}
                                     </div>
                                 `;
-                            }).join('')}
+        }).join('')}
                         </div>
                     ` : ''}
                     ${mp4Files.length > 0 ? `
@@ -1531,8 +1547,8 @@ class Dashboard {
                                 Videos (${mp4Files.length})
                             </h4>
                             ${mp4Files.map(file => {
-                                const captureDate = this.extractCaptureDate(file);
-                                return `
+            const captureDate = this.extractCaptureDate(file);
+            return `
                                     <div style="padding: 0.5rem; border-bottom: 1px solid var(--border-color);
                                                 font-family: monospace; font-size: 0.875rem; display: flex;
                                                 justify-content: space-between; align-items: center; gap: 1rem;">
@@ -1540,7 +1556,7 @@ class Dashboard {
                                         ${captureDate ? `<span style="color: var(--text-secondary); font-size: 0.75rem; white-space: nowrap;">${captureDate}</span>` : ''}
                                     </div>
                                 `;
-                            }).join('')}
+        }).join('')}
                         </div>
                     ` : ''}
                     ${otherFiles.length > 0 ? `
@@ -1549,8 +1565,8 @@ class Dashboard {
                                 Other Files (${otherFiles.length})
                             </h4>
                             ${otherFiles.map(file => {
-                                const captureDate = this.extractCaptureDate(file);
-                                return `
+            const captureDate = this.extractCaptureDate(file);
+            return `
                                     <div style="padding: 0.5rem; border-bottom: 1px solid var(--border-color);
                                                 font-family: monospace; font-size: 0.875rem; display: flex;
                                                 justify-content: space-between; align-items: center; gap: 1rem;">
@@ -1558,7 +1574,7 @@ class Dashboard {
                                         ${captureDate ? `<span style="color: var(--text-secondary); font-size: 0.75rem; white-space: nowrap;">${captureDate}</span>` : ''}
                                     </div>
                                 `;
-                            }).join('')}
+        }).join('')}
                         </div>
                     ` : ''}
                 </div>
