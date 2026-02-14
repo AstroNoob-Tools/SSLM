@@ -1,0 +1,10 @@
+
+
+https://www.google.com/search?q=how+to+get+FWHM+from+a+fit+file&oq=how+to+get+FWHM+from+a+fit+file&gs_lcrp=EgZjaHJvbWUyBggAEEUYOTIHCAEQIRiPAtIBCDY2NTNqMGo5qAIGsAIB8QUkjCAwzgl0Vw&sourceid=chrome&ie=UTF-8
+
+from lmfit.models import GaussianModel
+# Assume x, y are your data
+model = GaussianModel()
+params = model.guess(y, x=x)
+result = model.fit(y, params, x=x)
+print(result.params['fwhm']) # Prints FWHM directly

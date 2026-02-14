@@ -753,7 +753,74 @@ The import wizard guides users through the process of importing files from a con
 - **Mosaic Variant**: Object name + "_mosaic" suffix (e.g., "M 45_mosaic")
 - **Special Characters**: Spaces, hyphens, and numbers in object names
 
+## Recent Bug Fixes (2026-02-14)
+
+### Directory Browser Error Fix
+**Issue**: When selecting "Local Copy" mode and browsing for a folder, the application threw an error: "Cannot read properties of undefined (reading 'length')"
+
+**Root Cause**: Property name mismatch between server and client
+- Server API (`/api/browse/directory`) returned directory list as `directories` property
+- Client code (`modeSelection.js`) expected the property to be named `items`
+- When accessing `data.items.length`, the undefined `items` property caused the error
+
+**Fix**: Updated `renderDirectoryContents()` in `modeSelection.js`
+- Changed `data.items` references to `data.directories`
+- Added defensive null check: `const directories = data.directories || []`
+- Ensures graceful handling even if property is missing
+
+**Files Modified**: 
+- `public/js/modeSelection.js` (lines 409-417)
+
+### Dashboard Card Layout Fix
+**Issue**: Summary cards in the dashboard were wrapping to multiple rows instead of displaying in a single horizontal line
+
+**Root Cause**: Grid layout using `repeat(auto-fit, minmax(200px, 1fr))` caused cards to wrap when viewport width was insufficient for all cards at minimum 200px width
+
+**Fix**: Changed grid layout to fixed 6-column layout
+- Changed from `repeat(auto-fit, minmax(200px, 1fr))` to `repeat(6, 1fr)`
+- Reduced gap from `1.5rem` to `1rem` for more compact display
+- All 6 summary cards now display in one horizontal row
+
+**Files Modified**:
+- `public/js/dashboard.js` (line 72)
+
+### Object Detail Scroll Position Fix
+**Issue**: When clicking an object to view its detail page, the page would load scrolled to the bottom instead of the top
+
+**Root Cause**: The `showObjectDetail()` function switched screens but didn't reset scroll position
+
+**Fix**: Added scroll to top after screen switch
+- Added `window.scrollTo(0, 0)` after `app.showScreen('objectDetailScreen')`
+- Users now land at the top of the detail page where the object header is visible
+
+**Files Modified**:
+- `public/js/dashboard.js` (lines 1082-1086)
+
+### Imaging Session Grouping Fix
+**Issue**: Imaging sessions table showed duplicate entries for files from the same session
+- Example: 3 files captured on 1/2/2026 at 11:36 PM with 20s exposure and LP filter were displayed as 3 separate sessions instead of 1 grouped session
+
+**Root Cause**: The `parseImagingSessions()` function created a new session entry for each stacked file without grouping by session parameters
+
+**Fix**: Implemented session grouping using Map data structure
+- Created unique session key combining: date + time + exposure + filter
+- Sessions with identical parameters are now combined into single entries
+- Stack counts are aggregated (e.g., 60+60+60 = 180 total frames)
+- Added `fileCount` property to track how many files were combined
+
+**Implementation Details**:
+- Used `Map` to group sessions by unique key: `${dateStr}_${timeStr}_${exposure}_${filter}`
+- When duplicate session found, adds to existing stack count instead of creating new entry
+- Converts Map to array and sorts by datetime before returning
+- Fixed regex pattern to correctly parse object names with spaces
+
+**Files Modified**:
+- `public/js/dashboard.js` (lines 1209-1261)
+
+**Impact**: Imaging sessions now display accurately, showing the true number of distinct imaging sessions rather than the number of stacked files
+
 ### Future Enhancement Ideas
+
 - Cross-platform support (macOS, Linux)
 - Windows installer package
 - Backup and restore features
