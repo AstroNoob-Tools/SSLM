@@ -902,19 +902,30 @@ Network drives will be 3-5x slower.
   - Added `handleAnalyzeProgress()` Socket.IO event handler
   - Updated Step 3 UI with `analyzeStatusMessage` and `analyzeProgressDetails` elements
   - Modified analyze request to include socketId for real-time updates
-- ✅ **Enhanced Dashboard Navigation Debugging**:
+- ✅ **Enhanced Dashboard Navigation**:
   - Added path normalization in `skipToAnalysisDashboard()` (ensures Windows backslashes)
-  - Added detailed console logging on client side (original path, normalized path)
-  - Added comprehensive server-side debugging in `/api/analyze` endpoint
-  - Server now logs: raw path received, path length/type, directory existence check
-  - Returns detailed error message if directory not found
-  - Helps identify path encoding/format issues
+  - Added animated loading donut during dashboard analysis
+  - Fixed cross-wizard event handling (import wizard no longer interferes with merge validation)
+  - Proper screen activation checks using CSS class instead of inline styles
+- ✅ **Streamlined Workflow**:
+  - Removed all intermediate modals (merge completion, validation results)
+  - Automatic progression: Merge → Validation → Dashboard
+  - Auto-skip to validation when no files need copying (Step 3 → Step 6)
+  - Added Home button (🏠) in header for easy navigation back to welcome screen
+- ✅ **UI/UX Improvements**:
+  - All completion screens auto-proceed with visual feedback
+  - Brief transition messages between stages
+  - Loading donut animation during dashboard analysis
+  - Clean, uninterrupted workflow from start to finish
 
 **Testing Status:**
 - ✅ Successfully tested with 2 identical libraries (proper duplicate detection)
-- 🔄 Ongoing testing with real library copies containing differences
-- 🔄 Testing real-time analysis progress display
-- 🔄 Debugging dashboard navigation path handling
+- ✅ Successfully tested with real library copies containing differences
+- ✅ Real-time analysis progress display working correctly
+- ✅ Dashboard navigation and loading working properly
+- ✅ Auto-skip to validation when no files need copying
+- ✅ Complete end-to-end merge workflow validated
+- ✅ Home button navigation tested across all screens
 
 ### Dashboard Features
 
