@@ -139,11 +139,19 @@ body {
     display: block;
 }
 
+/* Merge Wizard Screen needs flex layout when active */
+.merge-wizard-screen.active {
+    display: flex;
+    flex-direction: column;
+    height: 100vh;
+}
+
 @keyframes fadeIn {
     from {
         opacity: 0;
         transform: translateY(10px);
     }
+
     to {
         opacity: 1;
         transform: translateY(0);
@@ -170,7 +178,7 @@ body {
     -webkit-text-fill-color: transparent;
 }
 
-.welcome-content > p {
+.welcome-content>p {
     font-size: 1.125rem;
     color: var(--text-secondary);
     margin-bottom: 3rem;
@@ -179,16 +187,19 @@ body {
 /* Mode Selection */
 .mode-selection {
     display: grid;
-    grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
-    gap: 2rem;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 1.5rem;
     margin-top: 2rem;
+    max-width: 1200px;
+    margin-left: auto;
+    margin-right: auto;
 }
 
 .mode-card {
     background: var(--bg-card);
     border: 2px solid var(--border-color);
     border-radius: 16px;
-    padding: 2rem;
+    padding: 1.5rem;
     text-align: center;
     transition: var(--transition);
 }
@@ -200,19 +211,20 @@ body {
 }
 
 .mode-icon {
-    font-size: 3rem;
-    margin-bottom: 1rem;
+    font-size: 2.5rem;
+    margin-bottom: 0.75rem;
 }
 
 .mode-card h3 {
-    font-size: 1.5rem;
+    font-size: 1.25rem;
     margin-bottom: 0.5rem;
 }
 
 .mode-card p {
     color: var(--text-secondary);
-    margin-bottom: 1.5rem;
-    min-height: 3rem;
+    margin-bottom: 1.25rem;
+    min-height: 2.5rem;
+    font-size: 0.9rem;
 }
 
 /* Buttons */
@@ -328,8 +340,13 @@ body {
 }
 
 @keyframes spin {
-    0% { transform: rotate(0deg); }
-    100% { transform: rotate(360deg); }
+    0% {
+        transform: rotate(0deg);
+    }
+
+    100% {
+        transform: rotate(360deg);
+    }
 }
 
 /* Modal */
@@ -515,7 +532,8 @@ body {
     font-weight: 500;
 }
 
-.device-card, .strategy-card {
+.device-card,
+.strategy-card {
     border: 2px solid var(--border-color);
     border-radius: 12px;
     padding: 1.5rem;
@@ -525,13 +543,15 @@ body {
     background: var(--bg-card);
 }
 
-.device-card:hover:not(.disabled), .strategy-card:hover {
+.device-card:hover:not(.disabled),
+.strategy-card:hover {
     border-color: var(--primary-color);
     transform: translateY(-2px);
     box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
 }
 
-.device-card.selected, .strategy-card.selected {
+.device-card.selected,
+.strategy-card.selected {
     border-color: var(--primary-color);
     background: var(--bg-secondary);
 }
@@ -659,7 +679,7 @@ body {
     margin-top: 1.5rem;
 }
 
-.progress-stats > div {
+.progress-stats>div {
     padding: 0.75rem;
     background: var(--bg-tertiary);
     border-radius: 8px;

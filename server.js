@@ -272,7 +272,24 @@ app.get('/api/analyze', async (req, res) => {
       return res.status(400).json({ success: false, error: 'Path parameter required' });
     }
 
-    console.log(`Analyzing directory: ${directoryPath}`);
+    console.log(`\n=== ANALYZE REQUEST ===`);
+    console.log(`Raw path from query: "${directoryPath}"`);
+    console.log(`Path length: ${directoryPath.length}`);
+    console.log(`Path exists check...`);
+
+    // Check if directory exists
+    const exists = await fs.pathExists(directoryPath);
+    console.log(`Directory exists: ${exists}`);
+
+    if (!exists) {
+      console.error(`ERROR: Directory not found at path: "${directoryPath}"`);
+      return res.status(404).json({
+        success: false,
+        error: `Directory does not exist: ${directoryPath}`
+      });
+    }
+
+    console.log(`Starting analysis...`);
     const result = await FileAnalyzer.analyzeDirectory(directoryPath);
 
     if (result.success) {
@@ -281,6 +298,7 @@ app.get('/api/analyze', async (req, res) => {
 
     res.json(result);
   } catch (error) {
+    console.error(`Analysis error:`, error);
     res.status(500).json({ success: false, error: error.message });
   }
 });
@@ -500,7 +518,7 @@ app.post('/api/import/validate', async (req, res) => {
 // Merge API Routes
 app.post('/api/merge/analyze', async (req, res) => {
   try {
-    const { sourcePaths, destinationPath } = req.body;
+    const { sourcePaths, destinationPath, socketId } = req.body;
 
     if (!sourcePaths || !Array.isArray(sourcePaths) || sourcePaths.length < 2) {
       return res.status(400).json({
@@ -517,7 +535,7 @@ app.post('/api/merge/analyze', async (req, res) => {
     }
 
     console.log(`Analyzing ${sourcePaths.length} libraries for merge...`);
-    const result = await mergeService.analyzeSources(sourcePaths, destinationPath);
+    const result = await mergeService.analyzeSources(sourcePaths, destinationPath, socketId);
 
     res.json({ success: true, ...result });
   } catch (error) {
@@ -622,6 +640,7 @@ app.post('/api/merge/validate', async (req, res) => {
 
     const operationId = Date.now().toString();
     console.log(`Starting merge validation: ${destinationPath}`);
+    console.log(`MergePlan summary: filesToCopy=${mergePlan.filesToCopy?.length || 0}, filesAlreadyExist=${mergePlan.filesAlreadyExist?.length || 0}, uniqueFiles=${mergePlan.uniqueFiles}`);
 
     mergeService.validateMerge(destinationPath, mergePlan, socketId, operationId)
       .catch(error => {
@@ -671,8 +690,8 @@ const gracefulShutdown = () => {
   console.log('\nShutdown signal received, shutting down gracefully...');
 
   // Cancel any ongoing operations
-  importService.cancelImport().catch(() => {});
-  mergeService.cancelMerge().catch(() => {});
+  importService.cancelImport().catch(() => { });
+  mergeService.cancelMerge().catch(() => { });
 
   // Close all Socket.IO connections
   io.close(() => {

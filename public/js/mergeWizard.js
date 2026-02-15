@@ -37,6 +37,9 @@ class MergeWizard {
             return;
         }
 
+        // Analysis progress events
+        app.socket.on('analyze:progress', (data) => this.handleAnalyzeProgress(data));
+
         // Merge progress events
         app.socket.on('merge:progress', (data) => this.handleProgressUpdate(data));
         app.socket.on('merge:complete', (data) => this.handleMergeComplete(data));
@@ -47,6 +50,45 @@ class MergeWizard {
         app.socket.on('validate:progress', (data) => this.handleValidationProgress(data));
         app.socket.on('validate:complete', (data) => this.handleValidationComplete(data));
         app.socket.on('validate:error', (data) => this.handleValidationError(data));
+    }
+
+    handleAnalyzeProgress(data) {
+        const statusMessage = document.getElementById('analyzeStatusMessage');
+        const progressDetails = document.getElementById('analyzeProgressDetails');
+
+        if (statusMessage) {
+            statusMessage.textContent = data.message || 'Analyzing...';
+        }
+
+        if (progressDetails) {
+            if (data.status === 'scanning_source') {
+                progressDetails.innerHTML = `
+                    <div style="padding: 0.75rem; background: var(--bg-tertiary); border-radius: 4px; margin-top: 0.5rem;">
+                        <div style="font-weight: 600; margin-bottom: 0.25rem;">
+                            Scanning Library ${data.currentSource} of ${data.totalSources}
+                        </div>
+                        <div style="font-family: monospace; font-size: 0.85em; color: var(--text-secondary); overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">
+                            ${data.sourcePath || ''}
+                        </div>
+                    </div>
+                `;
+            } else if (data.filesFound !== undefined) {
+                const existingContent = progressDetails.innerHTML;
+                progressDetails.innerHTML = existingContent + `
+                    <div style="padding: 0.5rem 0.75rem; color: var(--success-color); font-size: 0.9em;">
+                        ✓ Found ${data.filesFound.toLocaleString()} files
+                    </div>
+                `;
+            } else if (data.status === 'scanning_destination') {
+                progressDetails.innerHTML += `
+                    <div style="padding: 0.75rem; background: var(--bg-tertiary); border-radius: 4px; margin-top: 0.5rem;">
+                        <div style="font-weight: 600;">
+                            ${data.message || 'Scanning destination...'}
+                        </div>
+                    </div>
+                `;
+            }
+        }
     }
 
     async renderStep(stepNumber) {
@@ -161,8 +203,8 @@ class MergeWizard {
 
                 <div class="selected-sources" id="selectedSourcesList" style="flex: 1; overflow-y: auto;">
                     ${this.sourcePaths.length === 0
-                        ? '<div style="display: flex; align-items: center; justify-content: center; height: 100%; color: var(--text-secondary);"><p>No sources selected yet. Click "Add Library" to select folders.</p></div>'
-                        : this.renderSelectedSources()}
+                ? '<div style="display: flex; align-items: center; justify-content: center; height: 100%; color: var(--text-secondary);"><p>No sources selected yet. Click "Add Library" to select folders.</p></div>'
+                : this.renderSelectedSources()}
                 </div>
             </div>
         `;
@@ -239,14 +281,14 @@ class MergeWizard {
 
                 <div class="destination-display">
                     ${this.destinationPath
-                        ? `
+                ? `
                             <div class="selected-destination">
                                 <div class="destination-icon">📂</div>
                                 <div class="destination-path">${this.destinationPath}</div>
                             </div>
                         `
-                        : '<p class="text-muted">No destination selected. Click "Browse" to select a folder.</p>'
-                    }
+                : '<p class="text-muted">No destination selected. Click "Browse" to select a folder.</p>'
+            }
                 </div>
 
                 <button class="btn btn-primary" id="browseDestinationBtn">
@@ -273,21 +315,36 @@ class MergeWizard {
         content.innerHTML = `
             <div class="wizard-step-content">
                 <h3>Analyzing Libraries...</h3>
-                <div class="loading-indicator">
-                    <div class="spinner"></div>
-                    <p>Scanning source libraries and building merge plan...</p>
+                <div class="loading-indicator" style="text-align: center; padding: 3rem 0;">
+                    <div class="spinner" style="margin: 0 auto 1.5rem auto; width: 60px; height: 60px; border: 4px solid var(--border-color); border-top: 4px solid var(--primary-color); border-radius: 50%; animation: spin 1s linear infinite;"></div>
+                    <p id="analyzeStatusMessage" style="font-size: 1.1em; margin-bottom: 0.5rem;">Scanning source libraries and building merge plan...</p>
+                    <p style="color: var(--text-secondary); font-size: 0.9em;">This may take a moment depending on library size</p>
+                    <div id="analyzeProgressDetails" style="margin-top: 1.5rem; text-align: left; max-width: 600px; margin-left: auto; margin-right: auto;">
+                        <!-- Progress details will be populated here by Socket.IO events -->
+                    </div>
                 </div>
             </div>
+            <style>
+                @keyframes spin {
+                    0% { transform: rotate(0deg); }
+                    100% { transform: rotate(360deg); }
+                }
+                @keyframes blink {
+                    0%, 80%, 100% { opacity: 0.3; }
+                    40% { opacity: 1; }
+                }
+            </style>
         `;
 
         try {
-            // Call analyze API
+            // Call analyze API with socketId for real-time progress
             const response = await fetch('/api/merge/analyze', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({
                     sourcePaths: this.sourcePaths,
-                    destinationPath: this.destinationPath
+                    destinationPath: this.destinationPath,
+                    socketId: app.socket?.id
                 })
             });
 
@@ -315,6 +372,10 @@ class MergeWizard {
 
     displayAnalysisResults(mergePlan) {
         const content = document.getElementById('mergeWizardContent');
+
+        // Check if there are no files to copy
+        const noFilesToCopy = mergePlan.filesToCopy.length === 0;
+
         content.innerHTML = `
             <div class="wizard-step-content">
                 <h3>Merge Plan Preview</h3>
@@ -345,16 +406,49 @@ class MergeWizard {
                                 <td class="stat-value">${mergePlan.conflicts.count.toLocaleString()}</td>
                             </tr>
                             <tr class="highlight">
-                                <td class="stat-label">Final File Count</td>
+                                <td class="stat-label">Unique Files (After Deduplication)</td>
                                 <td class="stat-value">${mergePlan.uniqueFiles.toLocaleString()}</td>
                             </tr>
-                            <tr class="highlight">
-                                <td class="stat-label">Total Size</td>
+                            ${mergePlan.existingInDestination > 0 ? `
+                                <tr style="background-color: var(--bg-tertiary);">
+                                    <td class="stat-label">Already in Destination</td>
+                                    <td class="stat-value">${mergePlan.existingInDestination.toLocaleString()} (${this.formatBytes(mergePlan.bytesAlreadyInDestination)})</td>
+                                </tr>
+                            ` : ''}
+                            <tr class="highlight" style="font-weight: 600;">
+                                <td class="stat-label">Files to Copy</td>
+                                <td class="stat-value">${mergePlan.filesToCopy.length.toLocaleString()}</td>
+                            </tr>
+                            <tr class="highlight" style="font-weight: 600;">
+                                <td class="stat-label">Total Size to Copy</td>
                                 <td class="stat-value">${this.formatBytes(mergePlan.totalBytes)}</td>
                             </tr>
                         </tbody>
                     </table>
                 </div>
+
+                ${noFilesToCopy ? `
+                    <div class="info-message" style="margin: 1.5rem 0; padding: 1.5rem; background: var(--success-color); color: white; border-radius: 8px; text-align: center;">
+                        <div style="font-size: 2.5rem; margin-bottom: 0.5rem;">✓</div>
+                        <h4 style="margin: 0 0 0.5rem 0; color: white;">All Files Already Exist in Destination</h4>
+                        <p style="margin: 0; opacity: 0.9;">
+                            All unique files from the source libraries already exist in the destination directory.<br>
+                            No files need to be copied. You can proceed directly to validation.
+                        </p>
+                    </div>
+                    <div style="text-align: center; margin-top: 2rem;">
+                        <button class="btn btn-primary" id="skipToValidationBtn" style="font-size: 1.1em; padding: 1rem 2rem;">
+                            Proceed to Validation →
+                        </button>
+                    </div>
+                ` : ''}
+
+                ${!noFilesToCopy && mergePlan.existingInDestination > 0 ? `
+                    <div class="info-message" style="margin: 1rem 0; padding: 1rem; background: var(--bg-tertiary); border-left: 4px solid var(--primary-color); border-radius: 4px;">
+                        <strong>ℹ️ Previous Merge Detected</strong><br>
+                        ${mergePlan.existingInDestination} file${mergePlan.existingInDestination > 1 ? 's' : ''} already exist${mergePlan.existingInDestination === 1 ? 's' : ''} in the destination with matching content and will be skipped.
+                    </div>
+                ` : ''}
 
                 ${mergePlan.conflicts.count > 0 ? `
                     <div class="conflict-preview">
@@ -386,6 +480,14 @@ class MergeWizard {
                 ` : '<p class="success-message">No conflicts found! All files are unique across libraries.</p>'}
             </div>
         `;
+
+        // Add event listener for skip to validation button if it exists
+        if (noFilesToCopy) {
+            const skipBtn = document.getElementById('skipToValidationBtn');
+            if (skipBtn) {
+                skipBtn.addEventListener('click', () => this.skipToValidation());
+            }
+        }
     }
 
     // ========================================================================
@@ -395,24 +497,66 @@ class MergeWizard {
     async renderStep4_Confirmation() {
         const content = document.getElementById('mergeWizardContent');
 
-        // Calculate space requirements
+        // Show loading indicator while validating space
+        content.innerHTML = `
+            <div class="wizard-step-content">
+                <h3>Preparing Confirmation...</h3>
+                <div class="loading-indicator" style="text-align: center; padding: 3rem 0;">
+                    <div class="spinner" style="margin: 0 auto 1.5rem auto; width: 60px; height: 60px; border: 4px solid var(--border-color); border-top: 4px solid var(--primary-color); border-radius: 50%; animation: spin 1s linear infinite;"></div>
+                    <p style="font-size: 1.1em; margin-bottom: 0.5rem;">Validating disk space...</p>
+                    <p style="color: var(--text-secondary); font-size: 0.9em;">Checking available space on destination drive</p>
+                    <div class="progress-dots" style="margin-top: 1rem; font-size: 1.5em; letter-spacing: 0.5rem;">
+                        <span class="dot" style="animation: blink 1.4s infinite both; animation-delay: 0s;">●</span>
+                        <span class="dot" style="animation: blink 1.4s infinite both; animation-delay: 0.2s;">●</span>
+                        <span class="dot" style="animation: blink 1.4s infinite both; animation-delay: 0.4s;">●</span>
+                    </div>
+                </div>
+            </div>
+            <style>
+                @keyframes spin {
+                    0% { transform: rotate(0deg); }
+                    100% { transform: rotate(360deg); }
+                }
+                @keyframes blink {
+                    0%, 80%, 100% { opacity: 0.3; }
+                    40% { opacity: 1; }
+                }
+            </style>
+        `;
+
+
+
+        // Validate disk space for merge operation
+        // Use totalBytes from merge plan (already accounts for files in destination)
         let spaceValidation = null;
         try {
-            const response = await fetch('/api/merge/validate-space', {
+            // Use merge plan's totalBytes (already accurate - excludes files already in destination)
+            const requiredBytes = this.mergePlan.totalBytes;
+            const requiredWithBuffer = Math.ceil(requiredBytes * 1.1); // 10% buffer
+
+            // Get available space on destination drive using import endpoint
+            const response = await fetch('/api/import/validate-space', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({
-                    sourcePaths: this.sourcePaths,
-                    destinationPath: this.destinationPath
+                    sourcePath: this.sourcePaths[0],  // Any source (not used for space calc)
+                    destinationPath: this.destinationPath,
+                    strategy: 'full'
                 })
             });
 
             const result = await response.json();
             if (result.success) {
-                spaceValidation = result;
+                spaceValidation = {
+                    requiredFormatted: this.formatBytes(requiredWithBuffer),
+                    availableFormatted: result.availableFormatted,
+                    hasEnoughSpace: result.available >= requiredWithBuffer,
+                    required: requiredWithBuffer,
+                    available: result.available
+                };
             }
         } catch (error) {
-            console.error('Error validating space:', error);
+            console.error('Error validating disk space:', error);
         }
 
         content.innerHTML = `
@@ -474,8 +618,18 @@ class MergeWizard {
                                 <td class="stat-label">Final file count</td>
                                 <td class="stat-value">${this.mergePlan.uniqueFiles.toLocaleString()}</td>
                             </tr>
+                            ${this.mergePlan.existingInDestination > 0 ? `
+                            <tr style="background: var(--bg-tertiary);">
+                                <td class="stat-label">Already in destination (will skip)</td>
+                                <td class="stat-value">${this.mergePlan.existingInDestination.toLocaleString()} files (${this.formatBytes(this.mergePlan.bytesAlreadyInDestination)})</td>
+                            </tr>
                             <tr class="highlight">
-                                <td class="stat-label">Total size</td>
+                                <td class="stat-label">Files to copy</td>
+                                <td class="stat-value">${this.mergePlan.filesToCopy.length.toLocaleString()}</td>
+                            </tr>
+                            ` : ''}
+                            <tr class="highlight">
+                                <td class="stat-label">Total size ${this.mergePlan.existingInDestination > 0 ? 'to copy' : ''}</td>
                                 <td class="stat-value">${this.formatBytes(this.mergePlan.totalBytes)}</td>
                             </tr>
                         </tbody>
@@ -493,7 +647,7 @@ class MergeWizard {
                             </thead>
                             <tbody>
                                 <tr>
-                                    <td class="stat-label">Required</td>
+                                    <td class="stat-label">Required (with 10% buffer)</td>
                                     <td class="stat-value">${spaceValidation.requiredFormatted}</td>
                                 </tr>
                                 <tr>
@@ -563,49 +717,56 @@ class MergeWizard {
             <div class="wizard-step-content">
                 <h3>Merging Libraries...</h3>
 
-                <div class="progress-container">
-                    <div class="progress-bar">
-                        <div class="progress-fill" id="mergeProgressBar" style="width: 0%"></div>
+                <!-- Progress Bar Section -->
+                <div style="margin: 2rem 0;">
+                    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.5rem;">
+                        <span style="font-weight: 600; font-size: 1.1em;">Progress</span>
+                        <span id="mergeProgressPercentage" style="font-weight: 600; font-size: 1.1em; color: var(--primary-color);">0%</span>
                     </div>
-                    <div class="progress-percentage" id="mergeProgressPercentage">0%</div>
+                    <div style="width: 100%; height: 30px; background: var(--bg-tertiary); border-radius: 15px; overflow: hidden; border: 1px solid var(--border-color);">
+                        <div id="mergeProgressBar" style="height: 100%; width: 0%; background: linear-gradient(90deg, var(--primary-color), var(--accent-color)); transition: width 0.3s ease;"></div>
+                    </div>
                 </div>
 
-                <div class="progress-details">
-                    <div class="current-file" id="mergeCurrentFile">
+                <!-- Current File -->
+                <div style="margin: 1.5rem 0; padding: 1rem; background: var(--bg-secondary); border-radius: 8px; border: 1px solid var(--border-color);">
+                    <div id="mergeCurrentFile" style="font-family: monospace; font-size: 0.9em; color: var(--text-secondary); word-break: break-all;">
                         Starting merge...
                     </div>
-                    <div class="progress-stats">
-                        <div class="stat">
-                            <span class="label">Files:</span>
-                            <span class="value" id="mergeFilesProgress">0 / 0</span>
-                        </div>
-                        <div class="stat">
-                            <span class="label">Size:</span>
-                            <span class="value" id="mergeBytesProgress">0 / 0</span>
-                        </div>
-                        <div class="stat">
-                            <span class="label">Speed:</span>
-                            <span class="value" id="mergeSpeed">-</span>
-                        </div>
-                        <div class="stat">
-                            <span class="label">Time Remaining:</span>
-                            <span class="value" id="mergeETA">-</span>
-                        </div>
+                </div>
+
+                <!-- Statistics Cards -->
+                <div style="display: grid; grid-template-columns: repeat(2, 1fr); gap: 1rem; margin: 1.5rem 0;">
+                    <div style="padding: 1rem; background: var(--bg-secondary); border-radius: 8px; border: 1px solid var(--border-color);">
+                        <div style="font-size: 0.85em; color: var(--text-secondary); margin-bottom: 0.5rem;">Files</div>
+                        <div id="mergeFilesProgress" style="font-size: 1.25em; font-weight: 600; color: var(--primary-color);">0 / 0</div>
+                    </div>
+                    <div style="padding: 1rem; background: var(--bg-secondary); border-radius: 8px; border: 1px solid var(--border-color);">
+                        <div style="font-size: 0.85em; color: var(--text-secondary); margin-bottom: 0.5rem;">Size</div>
+                        <div id="mergeBytesProgress" style="font-size: 1.25em; font-weight: 600; color: var(--primary-color);">0 MB / 0 MB</div>
+                    </div>
+                    <div style="padding: 1rem; background: var(--bg-secondary); border-radius: 8px; border: 1px solid var(--border-color);">
+                        <div style="font-size: 0.85em; color: var(--text-secondary); margin-bottom: 0.5rem;">Speed</div>
+                        <div id="mergeSpeed" style="font-size: 1.25em; font-weight: 600;">-</div>
+                    </div>
+                    <div style="padding: 1rem; background: var(--bg-secondary); border-radius: 8px; border: 1px solid var(--border-color);">
+                        <div style="font-size: 0.85em; color: var(--text-secondary); margin-bottom: 0.5rem;">Time Remaining</div>
+                        <div id="mergeETA" style="font-size: 1.25em; font-weight: 600;">-</div>
                     </div>
                 </div>
 
-                <div class="merge-actions">
+                <div class="merge-actions" style="text-align: center; margin-top: 2rem;">
                     <button class="btn btn-danger" id="cancelMergeBtn">
                         Cancel Merge
                     </button>
                 </div>
 
-                <div id="mergeCompletionSection" style="display: none;">
-                    <div class="completion-message">
-                        <h4>Merge Complete!</h4>
-                        <p id="mergeCompletionSummary"></p>
+                <div id="mergeCompletionSection" style="display: none; margin-top: 2rem; padding: 1.5rem; background: var(--bg-secondary); border-radius: 8px; border: 2px solid var(--success-color);">
+                    <div class="completion-message" style="text-align: center;">
+                        <h4 style="color: var(--success-color); margin-bottom: 1rem;">✓ Merge Complete!</h4>
+                        <p id="mergeCompletionSummary" style="margin-bottom: 1.5rem;"></p>
                     </div>
-                    <div class="completion-actions">
+                    <div class="completion-actions" style="display: flex; gap: 1rem; justify-content: center;">
                         <button class="btn btn-primary" id="validateMergeBtn">
                             Validate Transfer →
                         </button>
@@ -624,7 +785,30 @@ class MergeWizard {
     }
 
     async startMerge() {
-        // Move to progress step
+        // Check if there are no files to copy - skip directly to validation
+        if (this.mergePlan && this.mergePlan.filesToCopy && this.mergePlan.filesToCopy.length === 0) {
+            console.log('No files to copy, skipping to validation');
+
+            // Show a brief message
+            const content = document.getElementById('mergeWizardContent');
+            content.innerHTML = `
+                <div class="wizard-step-content" style="text-align: center; padding: 3rem 0;">
+                    <div style="font-size: 3rem; margin-bottom: 1rem;">✓</div>
+                    <h3>All Files Already Exist</h3>
+                    <p style="color: var(--text-secondary); margin: 1rem 0;">
+                        All files from the source libraries already exist in the destination.<br>
+                        No files need to be copied. Proceeding to validation...
+                    </p>
+                </div>
+            `;
+
+            // Wait a moment for user to see the message, then go to validation
+            await new Promise(resolve => setTimeout(resolve, 2000));
+            await this.startValidation();
+            return;
+        }
+
+        // Normal merge process - move to progress step
         await this.renderStep(5);
 
         try {
@@ -674,6 +858,24 @@ class MergeWizard {
     handleMergeComplete(data) {
         console.log('Merge complete:', data);
 
+        // First, update progress display to show 100% completion
+        const progressBar = document.getElementById('mergeProgressBar');
+        const progressPercentage = document.getElementById('mergeProgressPercentage');
+        const currentFile = document.getElementById('mergeCurrentFile');
+        const filesProgress = document.getElementById('mergeFilesProgress');
+        const bytesProgress = document.getElementById('mergeBytesProgress');
+        const speed = document.getElementById('mergeSpeed');
+        const eta = document.getElementById('mergeETA');
+
+        if (progressBar) progressBar.style.width = '100%';
+        if (progressPercentage) progressPercentage.textContent = '100%';
+        if (currentFile) currentFile.textContent = 'Merge completed successfully!';
+        if (filesProgress) filesProgress.textContent = `${data.filesCopied} / ${data.totalFiles}`;
+        if (bytesProgress) bytesProgress.textContent = `${this.formatBytes(data.bytesCopied)} / ${this.formatBytes(data.totalBytes)}`;
+        if (speed) speed.textContent = '-';
+        if (eta) eta.textContent = '0s';
+
+        // Then show completion section
         const cancelBtn = document.getElementById('cancelMergeBtn');
         const completionSection = document.getElementById('mergeCompletionSection');
         const completionSummary = document.getElementById('mergeCompletionSummary');
@@ -737,32 +939,68 @@ class MergeWizard {
         content.innerHTML = `
             <div class="wizard-step-content">
                 <h3>Validating Merged Library...</h3>
+                <p style="color: var(--text-secondary); margin-bottom: 2rem;">
+                    Verifying all unique files from source libraries exist in destination with correct sizes.
+                </p>
 
-                <div class="progress-container">
-                    <div class="progress-bar">
-                        <div class="progress-fill" id="validateProgressBar" style="width: 0%"></div>
+                <!-- Progress Bar Section -->
+                <div style="margin: 2rem 0;">
+                    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.5rem;">
+                        <span style="font-weight: 600; font-size: 1.1em;">Progress</span>
+                        <span id="validateProgressPercentage" style="font-weight: 600; font-size: 1.1em; color: var(--primary-color);">0%</span>
                     </div>
-                    <div class="progress-percentage" id="validateProgressPercentage">0%</div>
-                </div>
-
-                <div class="validation-details">
-                    <div class="validation-stats">
-                        <div class="stat">
-                            <span class="label">Files Validated:</span>
-                            <span class="value" id="validateFilesProgress">0 / 0</span>
-                        </div>
-                        <div class="stat">
-                            <span class="label">Issues Found:</span>
-                            <span class="value" id="validateIssues">0</span>
-                        </div>
+                    <div style="width: 100%; height: 30px; background: var(--bg-tertiary); border-radius: 15px; overflow: hidden; border: 1px solid var(--border-color);">
+                        <div id="validateProgressBar" style="height: 100%; width: 0%; background: linear-gradient(90deg, var(--primary-color), var(--accent-color)); transition: width 0.3s ease;"></div>
                     </div>
                 </div>
 
-                <div id="validateResultsSection" style="display: none;">
+                <!-- Statistics Cards -->
+                <div style="display: grid; grid-template-columns: repeat(2, 1fr); gap: 1rem; margin: 1.5rem 0;">
+                    <div style="padding: 1.5rem; background: var(--bg-secondary); border-radius: 8px; border: 1px solid var(--border-color);">
+                        <div style="font-size: 0.85em; color: var(--text-secondary); margin-bottom: 0.5rem;">Files Validated</div>
+                        <div id="validateFilesProgress" style="font-size: 1.5em; font-weight: 600; color: var(--primary-color);">0 / 0</div>
+                    </div>
+                    <div style="padding: 1.5rem; background: var(--bg-secondary); border-radius: 8px; border: 1px solid var(--border-color);">
+                        <div style="font-size: 0.85em; color: var(--text-secondary); margin-bottom: 0.5rem;">Issues Found</div>
+                        <div id="validateIssues" style="font-size: 1.5em; font-weight: 600; color: var(--success-color);">0</div>
+                    </div>
+                </div>
+
+                <div id="validateResultsSection" style="display: none; margin-top: 2rem;">
                     <!-- Results will be populated here -->
                 </div>
             </div>
         `;
+    }
+
+    async skipToValidation() {
+        console.log('Skipping to validation - no files to copy');
+        // Jump directly to step 6 (validation)
+        await this.renderStep(6);
+
+        // Start validation immediately
+        try {
+            const response = await fetch('/api/merge/validate', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    destinationPath: this.destinationPath,
+                    mergePlan: this.mergePlan,
+                    socketId: app.socket.id
+                })
+            });
+
+            const result = await response.json();
+
+            if (result.success) {
+                console.log('Validation started:', result.operationId);
+            } else {
+                throw new Error(result.error || 'Failed to start validation');
+            }
+        } catch (error) {
+            console.error('Error starting validation:', error);
+            app.showModal('Error', `Failed to start validation: ${error.message}`);
+        }
     }
 
     async startValidation() {
@@ -810,6 +1048,21 @@ class MergeWizard {
     handleValidationComplete(data) {
         console.log('Validation complete:', data);
 
+        // First update progress to 100%
+        const progressBar = document.getElementById('validateProgressBar');
+        const progressPercentage = document.getElementById('validateProgressPercentage');
+        const filesProgress = document.getElementById('validateFilesProgress');
+        const issues = document.getElementById('validateIssues');
+
+        if (progressBar) progressBar.style.width = '100%';
+        if (progressPercentage) progressPercentage.textContent = '100%';
+        if (filesProgress) filesProgress.textContent = `${data.filesValidated} / ${data.filesValidated}`;
+        if (issues) {
+            issues.textContent = data.mismatches?.length || 0;
+            issues.style.color = (data.mismatches?.length || 0) > 0 ? 'var(--danger-color)' : 'var(--success-color)';
+        }
+
+        // Then show results
         const resultsSection = document.getElementById('validateResultsSection');
         if (!resultsSection) return;
 
@@ -817,12 +1070,12 @@ class MergeWizard {
 
         if (data.isValid) {
             resultsSection.innerHTML = `
-                <div class="validation-success">
-                    <div class="success-icon">✓</div>
-                    <h4>Validation Successful!</h4>
-                    <p>All ${data.filesValidated} files verified successfully.</p>
-                    <p>Validation completed in ${this.formatDuration(data.duration)}.</p>
-                    <button class="btn btn-primary" id="viewDashboardBtn">
+                <div style="padding: 2rem; background: var(--bg-secondary); border-radius: 8px; border: 2px solid var(--success-color); text-align: center;">
+                    <div style="font-size: 3em; color: var(--success-color); margin-bottom: 1rem;">✓</div>
+                    <h4 style="color: var(--success-color); margin-bottom: 1rem;">Validation Successful!</h4>
+                    <p style="margin-bottom: 0.5rem;">All ${data.filesValidated.toLocaleString()} files verified successfully.</p>
+                    <p style="color: var(--text-secondary); margin-bottom: 2rem;">Validation completed in ${this.formatDuration(data.duration)}.</p>
+                    <button class="btn btn-primary" onclick="mergeWizard.skipToAnalysisDashboard()">
                         View Dashboard
                     </button>
                 </div>
@@ -856,11 +1109,6 @@ class MergeWizard {
                 </div>
             `;
         }
-
-        const viewBtn = document.getElementById('viewDashboardBtn');
-        if (viewBtn) {
-            viewBtn.addEventListener('click', () => this.skipToAnalysisDashboard());
-        }
     }
 
     handleValidationError(data) {
@@ -871,24 +1119,40 @@ class MergeWizard {
     async skipToAnalysisDashboard() {
         // Analyze the merged library and display dashboard
         try {
-            const response = await fetch(`/api/analyze?path=${encodeURIComponent(this.destinationPath)}`);
+            console.log('skipToAnalysisDashboard called');
+            console.log('destinationPath:', this.destinationPath);
+
+            if (!this.destinationPath) {
+                throw new Error('Destination path is not set');
+            }
+
+            // Normalize path (ensure backslashes for Windows)
+            const normalizedPath = this.destinationPath.replace(/\//g, '\\');
+            console.log('Normalized path:', normalizedPath);
+
+            const response = await fetch(`/api/analyze?path=${encodeURIComponent(normalizedPath)}`);
             const result = await response.json();
 
+            console.log('Analysis result:', result);
+
             if (result.success) {
-                // Update app state
-                app.currentDirectory = this.destinationPath;
+                // Update app state with normalized path
+                app.currentDirectory = normalizedPath;
 
                 // Display dashboard
                 if (window.dashboard) {
                     window.dashboard.displayResults(result);
                     app.showScreen('dashboardScreen');
+                } else {
+                    throw new Error('Dashboard not available');
                 }
             } else {
                 throw new Error(result.error || 'Analysis failed');
             }
         } catch (error) {
             console.error('Error analyzing merged library:', error);
-            app.showModal('Error', `Failed to analyze merged library: ${error.message}`);
+            console.error('Destination path was:', this.destinationPath);
+            app.showModal('Error', `Failed to analyze merged library: ${error.message}\n\nPath: ${this.destinationPath || 'undefined'}`);
         }
     }
 
@@ -980,10 +1244,10 @@ class MergeWizard {
                 });
 
                 // Add hover effect
-                item.addEventListener('mouseenter', function() {
+                item.addEventListener('mouseenter', function () {
                     this.style.background = 'var(--bg-tertiary)';
                 });
-                item.addEventListener('mouseleave', function() {
+                item.addEventListener('mouseleave', function () {
                     this.style.background = 'transparent';
                 });
             });
@@ -1053,10 +1317,10 @@ class MergeWizard {
                 });
 
                 // Add hover effect
-                item.addEventListener('mouseenter', function() {
+                item.addEventListener('mouseenter', function () {
                     this.style.background = 'var(--bg-tertiary)';
                 });
-                item.addEventListener('mouseleave', function() {
+                item.addEventListener('mouseleave', function () {
                     this.style.background = 'transparent';
                 });
             });

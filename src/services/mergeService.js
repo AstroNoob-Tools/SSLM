@@ -17,9 +17,10 @@ class MergeService {
      * Analyze multiple source libraries and build merge plan
      * @param {Array<string>} sourcePaths - Array of source library paths
      * @param {string} destinationPath - Destination path for merged library
+     * @param {string} socketId - Socket ID for progress updates (optional)
      * @returns {Promise<Object>} Analysis result with merge plan
      */
-    async analyzeSources(sourcePaths, destinationPath) {
+    async analyzeSources(sourcePaths, destinationPath, socketId = null) {
         console.log(`\n===== MERGE ANALYSIS =====`);
         console.log(`Sources: ${sourcePaths.length} libraries`);
         sourcePaths.forEach((src, i) => console.log(`  [${i + 1}] ${src}`));
@@ -27,18 +28,40 @@ class MergeService {
 
         try {
             // Build file inventory from all sources
-            const inventory = await this.buildFileInventory(sourcePaths);
+            const inventory = await this.buildFileInventory(sourcePaths, socketId);
             console.log(`Total unique relative paths: ${inventory.size}`);
+
+            // Emit progress: scanning destination
+            if (socketId) {
+                this.emitEvent(socketId, 'analyze:progress', {
+                    status: 'scanning_destination',
+                    message: 'Scanning destination directory...'
+                });
+            }
+
+            // Analyze destination directory for existing files
+            const existingFiles = await this.analyzeDestination(destinationPath);
+            console.log(`Existing files in destination: ${existingFiles.size}`);
+
+            // Emit progress: resolving conflicts
+            if (socketId) {
+                this.emitEvent(socketId, 'analyze:progress', {
+                    status: 'resolving',
+                    message: 'Resolving conflicts and building merge plan...'
+                });
+            }
 
             // Resolve conflicts (select which version to keep)
             const resolutionPlan = this.resolveConflicts(inventory);
 
-            // Calculate statistics
-            const mergePlan = this.buildMergePlan(inventory, resolutionPlan, sourcePaths);
+            // Calculate statistics including destination analysis
+            const mergePlan = this.buildMergePlan(inventory, resolutionPlan, sourcePaths, existingFiles);
 
             console.log(`\nMerge Plan Summary:`);
             console.log(`  Total files from all sources: ${mergePlan.totalFiles}`);
             console.log(`  Unique files (after deduplication): ${mergePlan.uniqueFiles}`);
+            console.log(`  Files already in destination: ${mergePlan.existingInDestination}`);
+            console.log(`  Files to copy: ${mergePlan.filesToCopy.length}`);
             console.log(`  Duplicates detected: ${mergePlan.duplicates.count}`);
             console.log(`  Conflicts resolved: ${mergePlan.conflicts.count}`);
             console.log(`  Total bytes to copy: ${this.formatBytes(mergePlan.totalBytes)}`);
@@ -53,20 +76,44 @@ class MergeService {
     /**
      * Build unified file inventory from all sources
      * @param {Array<string>} sourcePaths - Array of source library paths
+     * @param {string} socketId - Socket ID for progress updates (optional)
      * @returns {Promise<Map>} Map of relativePath -> Array of file candidates
      */
-    async buildFileInventory(sourcePaths) {
+    async buildFileInventory(sourcePaths, socketId = null) {
         const inventory = new Map();
 
         for (let i = 0; i < sourcePaths.length; i++) {
             const sourcePath = sourcePaths[i];
             console.log(`\nScanning source [${i + 1}/${sourcePaths.length}]: ${sourcePath}`);
 
+            // Emit progress: scanning this source
+            if (socketId) {
+                this.emitEvent(socketId, 'analyze:progress', {
+                    status: 'scanning_source',
+                    currentSource: i + 1,
+                    totalSources: sourcePaths.length,
+                    sourcePath: sourcePath,
+                    message: `Scanning library ${i + 1} of ${sourcePaths.length}...`
+                });
+            }
+
             try {
                 // Recursively scan this source library
                 const files = await this.scanDirectory(sourcePath, sourcePath);
 
                 console.log(`  Found ${files.length} files`);
+
+                // Emit progress: found files in this source
+                if (socketId) {
+                    this.emitEvent(socketId, 'analyze:progress', {
+                        status: 'scanning_source',
+                        currentSource: i + 1,
+                        totalSources: sourcePaths.length,
+                        sourcePath: sourcePath,
+                        filesFound: files.length,
+                        message: `Found ${files.length.toLocaleString()} files in library ${i + 1}`
+                    });
+                }
 
                 // Add each file to inventory
                 for (const file of files) {
@@ -136,6 +183,46 @@ class MergeService {
 
         await scan(dirPath);
         return files;
+    }
+
+    /**
+     * Analyze destination directory for existing files
+     * @param {string} destinationPath - Destination directory path
+     * @returns {Promise<Map>} Map of relativePath -> file metadata
+     */
+    async analyzeDestination(destinationPath) {
+        const existingFiles = new Map();
+
+        try {
+            // Check if destination exists
+            const exists = await fs.pathExists(destinationPath);
+            if (!exists) {
+                console.log('Destination directory does not exist yet - will be created');
+                return existingFiles;
+            }
+
+            // Scan destination directory
+            const files = await this.scanDirectory(destinationPath, destinationPath);
+            console.log(`  Found ${files.length} existing files in destination`);
+
+            // Build map of existing files
+            for (const file of files) {
+                try {
+                    const stats = await fs.stat(file.sourcePath);
+                    existingFiles.set(file.relativePath, {
+                        path: file.sourcePath,
+                        size: stats.size,
+                        mtime: stats.mtime
+                    });
+                } catch (statError) {
+                    console.warn(`  Warning: Could not stat existing file ${file.sourcePath}:`, statError.message);
+                }
+            }
+        } catch (error) {
+            console.warn('Warning: Could not analyze destination directory:', error.message);
+        }
+
+        return existingFiles;
     }
 
     /**
@@ -226,10 +313,12 @@ class MergeService {
      * @param {Map} inventory - File inventory
      * @param {Object} resolutionPlan - Conflict resolution results
      * @param {Array<string>} sourcePaths - Source library paths
+     * @param {Map} existingFiles - Existing files in destination (relativePath -> metadata)
      * @returns {Object} Complete merge plan
      */
-    buildMergePlan(inventory, resolutionPlan, sourcePaths) {
+    buildMergePlan(inventory, resolutionPlan, sourcePaths, existingFiles = new Map()) {
         const filesToCopy = [];
+        const filesAlreadyExist = [];
         const sourceStats = {};
 
         // Initialize source stats
@@ -238,8 +327,11 @@ class MergeService {
         }
 
         let totalFiles = 0;
-        let totalBytes = 0;
+        let totalBytesToCopy = 0;  // Only bytes that need to be copied
+        let totalBytesAllUnique = 0;  // Total bytes of all unique files (for reference)
         let uniqueFiles = 0;
+        let existingInDestination = 0;
+        let bytesAlreadyInDestination = 0;
 
         // Build list of files to copy and calculate stats
         for (const [relativePath, candidates] of inventory) {
@@ -250,15 +342,32 @@ class MergeService {
 
             if (selected) {
                 uniqueFiles++;
-                totalBytes += selected.size;
+                totalBytesAllUnique += selected.size;
 
-                filesToCopy.push({
-                    sourcePath: selected.sourcePath,
-                    sourceLibrary: selected.sourceLibrary,
-                    relativePath: relativePath,
-                    size: selected.size,
-                    mtime: selected.mtime
-                });
+                // Check if file already exists in destination with same size and mtime
+                const existingFile = existingFiles.get(relativePath);
+                const needsToCopy = !existingFile ||
+                    existingFile.size !== selected.size ||
+                    existingFile.mtime.getTime() !== selected.mtime.getTime();
+
+                if (needsToCopy) {
+                    filesToCopy.push({
+                        sourcePath: selected.sourcePath,
+                        sourceLibrary: selected.sourceLibrary,
+                        relativePath: relativePath,
+                        size: selected.size,
+                        mtime: selected.mtime
+                    });
+                    totalBytesToCopy += selected.size;  // Only add to total if file needs copying
+                } else {
+                    // File already exists with same content - skip
+                    existingInDestination++;
+                    bytesAlreadyInDestination += selected.size;
+                    filesAlreadyExist.push({
+                        relativePath: relativePath,
+                        size: selected.size
+                    });
+                }
 
                 // Update source stats for original source
                 for (const candidate of candidates) {
@@ -285,8 +394,11 @@ class MergeService {
 
         return {
             totalFiles,
-            totalBytes,
+            totalBytes: totalBytesToCopy,  // Use bytes to copy, not all unique bytes
+            totalBytesAllUnique,  // Keep this for reference if needed
             uniqueFiles,
+            existingInDestination,
+            bytesAlreadyInDestination,
             sourceStats,
             duplicates: {
                 count: resolutionPlan.duplicateCount,
@@ -296,7 +408,8 @@ class MergeService {
                 count: resolutionPlan.conflictCount,
                 resolutions: resolutionPlan.resolutions
             },
-            filesToCopy
+            filesToCopy,
+            filesAlreadyExist  // Include this for validation purposes
         };
     }
 
@@ -481,16 +594,39 @@ class MergeService {
     async validateMerge(destinationPath, mergePlan, socketId, operationId) {
         console.log(`\n===== VALIDATING MERGE =====`);
         console.log(`Destination: ${destinationPath}`);
-        console.log(`Expected files: ${mergePlan.filesToCopy.length}`);
+
+        // Build list of ALL files that should exist in destination
+        // This includes both files that were copied AND files that already existed
+        const filesToValidate = [];
+
+        // Add files that were copied
+        for (const file of mergePlan.filesToCopy) {
+            filesToValidate.push({
+                relativePath: file.relativePath,
+                size: file.size,
+                source: 'copied'
+            });
+        }
+
+        // Add files that already existed (if available in mergePlan)
+        if (mergePlan.filesAlreadyExist) {
+            for (const file of mergePlan.filesAlreadyExist) {
+                filesToValidate.push({
+                    relativePath: file.relativePath,
+                    size: file.size,
+                    source: 'existing'
+                });
+            }
+        }
+
+        console.log(`Expected files: ${filesToValidate.length} (${mergePlan.filesToCopy.length} copied + ${(mergePlan.filesAlreadyExist || []).length} already existing)`);
 
         const startTime = Date.now();
         const mismatches = [];
         let filesValidated = 0;
 
         try {
-            const { filesToCopy } = mergePlan;
-
-            for (const file of filesToCopy) {
+            for (const file of filesToValidate) {
                 const destPath = path.join(destinationPath, file.relativePath);
 
                 try {
@@ -525,13 +661,13 @@ class MergeService {
 
                 filesValidated++;
 
-                // Emit progress every 100 files
-                if (filesValidated % 100 === 0 || filesValidated === filesToCopy.length) {
+                // Emit progress every 100 files or on completion
+                if (filesValidated % 100 === 0 || filesValidated === filesToValidate.length) {
                     this.emitEvent(socketId, 'validate:progress', {
                         status: 'validating',
                         filesValidated,
-                        totalFiles: filesToCopy.length,
-                        percentage: Math.round((filesValidated / filesToCopy.length) * 100),
+                        totalFiles: filesToValidate.length,
+                        percentage: Math.round((filesValidated / filesToValidate.length) * 100),
                         mismatches: mismatches.length,
                         operationId
                     });
