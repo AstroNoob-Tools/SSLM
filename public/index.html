@@ -21,6 +21,9 @@
                         <span class="mode-dot"></span>
                         <span id="modeText">Offline</span>
                     </span>
+                    <button class="icon-button" id="dashboardBtn" title="Dashboard" style="display: none;">
+                        📊
+                    </button>
                     <button class="icon-button" id="homeBtn" title="Home">
                         🏠
                     </button>
@@ -211,6 +214,15 @@
                 <button class="btn btn-secondary" id="modalCancel">Cancel</button>
                 <button class="btn btn-primary" id="modalConfirm">Confirm</button>
             </div>
+        </div>
+    </div>
+
+    <!-- Image Viewer Modal -->
+    <div class="image-viewer-modal" id="imageViewerModal">
+        <div class="image-viewer-content">
+            <button class="image-viewer-close" id="imageViewerClose">&times;</button>
+            <img id="imageViewerImg" src="" alt="">
+            <div class="image-viewer-filename" id="imageViewerFilename"></div>
         </div>
     </div>
 

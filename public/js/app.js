@@ -79,6 +79,12 @@ class App {
     }
 
     setupEventListeners() {
+        // Dashboard button
+        const dashboardBtn = document.getElementById('dashboardBtn');
+        if (dashboardBtn) {
+            dashboardBtn.addEventListener('click', () => this.scrollToDashboardTop());
+        }
+
         // Home button
         const homeBtn = document.getElementById('homeBtn');
         if (homeBtn) {
@@ -208,6 +214,49 @@ class App {
         this.showScreen('welcomeScreen');
         this.currentDirectory = null;
         this.updateStatus('Ready');
+
+        // Hide dashboard button when leaving dashboard
+        const dashboardBtn = document.getElementById('dashboardBtn');
+        if (dashboardBtn) {
+            dashboardBtn.style.display = 'none';
+        }
+    }
+
+    scrollToDashboardTop() {
+        // Check if we're on object detail screen
+        const objectDetailScreen = document.getElementById('objectDetailScreen');
+        const dashboardScreen = document.getElementById('dashboardScreen');
+
+        if (objectDetailScreen && objectDetailScreen.classList.contains('active')) {
+            // We're viewing object details, navigate back to main dashboard
+            this.showScreen('dashboardScreen');
+            if (window.dashboard && window.dashboard.data) {
+                window.dashboard.render();
+            }
+            window.scrollTo(0, 0);
+        } else if (dashboardScreen && dashboardScreen.classList.contains('active')) {
+            // We're on dashboard screen - check if viewing catalog detail or main dashboard
+            const dashboardTop = document.getElementById('dashboard-top');
+
+            if (!dashboardTop && window.dashboard && window.dashboard.data) {
+                // We're viewing catalog detail, render main dashboard
+                window.dashboard.render();
+                window.scrollTo(0, 0);
+            } else if (dashboardTop) {
+                // We're on main dashboard, scroll to top
+                const header = document.querySelector('.app-header');
+                const headerHeight = header ? header.offsetHeight : 0;
+                const offset = headerHeight + 20; // 20px extra padding
+
+                const elementPosition = dashboardTop.getBoundingClientRect().top;
+                const offsetPosition = elementPosition + window.pageYOffset - offset;
+
+                window.scrollTo({
+                    top: offsetPosition,
+                    behavior: 'smooth'
+                });
+            }
+        }
     }
 
     // Settings Dialog
