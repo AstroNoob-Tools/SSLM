@@ -84,6 +84,44 @@ app.post('/api/config', async (req, res) => {
   }
 });
 
+// Image serving endpoint
+app.get('/api/image', async (req, res) => {
+  try {
+    const { path: imagePath } = req.query;
+
+    if (!imagePath) {
+      return res.status(400).json({ success: false, error: 'Image path is required' });
+    }
+
+    // Check if file exists
+    const exists = await fs.pathExists(imagePath);
+    if (!exists) {
+      return res.status(404).json({ success: false, error: 'Image not found' });
+    }
+
+    // Determine content type based on file extension
+    const ext = path.extname(imagePath).toLowerCase();
+    const contentTypes = {
+      '.jpg': 'image/jpeg',
+      '.jpeg': 'image/jpeg',
+      '.png': 'image/png',
+      '.gif': 'image/gif',
+      '.bmp': 'image/bmp',
+      '.tif': 'image/tiff',
+      '.tiff': 'image/tiff'
+    };
+
+    const contentType = contentTypes[ext] || 'application/octet-stream';
+
+    // Set content type and send file
+    res.setHeader('Content-Type', contentType);
+    res.sendFile(imagePath);
+  } catch (error) {
+    console.error('Error serving image:', error);
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
 // Favorites API Routes
 app.get('/api/favorites', (req, res) => {
   try {

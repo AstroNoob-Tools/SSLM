@@ -10,11 +10,53 @@ class Dashboard {
         console.log('Dashboard module loaded');
         // Expose globally for modeSelection to access
         window.dashboard = this;
+        // Setup event listeners (only once)
+        this.setupEventListeners();
+        // Setup image viewer
+        this.setupImageViewer();
+    }
+
+    setupEventListeners() {
+        // Individual object cleanup buttons (using event delegation)
+        document.addEventListener('click', (e) => {
+            if (e.target.closest('.cleanup-object-btn')) {
+                const btn = e.target.closest('.cleanup-object-btn');
+                const objectName = btn.dataset.objectName;
+                this.handleCleanupObject(objectName);
+            }
+        });
+
+        // Object row click to view details (using event delegation)
+        document.addEventListener('click', (e) => {
+            const objectCell = e.target.closest('.object-cell');
+            if (objectCell) {
+                const row = objectCell.closest('.object-row');
+                if (row) {
+                    const objectId = row.dataset.objectId;
+                    this.showObjectDetail(objectId);
+                }
+            }
+        });
+
+        // Catalog card click to view catalog details (using event delegation)
+        document.addEventListener('click', (e) => {
+            const catalogCard = e.target.closest('.catalog-card');
+            if (catalogCard) {
+                const catalog = catalogCard.dataset.catalog;
+                this.showCatalogDetail(catalog);
+            }
+        });
     }
 
     displayResults(analysisResult) {
         this.data = analysisResult;
         this.render();
+
+        // Show dashboard button in header
+        const dashboardBtn = document.getElementById('dashboardBtn');
+        if (dashboardBtn) {
+            dashboardBtn.style.display = 'block';
+        }
     }
 
     render() {
@@ -47,8 +89,11 @@ class Dashboard {
                     <!-- Navigation Section -->
                     <h3 style="font-size: 1rem; margin-bottom: 1rem; color: var(--text-secondary); text-transform: uppercase; font-weight: 600;">Navigation</h3>
                     <nav style="display: flex; flex-direction: column; gap: 0.5rem;">
+                        <a href="#dashboard-top" class="nav-link" id="dashboardTopLink" style="padding: 0.75rem 1rem; background: var(--primary-color); border-radius: 8px; text-decoration: none; color: white; transition: all 0.2s; display: flex; align-items: center; gap: 0.5rem; font-weight: 600;">
+                            <span>📊</span> Dashboard
+                        </a>
                         <a href="#summary" class="nav-link" style="padding: 0.75rem 1rem; background: var(--bg-tertiary); border-radius: 8px; text-decoration: none; color: var(--text-primary); transition: all 0.2s; display: flex; align-items: center; gap: 0.5rem;">
-                            <span>📊</span> Summary
+                            <span>📈</span> Summary
                         </a>
                         <a href="#file-types" class="nav-link" style="padding: 0.75rem 1rem; background: var(--bg-tertiary); border-radius: 8px; text-decoration: none; color: var(--text-primary); transition: all 0.2s; display: flex; align-items: center; gap: 0.5rem;">
                             <span>📄</span> File Types
@@ -74,6 +119,9 @@ class Dashboard {
 
                 <!-- Main Content -->
                 <div class="dashboard-main" style="flex: 1; min-width: 0;">
+                    <!-- Anchor for top navigation -->
+                    <div id="dashboard-top" style="scroll-margin-top: 80px;"></div>
+
                     <!-- Header -->
                     <div class="dashboard-header" style="margin-bottom: 2rem; display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 1rem;">
                         <div>
@@ -571,36 +619,6 @@ class Dashboard {
                 this.handleCleanupSubFrames();
             });
         }
-
-        // Individual object cleanup buttons (using event delegation)
-        document.addEventListener('click', (e) => {
-            if (e.target.closest('.cleanup-object-btn')) {
-                const btn = e.target.closest('.cleanup-object-btn');
-                const objectName = btn.dataset.objectName;
-                this.handleCleanupObject(objectName);
-            }
-        });
-
-        // Object row click to view details (using event delegation)
-        document.addEventListener('click', (e) => {
-            const objectCell = e.target.closest('.object-cell');
-            if (objectCell) {
-                const row = objectCell.closest('.object-row');
-                if (row) {
-                    const objectId = row.dataset.objectId;
-                    this.showObjectDetail(objectId);
-                }
-            }
-        });
-
-        // Catalog card click to view catalog details (using event delegation)
-        document.addEventListener('click', (e) => {
-            const catalogCard = e.target.closest('.catalog-card');
-            if (catalogCard) {
-                const catalog = catalogCard.dataset.catalog;
-                this.showCatalogDetail(catalog);
-            }
-        });
 
         // Navigation links - smooth scrolling with header offset
         const navLinks = document.querySelectorAll('.nav-link');
@@ -1216,7 +1234,7 @@ class Dashboard {
                             </p>
                         </div>
                         <div style="text-align: right;">
-                            ${obj.hasSubFrames && obj.subFolder ? `
+                            ${obj.hasSubFrames && obj.subFolder && obj.subFolder.files.filter(f => !f.endsWith('.fit')).length > 0 ? `
                                 <button class="cleanup-object-btn" data-object-name="${obj.name}"
                                         style="background: var(--warning-color); color: white; border: none;
                                                border-radius: 8px; padding: 0.75rem 1.5rem; cursor: pointer;
@@ -1259,7 +1277,7 @@ class Dashboard {
                             <p style="font-weight: 600;">${app.formatBytes(obj.mainFolder.size)}</p>
                         </div>
                     </div>
-                    ${this.renderFileList(obj.mainFolder.files, 'Main Folder Files')}
+                    ${this.renderFileList(obj.mainFolder.files, 'Main Folder Files', obj.mainFolder.path)}
                 </div>
 
                 <!-- Sub-Frames Folder Details -->
@@ -1288,7 +1306,7 @@ class Dashboard {
                                 <p style="font-weight: 600;">${obj.subFolder.files.filter(f => !f.endsWith('.fit')).length}</p>
                             </div>
                         </div>
-                        ${this.renderFileList(obj.subFolder.files, 'Sub-Frame Files')}
+                        ${this.renderFileList(obj.subFolder.files, 'Sub-Frame Files', obj.subFolder.path)}
                     </div>
                 ` : ''}
             </div>
@@ -1561,7 +1579,7 @@ class Dashboard {
         return null;
     }
 
-    renderFileList(files, title) {
+    renderFileList(files, title, folderPath) {
         if (!files || files.length === 0) {
             return '';
         }
@@ -1610,9 +1628,11 @@ class Dashboard {
                             ${jpgFiles.map(file => {
             const captureDate = this.extractCaptureDate(file);
             return `
-                                    <div style="padding: 0.5rem; border-bottom: 1px solid var(--border-color);
+                                    <div class="image-file-item" data-folder-path="${folderPath}" data-filename="${file}"
+                                         style="padding: 0.5rem; border-bottom: 1px solid var(--border-color);
                                                 font-family: monospace; font-size: 0.875rem; display: flex;
-                                                justify-content: space-between; align-items: center; gap: 1rem;">
+                                                justify-content: space-between; align-items: center; gap: 1rem;
+                                                cursor: pointer; transition: background-color 0.2s;">
                                         <span style="flex: 1; word-break: break-all;">${file}</span>
                                         ${captureDate ? `<span style="color: var(--text-secondary); font-size: 0.75rem; white-space: nowrap;">${captureDate}</span>` : ''}
                                     </div>
@@ -1628,9 +1648,11 @@ class Dashboard {
                             ${thnFiles.map(file => {
             const captureDate = this.extractCaptureDate(file);
             return `
-                                    <div style="padding: 0.5rem; border-bottom: 1px solid var(--border-color);
+                                    <div class="image-file-item" data-folder-path="${folderPath}" data-filename="${file}"
+                                         style="padding: 0.5rem; border-bottom: 1px solid var(--border-color);
                                                 font-family: monospace; font-size: 0.875rem; display: flex;
-                                                justify-content: space-between; align-items: center; gap: 1rem;">
+                                                justify-content: space-between; align-items: center; gap: 1rem;
+                                                cursor: pointer; transition: background-color 0.2s;">
                                         <span style="flex: 1; word-break: break-all;">${file}</span>
                                         ${captureDate ? `<span style="color: var(--text-secondary); font-size: 0.75rem; white-space: nowrap;">${captureDate}</span>` : ''}
                                     </div>
@@ -1677,6 +1699,81 @@ class Dashboard {
                 </div>
             </details>
         `;
+    }
+
+    setupImageViewer() {
+        const modal = document.getElementById('imageViewerModal');
+        const closeBtn = document.getElementById('imageViewerClose');
+
+        // Close modal when clicking the X button
+        if (closeBtn) {
+            closeBtn.addEventListener('click', () => {
+                modal.style.display = 'none';
+            });
+        }
+
+        // Close modal when clicking outside the image
+        if (modal) {
+            modal.addEventListener('click', (e) => {
+                if (e.target === modal) {
+                    modal.style.display = 'none';
+                }
+            });
+        }
+
+        // Close modal with Escape key
+        document.addEventListener('keydown', (e) => {
+            if (e.key === 'Escape' && modal.style.display === 'flex') {
+                modal.style.display = 'none';
+            }
+        });
+
+        // Event delegation for image file clicks
+        document.addEventListener('click', (e) => {
+            const imageItem = e.target.closest('.image-file-item');
+            if (imageItem) {
+                const folderPath = imageItem.getAttribute('data-folder-path');
+                const filename = imageItem.getAttribute('data-filename');
+                if (folderPath && filename) {
+                    this.showImageModal(folderPath, filename);
+                }
+            }
+        });
+    }
+
+    showImageModal(folderPath, filename) {
+        const modal = document.getElementById('imageViewerModal');
+        const img = document.getElementById('imageViewerImg');
+        const filenameDisplay = document.getElementById('imageViewerFilename');
+
+        if (!modal || !img || !filenameDisplay) {
+            console.error('Image viewer modal elements not found');
+            return;
+        }
+
+        // Construct the file path - normalize to Windows path separators
+        const separator = folderPath.includes('\\') ? '\\' : '/';
+        const filePath = `${folderPath}${separator}${filename}`;
+
+        // Use the API endpoint to serve the image
+        const imageUrl = `/api/image?path=${encodeURIComponent(filePath)}`;
+
+        // Display the image
+        img.src = imageUrl;
+        filenameDisplay.textContent = filename;
+        modal.style.display = 'flex';
+
+        // Handle image load error
+        img.onerror = () => {
+            console.error('Failed to load image:', imageUrl);
+            filenameDisplay.textContent = `${filename} (Failed to load)`;
+            filenameDisplay.style.color = 'var(--danger-color)';
+        };
+
+        // Reset error styling on successful load
+        img.onload = () => {
+            filenameDisplay.style.color = 'var(--text-primary)';
+        };
     }
 }
 
