@@ -29,6 +29,18 @@ SSLM (SeaStar Library Manager) is an application that manages astrophotography f
 - ✅ Transfer validation with real-time progress display
 - ✅ Post-import completion UI with "Done" button
 
+**Phase 3 - COMPLETE**: Multi-library merge functionality
+- ✅ Combine multiple SeeStar library copies into one consolidated library
+- ✅ Intelligent duplicate detection by relative file path
+- ✅ Automatic conflict resolution (keep newer version by modification date)
+- ✅ 6-step merge wizard UI with analysis preview
+- ✅ Real-time progress tracking with Socket.IO
+- ✅ Post-merge validation for integrity verification
+- ✅ Read-only operations on all source libraries (safety first)
+- ✅ Disk space validation for merged library size (deduplicated calculation)
+- ✅ Tabular display for merge statistics and confirmation
+- ✅ Compact header design for better screen space utilization
+
 ## Domain Context
 
 ### SeeStar Device
@@ -553,6 +565,328 @@ The import wizard guides users through the process of importing files from a con
 - Shows size differences, modification time comparisons
 - Summary statistics of files to copy vs skip
 - Helps identify incorrect skipping behavior
+
+### Merge Functionality (Phase 3 - COMPLETE)
+
+#### Overview
+
+The merge feature allows users to combine multiple SeeStar library copies into a single consolidated library. This is useful when managing multiple backups or combining collections from different sources.
+
+**Use Cases:**
+- Multiple library copies on different drives (some with overlapping content, some unique)
+- Combining backups from different time periods
+- Consolidating after importing from multiple devices
+- Creating a master library from partial copies
+
+**Key Design Decisions:**
+- **Destination Strategy**: Create new merged library (doesn't modify any existing libraries)
+- **Duplicate Detection**: Files with same relative path are considered duplicates
+- **Conflict Resolution**: Keep newer version based on file modification date (mtime)
+- **Session Handling**: Keep all stacked images, even from same imaging sessions
+- **Safety**: All source libraries are read-only (never modified)
+
+#### 6-Step Merge Wizard
+
+**Step 1: Source Library Selection**
+- Multi-select folder browser (minimum 2 libraries required)
+- Shows selected libraries list with remove buttons
+- "Add Library" button to add more sources
+- Validates at least 2 sources before proceeding
+
+**Step 2: Destination Selection**
+- Folder browser for destination directory
+- "Create New Folder" capability for new merged library
+- Real-time disk space validation
+- Shows available vs required space
+
+**Step 3: Analysis & Preview**
+- Analyzes all source libraries to build merge plan
+- Displays statistics:
+  - Total files from each source library
+  - Duplicates detected (same relative path across sources)
+  - Conflicts found (files that exist in multiple sources with differences)
+  - Final file count after deduplication
+  - Space requirements vs available space
+- Shows conflict resolution preview (first 10 examples)
+- Conflict table shows: File Path, Source 1 info, Source 2 info, Resolution (which wins)
+
+**Step 4: Confirmation**
+- Summary cards with key statistics
+- Source libraries count and paths
+- Destination path
+- Files: original total → final count
+- Space required vs available
+- Conflict resolution strategy reminder
+- "Start Merge" button
+
+**Step 5: Merge Progress**
+- Real-time progress display:
+  - Overall progress bar (0-100%)
+  - Current file being copied (with source library name)
+  - File statistics (files copied / total)
+  - Byte statistics (bytes copied / total, formatted)
+  - Transfer speed (MB/s)
+  - Time remaining (ETA)
+  - Elapsed time
+- Per-source progress breakdown (visual bars for each source)
+- Cancel button for stopping merge
+- Completion message with "Done" and "Validate Transfer" buttons
+
+**Step 6: Validation (Optional)**
+- Post-merge integrity verification
+- Progress bar (files validated / total)
+- Issues found count (color-coded)
+- Results modal:
+  - Success: Shows checkmark, files validated, duration
+  - Failure: Shows warning, lists issues, suggests re-merge
+- "View Dashboard" button to explore merged library
+
+#### Backend Implementation
+
+**MergeService** (NEW: `src/services/mergeService.js`)
+
+Key methods:
+- `analyzeSources(sourcePaths, destinationPath)` - Analyze libraries and build merge plan
+- `buildFileInventory(sourcePaths)` - Build unified file inventory from all sources
+- `resolveConflicts(inventory)` - Detect duplicates and resolve conflicts
+- `executeMerge(sourcePaths, destinationPath, mergePlan, socketId, operationId)` - Execute merge with progress tracking
+- `validateMerge(destinationPath, mergePlan, socketId, operationId)` - Verify merged library integrity
+- `cancelMerge()` - Cancel ongoing merge operation
+
+**File Inventory Structure:**
+
+```javascript
+// Map: relativePath → array of candidates from different sources
+Map {
+  "NGC 6729/Stacked_210_NGC 6729_30.0s_IRCUT_20250822-231258.fit" => [
+    {
+      sourcePath: "H:/Library1/NGC 6729/Stacked_210...",
+      sourceLibrary: "H:/Library1",
+      size: 10485760,
+      mtime: Date("2025-08-20T22:45:00"),
+      selected: false  // Older version
+    },
+    {
+      sourcePath: "H:/Library2/NGC 6729/Stacked_210...",
+      sourceLibrary: "H:/Library2",
+      size: 10485760,
+      mtime: Date("2025-08-22T23:30:00"),
+      selected: true  // Newer version - wins
+    }
+  ]
+}
+```
+
+**Conflict Resolution Logic:**
+- For each relative path with multiple candidates:
+  - Compare modification times (mtime)
+  - Select file with newest mtime
+  - Mark as `selected: true`
+  - Track resolution decision for reporting
+
+**Merge Plan Structure:**
+
+```javascript
+{
+  totalFiles: 1250,
+  totalBytes: 22000000000,
+  sourceStats: {
+    "H:/Library1": { files: 600, bytes: 10000000000 },
+    "H:/Library2": { files: 750, bytes: 13000000000 }
+  },
+  duplicates: {
+    count: 100,
+    examples: [...]  // First 10 for preview
+  },
+  conflicts: {
+    count: 100,
+    resolutions: [
+      {
+        relativePath: "NGC 6729/Stacked_210...",
+        winningSource: "H:/Library2",
+        reason: "newer (2025-08-22 vs 2025-08-20)"
+      }
+    ]
+  },
+  uniqueFiles: 1150,  // Final count after deduplication
+  filesToCopy: [...]  // Array of selected files
+}
+```
+
+**DiskSpaceValidator Enhancement** (MODIFY: `src/utils/diskSpaceValidator.js`)
+- New method: `getMergeRequiredSpace(sourcePaths, destinationPath)`
+- Calculates total size of unique files after conflict resolution
+- Returns deduplicated size estimate (not sum of all sources)
+- Applies 10% safety buffer
+
+#### API Endpoints
+
+**Merge Operations:**
+- `POST /api/merge/analyze` - Analyze multiple source libraries
+  - Body: `{sourcePaths: [...], destinationPath: "..."}`
+  - Returns merge plan with statistics
+- `POST /api/merge/validate-space` - Validate disk space for merge
+  - Body: `{sourcePaths: [...], destinationPath: "..."}`
+  - Returns space validation result
+- `POST /api/merge/start` - Start merge operation
+  - Body: `{sourcePaths: [...], destinationPath: "...", mergePlan: {...}, socketId: "..."}`
+  - Returns operation ID, progress via Socket.IO
+- `POST /api/merge/cancel` - Cancel ongoing merge operation
+- `POST /api/merge/validate` - Validate merged library integrity
+  - Body: `{destinationPath: "...", mergePlan: {...}, socketId: "..."}`
+
+**Socket.IO Events:**
+- `merge:progress` - Real-time progress updates during merge
+- `merge:complete` - Merge operation completed
+- `merge:error` - Fatal error during merge
+- `merge:cancelled` - User cancelled merge
+- `validate:progress` - Validation progress (reused from import)
+- `validate:complete` - Validation finished (reused from import)
+- `validate:error` - Validation error (reused from import)
+
+#### Frontend Implementation
+
+**MergeWizard** (NEW: `public/js/mergeWizard.js`)
+- 6-step wizard UI class
+- Multi-source selection component
+- Conflict preview table
+- Per-source progress breakdown
+- Socket.IO event handlers for real-time updates
+
+**UI Updates:**
+- `public/index.html` - Add merge wizard screen and merge mode card
+- `public/js/modeSelection.js` - Add merge mode handler
+
+#### Reused Components
+
+**From ImportService:**
+- `scanDirectory()` - Recursive file enumeration
+- `copyFileWithProgress()` - Stream-based copying
+- Progress tracking patterns (speed, ETA, throttling)
+- Socket.IO event emission
+- Cancellation support
+- Error recovery
+
+**From Import Wizard:**
+- Step indicator pattern
+- Folder browser component
+- Progress display layout
+- Validation flow
+- Modal dialogs
+
+#### Safety Features
+
+1. **Read-Only Sources**: All source libraries never modified (only read)
+2. **New Destination**: Creates new library (doesn't overwrite)
+3. **Disk Space Validation**: Validates before merge starts
+4. **Pre-Merge Preview**: Shows what will happen before executing
+5. **Cancellation Support**: Can stop merge safely at any time
+6. **Error Recovery**: Continues on file errors, reports at end
+7. **Post-Merge Validation**: Verifies all files copied correctly
+8. **Conflict Transparency**: Shows which version kept and why
+
+#### Expected Performance
+
+Estimated merge times (SSD, local drives):
+
+| Library Size | File Count | Estimated Time |
+|--------------|-----------|----------------|
+| 5 GB (2 libs) | 500 files | 1-2 minutes |
+| 20 GB (3 libs) | 2000 files | 4-6 minutes |
+| 50 GB (4 libs) | 5000 files | 10-15 minutes |
+
+Network drives will be 3-5x slower.
+
+#### Files to Create/Modify
+
+**New Files:**
+1. `src/services/mergeService.js` - Core merge orchestration
+2. `src/utils/mergeAnalyzer.js` - Helper utilities for statistics
+3. `public/js/mergeWizard.js` - 6-step merge wizard UI
+4. `tests/mergeService.test.js` - Unit tests
+5. `documentation/MERGE_GUIDE.md` - User guide
+
+**Modified Files:**
+1. `server.js` - Add 5 merge API endpoints
+2. `src/utils/diskSpaceValidator.js` - Add `getMergeRequiredSpace()`
+3. `public/index.html` - Add merge wizard screen and mode card
+4. `public/js/modeSelection.js` - Add merge mode handler
+5. `public/css/styles.css` - Merge-specific styles
+
+#### Implementation Timeline
+
+**Sprint 1: Backend Foundation (3-4 days)**
+- Create MergeService with core methods
+- Implement file inventory building
+- Implement conflict resolution
+- Add API endpoints
+- Write unit tests
+
+**Sprint 2: Frontend UI (4-5 days)**
+- Create MergeWizard class
+- Implement all 6 steps
+- Add merge mode to welcome screen
+- Connect Socket.IO events
+- Add CSS styling
+
+**Sprint 3: Testing & Polish (2-3 days)**
+- Manual testing with real data
+- Edge case testing
+- Performance testing
+- Bug fixes
+- Documentation
+
+**Total Estimated Time:** 12-16 days
+
+#### Completed Implementation (February 2026)
+
+**Backend Complete:**
+- ✅ `MergeService` class with all core methods implemented
+- ✅ `getMergeRequiredSpace()` added to DiskSpaceValidator
+- ✅ 5 merge API endpoints added to server.js
+- ✅ Socket.IO events for real-time progress tracking
+- ✅ Graceful server shutdown fix (Ctrl+C properly exits process)
+
+**Frontend Complete:**
+- ✅ `MergeWizard` class with all 6 steps
+- ✅ Merge mode card added to welcome screen
+- ✅ Merge wizard screen HTML structure
+- ✅ `selectMergeMode()` method in modeSelection.js
+- ✅ Folder browser interaction fixes (cursor and selection)
+- ✅ Step 1 button layout improvements (compact design)
+- ✅ Step progress indicator updates (visual state changes)
+- ✅ Step 3 tabular display for merge plan preview
+- ✅ Step 4 tabular display for confirmation screen
+- ✅ Compact header design for better screen space
+- ✅ CSS styling for merge statistics tables
+
+**UI Improvements:**
+- **Tabular Displays**: Step 3 (Analysis Preview) and Step 4 (Confirmation) use clean table layouts
+  - Proper borders, backgrounds, and spacing
+  - Numbers formatted with thousand separators
+  - Highlighted rows for important metrics
+  - Consistent styling across all merge screens
+- **Compact Headers**: Reduced header heights to ensure buttons visible without scrolling
+  - App header: 0.75rem padding, 1.35rem font size
+  - Merge wizard header: 0.75rem padding, 1.25rem title
+  - Step indicators: 32px circles, 0.8rem labels
+  - Step indicators update properly with completed/active states
+- **Button Organization**: Clean separation of controls
+  - "Add Library" button in top right
+  - "Remove" buttons on left side of each item
+  - "Next" button in bottom right corner
+  - Proper flexbox layouts for positioning
+
+**Bug Fixes:**
+- Fixed folder browser cursor not changing to pointer on hover
+- Fixed folder selection not working (onclick → event listeners)
+- Fixed step progress indicator not updating (scoped query selector)
+- Fixed server not stopping with Ctrl+C (graceful shutdown with timeout)
+- Added completed step visual indicator (green with checkmark)
+
+**Testing Status:**
+- ✅ Successfully tested with 2 identical libraries (proper duplicate detection)
+- 🔄 Ongoing testing with real library copies
 
 ### Dashboard Features
 

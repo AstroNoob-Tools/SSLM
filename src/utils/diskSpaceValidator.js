@@ -168,6 +168,82 @@ class DiskSpaceValidator {
     }
 
     /**
+     * Calculate space required for merge operation (deduplicated size)
+     * @param {Array<string>} sourcePaths - Array of source library paths
+     * @returns {Promise<number>} Required size in bytes (after deduplication)
+     */
+    static async getMergeRequiredSpace(sourcePaths) {
+        try {
+            const fileInventory = new Map();
+
+            // Build file inventory from all sources
+            for (const sourcePath of sourcePaths) {
+                await this.buildMergeInventory(sourcePath, sourcePath, fileInventory);
+            }
+
+            // Calculate size of unique files only
+            let totalSize = 0;
+
+            for (const [relativePath, candidates] of fileInventory) {
+                // Find the largest file size among candidates
+                // (in case same file has different sizes across sources)
+                let maxSize = 0;
+                for (const candidate of candidates) {
+                    if (candidate.size > maxSize) {
+                        maxSize = candidate.size;
+                    }
+                }
+                totalSize += maxSize;
+            }
+
+            return totalSize;
+        } catch (error) {
+            console.error('Error calculating merge space:', error);
+            throw new Error(`Cannot calculate merge size: ${error.message}`);
+        }
+    }
+
+    /**
+     * Helper to build merge file inventory
+     * @param {string} dirPath - Directory to scan
+     * @param {string} basePath - Base path for relative paths
+     * @param {Map} inventory - File inventory map
+     */
+    static async buildMergeInventory(dirPath, basePath, inventory) {
+        try {
+            const items = await fs.readdir(dirPath);
+
+            for (const item of items) {
+                const itemPath = path.join(dirPath, item);
+
+                try {
+                    const stats = await fs.stat(itemPath);
+
+                    if (stats.isDirectory()) {
+                        await this.buildMergeInventory(itemPath, basePath, inventory);
+                    } else {
+                        const relativePath = path.relative(basePath, itemPath);
+
+                        if (!inventory.has(relativePath)) {
+                            inventory.set(relativePath, []);
+                        }
+
+                        inventory.get(relativePath).push({
+                            path: itemPath,
+                            size: stats.size,
+                            mtime: stats.mtime
+                        });
+                    }
+                } catch (err) {
+                    console.warn(`Cannot access ${itemPath}:`, err.message);
+                }
+            }
+        } catch (err) {
+            console.warn(`Cannot read directory ${dirPath}:`, err.message);
+        }
+    }
+
+    /**
      * Check if destination has enough space for source
      * @param {string} sourcePath - Source directory to copy from
      * @param {string} destinationPath - Destination directory to copy to

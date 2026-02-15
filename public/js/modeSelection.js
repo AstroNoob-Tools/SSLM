@@ -13,6 +13,7 @@ class ModeSelection {
         // Mode selection button event listeners
         const importModeBtn = document.getElementById('importModeBtn');
         const localModeBtn = document.getElementById('localModeBtn');
+        const mergeModeBtn = document.getElementById('mergeModeBtn');
 
         if (importModeBtn) {
             importModeBtn.addEventListener('click', () => this.selectImportMode());
@@ -20,6 +21,10 @@ class ModeSelection {
 
         if (localModeBtn) {
             localModeBtn.addEventListener('click', () => this.selectLocalMode());
+        }
+
+        if (mergeModeBtn) {
+            mergeModeBtn.addEventListener('click', () => this.selectMergeMode());
         }
     }
 
@@ -41,6 +46,19 @@ class ModeSelection {
         app.showScreen('localCopyScreen');
 
         this.showLocalCopySelection();
+    }
+
+    selectMergeMode() {
+        console.log('Merge mode selected');
+        app.updateStatus('Merge mode selected');
+
+        // Switch to merge wizard screen
+        app.showScreen('mergeWizardScreen');
+
+        // Initialize merge wizard if not already created
+        if (!window.mergeWizard) {
+            window.mergeWizard = new MergeWizard();
+        }
     }
 
     async showLocalCopySelection() {
@@ -388,6 +406,19 @@ class ModeSelection {
         const browserList = document.getElementById('browserList');
         const currentPathInput = document.getElementById('browserCurrentPath');
         const upBtn = document.getElementById('browserUpBtn');
+
+        // Defensive check for data
+        if (!data) {
+            console.error('renderDirectoryContents called with no data');
+            if (browserList) {
+                browserList.innerHTML = `
+                    <div style="padding: 2rem; text-align: center; color: var(--danger-color);">
+                        Error loading directory contents
+                    </div>
+                `;
+            }
+            return;
+        }
 
         this.currentBrowsePath = data.currentPath;
 
