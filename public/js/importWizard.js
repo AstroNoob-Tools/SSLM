@@ -1150,6 +1150,12 @@ class ImportWizard {
     }
 
     handleValidationProgress(data) {
+        // Only handle if import wizard is active (not merge wizard)
+        const importWizardScreen = document.getElementById('importWizardScreen');
+        if (!importWizardScreen || !importWizardScreen.classList.contains('active')) {
+            return;
+        }
+
         const statusEl = document.getElementById('validationStatus');
         const validatedCountEl = document.getElementById('validatedCount');
         const issuesCountEl = document.getElementById('issuesCount');
@@ -1180,6 +1186,13 @@ class ImportWizard {
 
     handleValidationComplete(data) {
         console.log('Validation complete:', data);
+
+        // Only handle if import wizard is active (not merge wizard)
+        const importWizardScreen = document.getElementById('importWizardScreen');
+        if (!importWizardScreen || !importWizardScreen.classList.contains('active')) {
+            console.log('Import wizard not active, ignoring validation event');
+            return;
+        }
 
         const isValid = data.isValid;
         const hasIssues = data.mismatches && data.mismatches.length > 0;
@@ -1232,6 +1245,13 @@ class ImportWizard {
 
     handleValidationError(data) {
         console.error('Validation error:', data);
+
+        // Only handle if import wizard is active (not merge wizard)
+        const importWizardScreen = document.getElementById('importWizardScreen');
+        if (!importWizardScreen || !importWizardScreen.classList.contains('active')) {
+            console.log('Import wizard not active, ignoring validation error event');
+            return;
+        }
 
         app.showModal(
             'Validation Error',

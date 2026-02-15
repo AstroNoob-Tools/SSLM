@@ -433,13 +433,8 @@ class MergeWizard {
                         <h4 style="margin: 0 0 0.5rem 0; color: white;">All Files Already Exist in Destination</h4>
                         <p style="margin: 0; opacity: 0.9;">
                             All unique files from the source libraries already exist in the destination directory.<br>
-                            No files need to be copied. You can proceed directly to validation.
+                            No files need to be copied. Starting validation...
                         </p>
-                    </div>
-                    <div style="text-align: center; margin-top: 2rem;">
-                        <button class="btn btn-primary" id="skipToValidationBtn" style="font-size: 1.1em; padding: 1rem 2rem;">
-                            Proceed to Validation →
-                        </button>
                     </div>
                 ` : ''}
 
@@ -481,12 +476,12 @@ class MergeWizard {
             </div>
         `;
 
-        // Add event listener for skip to validation button if it exists
+        // If no files to copy, automatically proceed to validation after showing message
         if (noFilesToCopy) {
-            const skipBtn = document.getElementById('skipToValidationBtn');
-            if (skipBtn) {
-                skipBtn.addEventListener('click', () => this.skipToValidation());
-            }
+            setTimeout(async () => {
+                await this.renderStep(6);
+                await this.startValidation();
+            }, 2000);
         }
     }
 
@@ -760,21 +755,6 @@ class MergeWizard {
                         Cancel Merge
                     </button>
                 </div>
-
-                <div id="mergeCompletionSection" style="display: none; margin-top: 2rem; padding: 1.5rem; background: var(--bg-secondary); border-radius: 8px; border: 2px solid var(--success-color);">
-                    <div class="completion-message" style="text-align: center;">
-                        <h4 style="color: var(--success-color); margin-bottom: 1rem;">✓ Merge Complete!</h4>
-                        <p id="mergeCompletionSummary" style="margin-bottom: 1.5rem;"></p>
-                    </div>
-                    <div class="completion-actions" style="display: flex; gap: 1rem; justify-content: center;">
-                        <button class="btn btn-primary" id="validateMergeBtn">
-                            Validate Transfer →
-                        </button>
-                        <button class="btn btn-secondary" id="skipValidationBtn">
-                            Skip to Dashboard
-                        </button>
-                    </div>
-                </div>
             </div>
         `;
 
@@ -787,7 +767,7 @@ class MergeWizard {
     async startMerge() {
         // Check if there are no files to copy - skip directly to validation
         if (this.mergePlan && this.mergePlan.filesToCopy && this.mergePlan.filesToCopy.length === 0) {
-            console.log('No files to copy, skipping to validation');
+            console.log('No files to copy, skipping directly to validation');
 
             // Show a brief message
             const content = document.getElementById('mergeWizardContent');
@@ -797,13 +777,13 @@ class MergeWizard {
                     <h3>All Files Already Exist</h3>
                     <p style="color: var(--text-secondary); margin: 1rem 0;">
                         All files from the source libraries already exist in the destination.<br>
-                        No files need to be copied. Proceeding to validation...
+                        No files need to be copied. Starting validation...
                     </p>
                 </div>
             `;
 
             // Wait a moment for user to see the message, then go to validation
-            await new Promise(resolve => setTimeout(resolve, 2000));
+            await new Promise(resolve => setTimeout(resolve, 1500));
             await this.startValidation();
             return;
         }
@@ -858,7 +838,7 @@ class MergeWizard {
     handleMergeComplete(data) {
         console.log('Merge complete:', data);
 
-        // First, update progress display to show 100% completion
+        // Update progress display to show 100% completion
         const progressBar = document.getElementById('mergeProgressBar');
         const progressPercentage = document.getElementById('mergeProgressPercentage');
         const currentFile = document.getElementById('mergeCurrentFile');
@@ -869,41 +849,24 @@ class MergeWizard {
 
         if (progressBar) progressBar.style.width = '100%';
         if (progressPercentage) progressPercentage.textContent = '100%';
-        if (currentFile) currentFile.textContent = 'Merge completed successfully!';
+        if (currentFile) currentFile.textContent = 'Merge completed successfully! Starting validation...';
         if (filesProgress) filesProgress.textContent = `${data.filesCopied} / ${data.totalFiles}`;
         if (bytesProgress) bytesProgress.textContent = `${this.formatBytes(data.bytesCopied)} / ${this.formatBytes(data.totalBytes)}`;
         if (speed) speed.textContent = '-';
         if (eta) eta.textContent = '0s';
 
-        // Then show completion section
-        const cancelBtn = document.getElementById('cancelMergeBtn');
-        const completionSection = document.getElementById('mergeCompletionSection');
-        const completionSummary = document.getElementById('mergeCompletionSummary');
+        // Store merge results for display in validation screen if needed
+        this.mergeResults = {
+            filesCopied: data.filesCopied,
+            bytesCopied: data.bytesCopied,
+            duration: data.duration,
+            errors: data.errors
+        };
 
-        if (cancelBtn) cancelBtn.style.display = 'none';
-        if (completionSection) completionSection.style.display = 'block';
-
-        if (completionSummary) {
-            completionSummary.innerHTML = `
-                Successfully merged ${data.filesCopied} files (${this.formatBytes(data.bytesCopied)})
-                in ${this.formatDuration(data.duration)}.
-                ${data.errors && data.errors.length > 0
-                    ? `<br><span class="warning">⚠️ ${data.errors.length} errors occurred during merge.</span>`
-                    : ''}
-            `;
-        }
-
-        // Add event listeners for completion actions
-        const validateBtn = document.getElementById('validateMergeBtn');
-        const skipBtn = document.getElementById('skipValidationBtn');
-
-        if (validateBtn) {
-            validateBtn.addEventListener('click', () => this.startValidation());
-        }
-
-        if (skipBtn) {
-            skipBtn.addEventListener('click', () => this.skipToAnalysisDashboard());
-        }
+        // Automatically proceed to validation after a brief delay
+        setTimeout(() => {
+            this.startValidation();
+        }, 1500);
     }
 
     handleMergeError(data) {
@@ -1048,7 +1011,7 @@ class MergeWizard {
     handleValidationComplete(data) {
         console.log('Validation complete:', data);
 
-        // First update progress to 100%
+        // Update progress to 100%
         const progressBar = document.getElementById('validateProgressBar');
         const progressPercentage = document.getElementById('validateProgressPercentage');
         const filesProgress = document.getElementById('validateFilesProgress');
@@ -1062,53 +1025,75 @@ class MergeWizard {
             issues.style.color = (data.mismatches?.length || 0) > 0 ? 'var(--danger-color)' : 'var(--success-color)';
         }
 
-        // Then show results
-        const resultsSection = document.getElementById('validateResultsSection');
-        if (!resultsSection) return;
-
-        resultsSection.style.display = 'block';
-
-        if (data.isValid) {
-            resultsSection.innerHTML = `
-                <div style="padding: 2rem; background: var(--bg-secondary); border-radius: 8px; border: 2px solid var(--success-color); text-align: center;">
-                    <div style="font-size: 3em; color: var(--success-color); margin-bottom: 1rem;">✓</div>
-                    <h4 style="color: var(--success-color); margin-bottom: 1rem;">Validation Successful!</h4>
-                    <p style="margin-bottom: 0.5rem;">All ${data.filesValidated.toLocaleString()} files verified successfully.</p>
-                    <p style="color: var(--text-secondary); margin-bottom: 2rem;">Validation completed in ${this.formatDuration(data.duration)}.</p>
-                    <button class="btn btn-primary" onclick="mergeWizard.skipToAnalysisDashboard()">
-                        View Dashboard
-                    </button>
-                </div>
-            `;
-        } else {
-            resultsSection.innerHTML = `
-                <div class="validation-failure">
-                    <div class="error-icon">⚠️</div>
-                    <h4>Validation Failed</h4>
-                    <p>${data.mismatches.length} files failed validation.</p>
-                    ${data.mismatches.length > 0 ? `
-                        <div class="mismatch-list">
-                            <h5>Issues:</h5>
-                            <ul>
-                                ${data.mismatches.slice(0, 50).map(m => `
-                                    <li>
-                                        <strong>${m.file}</strong>: ${m.message}
-                                    </li>
-                                `).join('')}
-                            </ul>
-                            ${data.mismatches.length > 50 ? `
-                                <p class="text-muted">... and ${data.mismatches.length - 50} more issues</p>
-                            ` : ''}
-                        </div>
-                    ` : ''}
-                    <div class="validation-actions">
-                        <button class="btn btn-secondary" onclick="mergeWizard.skipToAnalysisDashboard()">
-                            View Dashboard Anyway
-                        </button>
-                    </div>
+        // Show brief completion message
+        const content = document.getElementById('mergeWizardContent');
+        if (content) {
+            content.innerHTML = `
+                <div class="wizard-step-content" style="text-align: center; padding: 3rem 0;">
+                    <div style="font-size: 3rem; margin-bottom: 1rem; color: var(--success-color);">✓</div>
+                    <h3>Validation Complete</h3>
+                    <p style="color: var(--text-secondary); margin: 1rem 0;">
+                        ${data.isValid
+                            ? `All ${data.filesValidated.toLocaleString()} files verified successfully!`
+                            : `Validation completed with ${data.mismatches?.length || 0} issues.`}
+                    </p>
+                    <p style="color: var(--text-secondary); font-size: 0.9em;">
+                        Loading dashboard...
+                    </p>
                 </div>
             `;
         }
+
+        // Wait briefly, then show loading screen and proceed to dashboard
+        setTimeout(() => {
+            this.showDashboardLoading();
+            this.skipToAnalysisDashboard();
+        }, 1000);
+    }
+
+    showDashboardLoading() {
+        const content = document.getElementById('mergeWizardContent');
+        if (!content) return;
+
+        content.innerHTML = `
+            <div class="wizard-step-content" style="text-align: center; padding: 3rem 0;">
+                <h3>Analyzing Merged Library</h3>
+                <p style="color: var(--text-secondary); margin-bottom: 2rem;">
+                    Scanning files and building dashboard statistics...
+                </p>
+
+                <div class="loading-donut" style="margin: 2rem auto;">
+                    <svg width="120" height="120" viewBox="0 0 120 120">
+                        <circle cx="60" cy="60" r="54" fill="none" stroke="var(--border-color)" stroke-width="12"/>
+                        <circle cx="60" cy="60" r="54" fill="none" stroke="var(--primary-color)" stroke-width="12"
+                                stroke-dasharray="339.292" stroke-dashoffset="0"
+                                stroke-linecap="round"
+                                style="animation: donut-spin 2s linear infinite; transform-origin: center;">
+                        </circle>
+                    </svg>
+                </div>
+
+                <p style="color: var(--text-secondary); font-size: 0.9em; margin-top: 2rem;">
+                    This may take a few moments for large libraries...
+                </p>
+            </div>
+            <style>
+                @keyframes donut-spin {
+                    0% {
+                        stroke-dashoffset: 339.292;
+                        transform: rotate(0deg);
+                    }
+                    50% {
+                        stroke-dashoffset: 84.823;
+                        transform: rotate(180deg);
+                    }
+                    100% {
+                        stroke-dashoffset: 339.292;
+                        transform: rotate(360deg);
+                    }
+                }
+            </style>
+        `;
     }
 
     handleValidationError(data) {

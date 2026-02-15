@@ -79,6 +79,12 @@ class App {
     }
 
     setupEventListeners() {
+        // Home button
+        const homeBtn = document.getElementById('homeBtn');
+        if (homeBtn) {
+            homeBtn.addEventListener('click', () => this.goHome());
+        }
+
         // Settings button
         const settingsBtn = document.getElementById('settingsBtn');
         if (settingsBtn) {
@@ -194,6 +200,14 @@ class App {
         if (modal) {
             modal.classList.remove('active');
         }
+    }
+
+    // Navigation
+    goHome() {
+        // Return to welcome screen
+        this.showScreen('welcomeScreen');
+        this.currentDirectory = null;
+        this.updateStatus('Ready');
     }
 
     // Settings Dialog
