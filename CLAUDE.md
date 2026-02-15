@@ -601,22 +601,31 @@ The merge feature allows users to combine multiple SeeStar library copies into a
 
 **Step 3: Analysis & Preview**
 - Analyzes all source libraries to build merge plan
-- Displays statistics:
+- **Scans destination directory** for existing files (if destination already has content)
+- Displays statistics in tabular format:
   - Total files from each source library
   - Duplicates detected (same relative path across sources)
   - Conflicts found (files that exist in multiple sources with differences)
+  - **Files already in destination** (will be skipped if same size/mtime)
   - Final file count after deduplication
+  - **Actual files to copy** (excluding files already in destination)
   - Space requirements vs available space
 - Shows conflict resolution preview (first 10 examples)
 - Conflict table shows: File Path, Source 1 info, Source 2 info, Resolution (which wins)
 
 **Step 4: Confirmation**
-- Summary cards with key statistics
-- Source libraries count and paths
+- Tabular display with key statistics
+- Source libraries count and paths (with full paths)
 - Destination path
-- Files: original total → final count
-- Space required vs available
-- Conflict resolution strategy reminder
+- Merge statistics table:
+  - Total files from all sources
+  - Duplicates removed
+  - Final file count
+  - **Files already in destination** (shown if > 0, with size)
+  - **Files to copy** (actual work to be done)
+  - Total size to copy
+- Disk space validation table (required vs available)
+- Conflict resolution strategy table
 - "Start Merge" button
 
 **Step 5: Merge Progress**
@@ -884,9 +893,28 @@ Network drives will be 3-5x slower.
 - Fixed server not stopping with Ctrl+C (graceful shutdown with timeout)
 - Added completed step visual indicator (green with checkmark)
 
+**Recent Improvements (2026-02-15):**
+- ✅ **Real-Time Analysis Progress**: Step 3 now shows live scanning progress
+  - Displays which library is being scanned (e.g., "Scanning Library 2 of 4")
+  - Shows full path of current library being scanned
+  - Displays file count found in each library with checkmark
+  - Shows status when scanning destination directory
+  - Added `handleAnalyzeProgress()` Socket.IO event handler
+  - Updated Step 3 UI with `analyzeStatusMessage` and `analyzeProgressDetails` elements
+  - Modified analyze request to include socketId for real-time updates
+- ✅ **Enhanced Dashboard Navigation Debugging**:
+  - Added path normalization in `skipToAnalysisDashboard()` (ensures Windows backslashes)
+  - Added detailed console logging on client side (original path, normalized path)
+  - Added comprehensive server-side debugging in `/api/analyze` endpoint
+  - Server now logs: raw path received, path length/type, directory existence check
+  - Returns detailed error message if directory not found
+  - Helps identify path encoding/format issues
+
 **Testing Status:**
 - ✅ Successfully tested with 2 identical libraries (proper duplicate detection)
-- 🔄 Ongoing testing with real library copies
+- 🔄 Ongoing testing with real library copies containing differences
+- 🔄 Testing real-time analysis progress display
+- 🔄 Debugging dashboard navigation path handling
 
 ### Dashboard Features
 
