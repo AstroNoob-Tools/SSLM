@@ -7,6 +7,7 @@ const DirectoryBrowser = require('./src/utils/directoryBrowser');
 const FileAnalyzer = require('./src/services/fileAnalyzer');
 const FileCleanup = require('./src/services/fileCleanup');
 const ImportService = require('./src/services/importService');
+const MergeService = require('./src/services/mergeService');
 const DiskSpaceValidator = require('./src/utils/diskSpaceValidator');
 
 // Create Express app
@@ -31,8 +32,9 @@ try {
   };
 }
 
-// Initialize ImportService with Socket.IO and config
+// Initialize ImportService and MergeService with Socket.IO and config
 const importService = new ImportService(io, config);
+const mergeService = new MergeService(io, config);
 
 const PORT = process.env.PORT || config.server.port || 3000;
 const HOST = config.server.host || 'localhost';
@@ -495,6 +497,147 @@ app.post('/api/import/validate', async (req, res) => {
   }
 });
 
+// Merge API Routes
+app.post('/api/merge/analyze', async (req, res) => {
+  try {
+    const { sourcePaths, destinationPath } = req.body;
+
+    if (!sourcePaths || !Array.isArray(sourcePaths) || sourcePaths.length < 2) {
+      return res.status(400).json({
+        success: false,
+        error: 'At least 2 source paths required'
+      });
+    }
+
+    if (!destinationPath) {
+      return res.status(400).json({
+        success: false,
+        error: 'destinationPath required'
+      });
+    }
+
+    console.log(`Analyzing ${sourcePaths.length} libraries for merge...`);
+    const result = await mergeService.analyzeSources(sourcePaths, destinationPath);
+
+    res.json({ success: true, ...result });
+  } catch (error) {
+    console.error('Error analyzing merge:', error);
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
+app.post('/api/merge/validate-space', async (req, res) => {
+  try {
+    const { sourcePaths, destinationPath } = req.body;
+
+    if (!sourcePaths || !destinationPath) {
+      return res.status(400).json({
+        success: false,
+        error: 'sourcePaths and destinationPath required'
+      });
+    }
+
+    console.log(`Validating disk space for merge: ${sourcePaths.length} sources`);
+
+    // Calculate deduplicated space required
+    const required = await DiskSpaceValidator.getMergeRequiredSpace(sourcePaths);
+    const requiredWithBuffer = Math.ceil(required * 1.1); // 10% buffer
+
+    // Get available space
+    const available = await DiskSpaceValidator.getAvailableSpace(destinationPath);
+
+    const result = {
+      hasEnoughSpace: available >= requiredWithBuffer,
+      required: requiredWithBuffer,
+      requiredFormatted: DiskSpaceValidator.formatBytes(requiredWithBuffer),
+      available,
+      availableFormatted: DiskSpaceValidator.formatBytes(available),
+      bufferApplied: 1.1,
+      requiredWithoutBuffer: required,
+      requiredWithoutBufferFormatted: DiskSpaceValidator.formatBytes(required)
+    };
+
+    console.log(`Merge space validation: ${result.hasEnoughSpace ? 'OK' : 'INSUFFICIENT'} - Required: ${result.requiredFormatted}`);
+    res.json({ success: true, ...result });
+  } catch (error) {
+    console.error('Error validating merge space:', error);
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
+app.post('/api/merge/start', async (req, res) => {
+  try {
+    const { sourcePaths, destinationPath, mergePlan, socketId } = req.body;
+
+    if (!sourcePaths || !destinationPath || !mergePlan || !socketId) {
+      return res.status(400).json({
+        success: false,
+        error: 'sourcePaths, destinationPath, mergePlan, and socketId required'
+      });
+    }
+
+    console.log(`Starting merge: ${sourcePaths.length} sources -> ${destinationPath}`);
+
+    const operationId = Date.now().toString();
+    mergeService.executeMerge(sourcePaths, destinationPath, mergePlan, socketId, operationId)
+      .then(() => {
+        console.log(`Merge completed successfully`);
+      })
+      .catch(error => {
+        console.error(`Merge failed:`, error);
+        io.to(socketId).emit('merge:error', {
+          error: error.message,
+          operationId
+        });
+      });
+
+    res.json({ success: true, operationId, message: 'Merge started' });
+  } catch (error) {
+    console.error('Error starting merge:', error);
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
+app.post('/api/merge/cancel', async (req, res) => {
+  try {
+    console.log('Cancelling merge...');
+    const result = await mergeService.cancelMerge();
+    res.json(result);
+  } catch (error) {
+    console.error('Error cancelling merge:', error);
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
+app.post('/api/merge/validate', async (req, res) => {
+  try {
+    const { destinationPath, mergePlan, socketId } = req.body;
+
+    if (!destinationPath || !mergePlan || !socketId) {
+      return res.status(400).json({
+        success: false,
+        error: 'destinationPath, mergePlan, and socketId required'
+      });
+    }
+
+    const operationId = Date.now().toString();
+    console.log(`Starting merge validation: ${destinationPath}`);
+
+    mergeService.validateMerge(destinationPath, mergePlan, socketId, operationId)
+      .catch(error => {
+        io.to(socketId).emit('validate:error', {
+          error: error.message,
+          operationId
+        });
+      });
+
+    res.json({ success: true, operationId, message: 'Validation started' });
+  } catch (error) {
+    console.error('Error starting merge validation:', error);
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
 // Socket.IO connection handling
 io.on('connection', (socket) => {
   console.log('Client connected:', socket.id);
@@ -524,20 +667,32 @@ server.listen(PORT, HOST, () => {
 });
 
 // Graceful shutdown
-process.on('SIGTERM', () => {
-  console.log('\nSIGTERM received, shutting down gracefully...');
-  server.close(() => {
-    console.log('Server closed');
-    process.exit(0);
-  });
-});
+const gracefulShutdown = () => {
+  console.log('\nShutdown signal received, shutting down gracefully...');
 
-process.on('SIGINT', () => {
-  console.log('\nSIGINT received, shutting down gracefully...');
+  // Cancel any ongoing operations
+  importService.cancelImport().catch(() => {});
+  mergeService.cancelMerge().catch(() => {});
+
+  // Close all Socket.IO connections
+  io.close(() => {
+    console.log('Socket.IO server closed');
+  });
+
+  // Close HTTP server
   server.close(() => {
-    console.log('Server closed');
+    console.log('HTTP server closed');
     process.exit(0);
   });
-});
+
+  // Force exit after 5 seconds if graceful shutdown fails
+  setTimeout(() => {
+    console.error('Forced shutdown after timeout');
+    process.exit(1);
+  }, 5000);
+};
+
+process.on('SIGTERM', gracefulShutdown);
+process.on('SIGINT', gracefulShutdown);
 
 module.exports = { app, io };
