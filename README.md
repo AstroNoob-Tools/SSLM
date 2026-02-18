@@ -1,71 +1,65 @@
-# SSLM - SeeStar Library Manager
+# SSLM — SeaStar Library Manager
 
-🔭 A local web application for managing astrophotography files from SeeStar telescope devices.
+A local web application for managing astrophotography files from a **SeeStar telescope**. Organise, import, merge, and analyse your astronomical image collection — entirely offline, running on your own machine.
 
-**SSLM** (SeeStar Library Manager) helps you organize, analyze, and maintain your astrophotography library with an intuitive web-based dashboard.
+---
 
-## ✨ Features
+## Features
 
-### 📊 Interactive Dashboard
-- **Collection Statistics**: View total objects, file counts, storage usage, and date ranges at a glance
-- **Sidebar Navigation**: Quick access to all dashboard sections (Summary, File Types, Catalogs, Objects)
-- **Catalog Breakdown**: See your collection organized by astronomical catalogs (Messier, NGC, IC, SH)
-  - **Clickable Catalogs**: Click any catalog card to view catalog-specific details
-  - **Catalog Detail View**: Drill down into individual catalogs to see all objects and imaging sessions
-  - **Catalog Statistics**: View summary stats (objects, size, integration time) for each catalog
-- **File Type Analysis**: Detailed breakdown of .FIT files, JPGs, thumbnails, and videos
-- **Search & Filter**: Quickly find objects by name or catalog
+### Import from SeeStar
+- Automatic device detection (USB drives C: through Z:, and network/station mode)
+- **Full Copy** — fresh import of all files
+- **Incremental Copy** — updates only new or changed files
+- Real-time progress: speed, ETA, files copied, bytes transferred
+- Post-import transfer validation with file integrity checks
 
-### 🎯 Object Management
-- **Detailed Object View**: Complete information for each celestial object
-  - Click any object name to view comprehensive details
-  - Imaging sessions table with stacking counts, exposure times, and filters
-  - Exposure breakdown showing counts by exposure time for both stacked images and light frames
-  - Complete file lists for main and sub-frame folders with capture dates
-- **Sub-Frame Detection**: Automatically identifies objects with sub-frame directories
-- **Integration Time Tracking**: View total integration time per object
-- **Sub-Frame Statistics**: See breakdown of .fit files vs other files in sub-frame folders
-- **Visual Hover Effects**: Object names highlight on hover to indicate they're clickable
+### Interactive Dashboard
+- Summary statistics: total objects, integration times, file counts, storage usage
+- File type breakdown (FITS, JPG, thumbnails, MP4)
+- Catalog breakdown with clickable cards (Messier, NGC, IC, Sharpless, and more)
+- Object table with search, filtering, and direct navigation
+- Sticky sidebar navigation — jump to any section instantly
+- Dashboard button in header — return to top from anywhere
 
-### 🧹 Cleanup & Optimization
-- **Empty Directory Cleanup**: Identify and delete empty directories safely
-- **Sub-Frame Optimization**: Remove unnecessary JPG and thumbnail files from sub-frame folders
-  - Global cleanup: Clean all sub-frame directories at once
-  - Individual cleanup: Clean specific objects with a single click
-  - Safe operation: Your .fit files are never touched
-- **Storage Savings**: Track freed space after cleanup operations
+### Object & Catalog Detail Pages
+- Imaging sessions grouped by date, exposure, and filter
+- Exposure breakdown cards for main and sub-frame folders
+- Full file lists with capture timestamps, grouped by type
+- **Image Viewer** — click any JPG or thumbnail to view full-screen
+- Individual sub-frame cleanup per object
 
-### 📥 Import & Organization
-- **Import from SeeStar**: Copy files from connected SeeStar device
-  - Removable drive support (E:\, F:\, etc.)
-  - Network path support (\\seestar)
-- **Work with Local Copies**: Manage existing local astrophotography collections
-- **Favorite Folders**: Save frequently used directories for quick access
-  - Add folders to favorites with the ⭐ button
-  - One-click access from favorite list
-  - Remove favorites you no longer need
-- **Smart File Detection**: Automatically recognizes SeeStar file structure
-  - Main object directories
-  - Sub-frame directories (_sub folders)
-  - Mosaic captures
+### Multi-Library Merge
+- Combine 2 or more library copies into one consolidated library
+- Automatic duplicate detection by relative file path
+- Conflict resolution: keeps the newer version by modification date
+- Real-time scanning progress showing per-library file counts
+- Conflict preview before any files are moved
+- Post-merge integrity validation
+- Auto-skips to validation when destination is already up to date
 
-### 🌐 Mode Support
-- **Offline Mode** (default): Full functionality without internet connection
-- **Online Mode**: Additional features when internet is available
-- **Settings Management**: Configure default import strategy and operating mode
+### Cleanup Tools
+- Delete empty directories with one click
+- Remove JPG/thumbnail preview files from sub-frame directories (`.fit` files are never touched)
+- Global cleanup (all objects) or individual object cleanup
+- Space savings shown before confirmation
 
-## 🚀 Quick Start
+### Favourites & Folder Browser
+- Save frequently used library folders
+- Quick one-click access across Import, Local Copy, and Merge workflows
+- Create new folders directly from the browser
+
+---
+
+## Quick Start
 
 ### Requirements
-- Node.js 18 or higher
-- Windows OS (initial release, cross-platform support planned)
 
-### Installation
+- [Node.js](https://nodejs.org) v18 or later
+- Windows 10 / 11
+
+### Install & Run
 
 ```bash
-# Clone or download the repository
-cd SeeStarFileManager
-
 # Install dependencies
 npm install
 
@@ -73,162 +67,90 @@ npm install
 npm start
 ```
 
-The application will start at `http://localhost:3000`
+Open your browser at **http://localhost:3000**
 
 ### Development Mode
 
 ```bash
-# Run with auto-reload (requires nodemon)
-npm run dev
+npm run dev    # Auto-restarts on file changes (requires nodemon)
 ```
 
-## 📖 Usage
+---
 
-### First Time Setup
+## Documentation
 
-1. **Start the application**
-   ```bash
-   npm start
-   ```
+| Document | Description |
+|----------|-------------|
+| [Installation Manual](documentation/InstallationManual.md) | Full installation guide, configuration, troubleshooting |
+| [User Manual](documentation/UserManual.md) | Complete step-by-step user guide for all features |
 
-2. **Open your browser** to `http://localhost:3000`
+---
 
-3. **Choose your mode**:
-   - **Import from SeeStar**: Copy files from your connected device
-   - **Work with local copy**: Use an existing local directory
-
-### Import from SeeStar
-
-1. Connect your SeeStar device (USB or network)
-2. Select "Import from SeeStar"
-3. Choose connection type:
-   - Removable drive (auto-detected)
-   - Network path: `\\seestar`
-4. Select import strategy:
-   - **Copy Everything**: Full copy (new imports)
-   - **Incremental Copy**: Only new/changed files (updates)
-5. Choose destination folder (ensure ~50GB free space)
-6. Monitor progress and view dashboard when complete
-
-### Work with Local Copy
-
-1. Select "Work with local copy"
-2. Choose from your favorite folders or browse to your existing SeeStar directory
-3. Add frequently used directories to favorites with the ⭐ button
-4. Dashboard loads immediately with collection statistics
-
-### Dashboard Features
-
-**Summary Section**:
-- Total objects count
-- Objects with/without sub-frames
-- Total storage used
-- Total file count
-- Empty directories warning
-
-**File Types Section**:
-- .FIT files count
-- JPG files count
-- Thumbnail files count
-- Video files (.mp4) count
-
-**Catalogs Section**:
-- Breakdown by astronomical catalog (M, NGC, IC, SH)
-- Click any catalog to view detailed catalog page
-- Catalog-specific statistics and object lists
-
-**Empty Directories**:
-- List of empty directories
-- One-click deletion
-
-**Cleanup Section**:
-- Sub-frame cleanup suggestions
-- Space savings estimate
-- Global or individual cleanup options
-
-**Objects Section**:
-- Searchable object list
-- Sub-frame file breakdown (.fit vs other)
-- Integration time per object
-- Individual cleanup buttons
-- Total files and size per object
-- Clickable object names (with hover effects) to view detailed pages
-- Detailed object pages include:
-  - Imaging sessions table with dates, times, and stacking counts
-  - Exposure breakdown for both stacked images and light frames
-  - Complete file lists with capture timestamps
-  - Metadata including filters, exposures, and stacking counts
-
-## 🗂️ Project Structure
+## Project Structure
 
 ```
-SSLM/
-├── server.js              # Main Express server
-├── package.json           # Project dependencies
-├── config/                # Configuration files
-│   └── settings.json      # User settings (created on first run)
-├── src/                   # Backend source code
-│   ├── services/          # Business logic
-│   │   ├── fileAnalyzer.js    # Directory analysis
-│   │   ├── fileCleanup.js     # Cleanup operations
-│   │   └── catalogParser.js   # Catalog name parsing
-│   └── utils/             # Utility functions
-│       └── directoryBrowser.js # File system operations
-├── public/                # Frontend static files
-│   ├── index.html         # Main HTML
-│   ├── css/               # Stylesheets
-│   │   └── styles.css
-│   └── js/                # JavaScript files
-│       ├── app.js             # Main application logic
-│       ├── dashboard.js       # Dashboard rendering
-│       ├── modeSelection.js   # Mode selection wizard
-│       └── importWizard.js    # Import wizard
-└── CLAUDE.md             # Project documentation
+SeeStarFileManager/
+├── config/
+│   └── settings.json              # User preferences, favourites, saved paths
+├── src/
+│   ├── services/
+│   │   ├── fileAnalyzer.js        # Library scanning and statistics
+│   │   ├── fileCleanup.js         # Cleanup operations
+│   │   ├── importService.js       # SeeStar device import with progress tracking
+│   │   ├── mergeService.js        # Multi-library merge with conflict resolution
+│   │   └── catalogParser.js       # Astronomical catalog name parsing
+│   └── utils/
+│       ├── directoryBrowser.js    # File system navigation and drive detection
+│       └── diskSpaceValidator.js  # Strategy-aware disk space validation
+├── public/
+│   ├── index.html                 # Application UI
+│   ├── css/styles.css             # Dark space theme
+│   └── js/
+│       ├── app.js                 # Core application, screen management, navigation
+│       ├── dashboard.js           # Dashboard, object detail, catalog detail, image viewer
+│       ├── importWizard.js        # 5-step import wizard
+│       ├── mergeWizard.js         # 6-step merge wizard
+│       └── modeSelection.js       # Mode selection and folder browsing
+├── documentation/
+│   ├── InstallationManual.md
+│   └── UserManual.md
+├── server.js                      # Express server and all API endpoints
+└── package.json
 ```
 
-## 🔧 Technical Details
+---
 
-### Technology Stack
-- **Backend**: Node.js + Express.js
-- **Real-time**: Socket.IO
-- **File Operations**: fs-extra
-- **Frontend**: Vanilla JavaScript + CSS
-- **Architecture**: Local web application (no internet required)
+## SeeStar File Structure
 
-### File Format Support
-- **.fit (FITS)**: Flexible Image Transport System files
-- **.jpg**: Preview images
-- **_thn.jpg**: Thumbnail images
-- **.mp4**: Video files
+SSLM understands the SeeStar directory and file naming conventions:
 
-### Supported Catalogs
-- **Messier (M)**: M 42, M 45, M 47, etc.
-- **New General Catalogue (NGC)**: NGC 1365, NGC 2024, etc.
-- **Index Catalogue (IC)**: IC 434, IC 2177, etc.
-- **Sharpless (SH)**: SH 2-3, SH 2-54, etc.
-- **Named Objects**: Large Magellanic Cloud, etc.
+```
+MyWorks/
+├── NGC 6729/                    ← Main folder: stacked images
+│   ├── Stacked_210_NGC 6729_30.0s_IRCUT_20250822-231258.fit
+│   ├── Stacked_210_NGC 6729_30.0s_IRCUT_20250822-231258.jpg
+│   └── Stacked_210_NGC 6729_30.0s_IRCUT_20250822-231258_thn.jpg
+├── NGC 6729_sub/                ← Sub-frame folder: individual exposures
+│   ├── Light_NGC 6729_30.0s_IRCUT_20250822-203353.fit
+│   └── ...
+├── M 42/                        ← Object without sub-frames
+│   └── Stacked_30_M 42_10.0s_IRCUT_20260101-220000.fit
+└── ...
+```
 
-## 🛡️ Safety Features
+**Filename format:**
+```
+Stacked_[frames]_[Object]_[exposure]_[filter]_[YYYYMMDD-HHMMSS].fit
+Light_[Object]_[exposure]_[filter]_[YYYYMMDD-HHMMSS].fit
+```
 
-- **Read-only on SeeStar**: Never modifies files on the device
-- **Confirmation dialogs**: All destructive operations require confirmation
-- **.fit file protection**: Cleanup operations never delete .fit files
-- **Empty directory check**: Double-checks directories are empty before deletion
-- **Progress tracking**: Real-time feedback during operations
-- **Error handling**: Comprehensive error reporting and recovery
+**Supported catalogs:** Messier (M), NGC, IC, Sharpless (SH), named objects, mosaic variants (`_mosaic`)
 
-## 🎨 Interface Features
+---
 
-- **Modern UI**: Clean, dark-themed interface optimized for readability
-- **Responsive Design**: Adapts to different screen sizes
-- **Smooth Navigation**: Sidebar navigation with smooth scrolling
-- **Real-time Updates**: Dashboard refreshes after cleanup operations
-- **Loading Indicators**: Visual feedback during long operations
-- **Modal Dialogs**: Clean confirmation and result displays
+## Configuration
 
-## 📝 Configuration
-
-Settings are stored in `config/settings.json`:
+`config/settings.json` is created automatically with defaults on first run.
 
 ```json
 {
@@ -239,44 +161,86 @@ Settings are stored in `config/settings.json`:
   "mode": {
     "online": false
   },
+  "seestar": {
+    "directoryName": "MyWorks"
+  },
   "paths": {
     "lastSourcePath": "",
     "lastDestinationPath": ""
   },
   "preferences": {
     "defaultImportStrategy": "incremental"
-  }
+  },
+  "favorites": []
 }
 ```
 
-## 🐛 Known Limitations
-
-- Windows support only (currently)
-- SeeStar device required for import functionality
-- Large collections (>10,000 files) may take time to analyze
-- Maximum 50mb payload size for cleanup operations
-
-## 🔮 Future Enhancements
-
-- Cross-platform support (macOS, Linux)
-- Windows installer package
-- Incremental import functionality
-- File import with progress tracking
-- Backup and restore features
-- Advanced filtering and sorting
-- Export capabilities
-- Batch operations
-
-## 📄 License
-
-ISC
-
-## 🙏 Acknowledgments
-
-Built for the astrophotography community using SeeStar telescopes.
+To change the port, update `server.port` and restart.
 
 ---
 
-**Version**: 1.0.0
-**Status**: Active Development
-**Platform**: Windows (Node.js)
+## API Reference
+
+| Method | Endpoint | Description |
+|--------|----------|-------------|
+| GET | `/api/status` | Server status |
+| GET | `/api/analyze?path=` | Analyse a library directory |
+| GET | `/api/image?path=` | Serve an image file |
+| GET | `/api/favorites` | List saved favourites |
+| POST | `/api/favorites/add` | Add a favourite |
+| POST | `/api/favorites/remove` | Remove a favourite |
+| GET | `/api/import/detect-seestar` | Detect connected SeeStar devices |
+| POST | `/api/import/validate-space` | Check disk space before import |
+| POST | `/api/import/start` | Start an import operation |
+| POST | `/api/import/cancel` | Cancel a running import |
+| POST | `/api/import/validate` | Validate transfer integrity |
+| POST | `/api/merge/analyze` | Analyse sources and build merge plan |
+| POST | `/api/merge/start` | Start a merge operation |
+| POST | `/api/merge/cancel` | Cancel a running merge |
+| POST | `/api/merge/validate` | Validate merge integrity |
+| GET | `/api/browse/drives` | List available drives |
+| GET | `/api/browse/directory?path=` | List directory contents |
+| POST | `/api/browse/create-directory` | Create a new directory |
+| POST | `/api/cleanup/empty-directories` | Delete empty directories |
+| POST | `/api/cleanup/subframe-directories` | Clean sub-frame preview files |
+
+---
+
+## Technology Stack
+
+| Layer | Technology |
+|-------|-----------|
+| Backend | Node.js + Express |
+| Real-time | Socket.IO |
+| Frontend | Vanilla JavaScript (ES6+) |
+| File operations | fs-extra |
+| Styling | CSS3 with custom properties |
+
+---
+
+## Safety
+
+- SSLM **never writes to or modifies files on the SeeStar device**
+- Merge operations **never modify source libraries**
+- Cleanup only removes **JPG and thumbnail preview files** — `.fit` data files are never touched
+- All destructive operations require explicit confirmation
+- Disk space is validated before import and merge operations begin
+
+---
+
+## Status
+
+| Phase | Description | Status |
+|-------|-------------|--------|
+| Phase 1 | Dashboard, local copy workflow, cleanup, favourites | ✅ Complete |
+| Phase 2 | Import from SeeStar device with real-time progress | ✅ Complete |
+| Phase 3 | Multi-library merge with deduplication | ✅ Complete |
+
+**Current version**: 1.0.0 — February 2026
+**Platform**: Windows 10 / 11
+
+---
+
+## License
+
+ISC
