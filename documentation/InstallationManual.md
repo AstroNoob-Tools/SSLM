@@ -18,6 +18,7 @@
 7. [Updating the Application](#updating-the-application)
 8. [Uninstallation](#uninstallation)
 9. [Troubleshooting](#troubleshooting)
+10. [npm Dependencies Reference](#npm-dependencies-reference)
 
 ---
 
@@ -504,6 +505,155 @@ SeeStarFileManager/
 | `http://localhost:3000` | Main application |
 | `http://localhost:3000/api/status` | Server status check |
 | `http://localhost:3000/api/config` | Current configuration |
+
+---
+
+## npm Dependencies Reference
+
+A complete list of every npm package used by SSLM, including its purpose and why it was chosen.
+
+### Production Dependencies
+
+These packages are required to run the application. They are installed by `npm install` and must be present at runtime.
+
+---
+
+#### `express` — v4.18.2
+
+**Category**: Web framework
+**npm**: https://www.npmjs.com/package/express
+
+Express is the HTTP server framework that powers the SSLM backend. It handles all incoming HTTP requests from the browser, routes them to the appropriate handler functions, and sends responses back.
+
+**Used for:**
+- Serving the frontend HTML, CSS, and JavaScript files as static assets
+- Defining all REST API endpoints (`/api/analyze`, `/api/import/start`, `/api/merge/start`, etc.)
+- Parsing JSON request bodies (`express.json()`)
+- Serving image files on demand via `/api/image`
+
+**Why Express**: Lightweight, widely used, and well-suited to local utility applications. No database or session management is needed, so a minimal framework is ideal.
+
+---
+
+#### `socket.io` — v4.6.1
+
+**Category**: Real-time communication
+**npm**: https://www.npmjs.com/package/socket.io
+
+Socket.IO provides bidirectional, event-driven communication between the Node.js server and the browser. It is used to push real-time progress updates to the frontend during long-running operations (import, merge, validation) without requiring the client to poll the server.
+
+**Used for:**
+- Emitting `import:progress` events during file copying (current file, bytes transferred, speed, ETA)
+- Emitting `merge:progress` events during merge operations (per-source breakdown, overall progress)
+- Emitting `analyze:progress` events during source library scanning (Step 3 of merge wizard)
+- Emitting `validate:progress` events during transfer validation
+- Emitting completion and error events (`import:complete`, `merge:complete`, `validate:complete`, etc.)
+
+**Why Socket.IO**: The import and merge operations can run for many minutes on large libraries. Real-time progress feedback is essential for a good user experience. Socket.IO works transparently over HTTP and requires no special browser configuration.
+
+---
+
+#### `fs-extra` — v11.2.0
+
+**Category**: File system utilities
+**npm**: https://www.npmjs.com/package/fs-extra
+
+`fs-extra` extends Node.js's built-in `fs` module with additional methods and Promise-based versions of all standard file system operations. It simplifies recursive directory operations, JSON file handling, and path utilities.
+
+**Used for:**
+- `fs.pathExists()` — checking whether a file or directory exists before operating on it
+- `fs.readJSONSync()` / `fs.writeJSON()` — reading and writing `config/settings.json`
+- `fs.ensureDir()` — creating destination directories (including all intermediate folders) before copying
+- `fs.stat()` — reading file metadata (size, modification time) for incremental copy comparisons
+- `fs.readdir()` — listing directory contents during library scanning
+- `fs.remove()` — deleting empty directories and sub-frame preview files during cleanup
+- Stream-based file copying via `fs.createReadStream()` / `fs.createWriteStream()`
+
+**Why fs-extra**: Avoids repetitive boilerplate for common file tasks (e.g., `mkdirp`, `JSON.parse(fs.readFileSync(...))`). All methods return Promises, making async/await code clean and readable.
+
+---
+
+#### `check-disk-space` — v3.4.0
+
+**Category**: System utility
+**npm**: https://www.npmjs.com/package/check-disk-space
+
+`check-disk-space` queries the operating system for available free space on a given drive or path. It provides a cross-platform API that returns total size and free space in bytes.
+
+**Used for:**
+- `DiskSpaceValidator.hasEnoughSpace()` — verifying there is sufficient free space on the destination drive before starting an import or merge
+- Strategy-aware space calculation: for incremental imports, only the differential size is validated rather than the full source size
+- Merge space validation: calculates the deduplicated size of the merged library
+
+**Why check-disk-space**: Node.js's built-in `fs` module does not expose disk space information. This package provides a clean, Promise-based API. On Windows it uses `wmic` internally, avoiding the need to shell out manually.
+
+---
+
+### Development Dependencies
+
+These packages are only used during development. They are installed by `npm install` but are **not** required to run the application in production. They can be omitted with `npm install --omit=dev` if deploying to another machine.
+
+---
+
+#### `nodemon` — v3.0.3
+
+**Category**: Development tool
+**npm**: https://www.npmjs.com/package/nodemon
+
+`nodemon` monitors the project's source files for changes and automatically restarts the Node.js server whenever a file is saved. This eliminates the need to manually stop and restart the server during development.
+
+**Used for:**
+- `npm run dev` — starts the server via nodemon instead of node
+- Watches `server.js`, `src/**/*.js`, and related files for changes
+- Restarts the server within ~1 second of saving any backend file
+
+**Why nodemon**: Standard development workflow tool for Node.js projects. Not needed in production since files do not change at runtime.
+
+---
+
+### Dependency Tree Summary
+
+| Package | Version | Type | Purpose |
+|---------|---------|------|---------|
+| `express` | ^4.18.2 | Production | HTTP server and REST API routing |
+| `socket.io` | ^4.6.1 | Production | Real-time progress events (import, merge, validation) |
+| `fs-extra` | ^11.2.0 | Production | File system operations (copy, scan, read, write, delete) |
+| `check-disk-space` | ^3.4.0 | Production | Disk free space validation before operations |
+| `nodemon` | ^3.0.3 | Development | Auto-restart server on file changes |
+
+### Transitive Dependencies
+
+Running `npm install` also installs transitive dependencies (packages required by the above packages). These are managed automatically by npm and listed in `package-lock.json`. Key transitive packages include:
+
+| Package | Required by | Purpose |
+|---------|------------|---------|
+| `accepts` | express | HTTP content negotiation |
+| `body-parser` | express | Request body parsing |
+| `cors` | socket.io | Cross-Origin Resource Sharing headers |
+| `debug` | express, socket.io | Debug logging utility |
+| `engine.io` | socket.io | Transport layer (WebSocket / long-polling) |
+| `mime-types` | express | MIME type resolution for static file serving |
+| `ms` | various | Millisecond time conversion utility |
+| `path-to-regexp` | express | URL pattern matching for route definitions |
+| `ws` | socket.io | WebSocket implementation |
+
+> **Note**: You do not need to manage transitive dependencies manually. `npm install` handles the full dependency tree. The complete list is locked in `package-lock.json`.
+
+### Installing Dependencies
+
+```bash
+# Install all dependencies (production + development)
+npm install
+
+# Install production dependencies only (for deployment)
+npm install --omit=dev
+
+# Check for outdated packages
+npm outdated
+
+# Update all packages to latest compatible versions
+npm update
+```
 
 ---
 
