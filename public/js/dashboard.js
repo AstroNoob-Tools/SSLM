@@ -952,6 +952,12 @@ class Dashboard {
             app.hideLoading();
 
             if (result.success || result.totalFilesDeleted > 0) {
+                // Remove the cleanup button immediately so it doesn't linger
+                const cleanupBtn = document.querySelector(`.cleanup-object-btn[data-object-name="${object.name}"]`);
+                if (cleanupBtn) {
+                    cleanupBtn.remove();
+                }
+
                 const cleanedObj = result.cleaned[0];
                 const message = `
                     <div style="text-align: left;">
@@ -966,11 +972,14 @@ class Dashboard {
                     </div>
                 `;
 
-                app.showModal('Cleanup Complete', message, null, 'Close');
+                app.showModal('Cleanup Complete', message, null, 'Done');
 
-                // Refresh the dashboard
-                setTimeout(() => {
-                    this.refreshDashboard();
+                // Refresh the dashboard and re-render object detail if still on that screen
+                setTimeout(async () => {
+                    await this.refreshDashboard();
+                    if (app.currentScreen === 'objectDetail') {
+                        this.showObjectDetail(object.name);
+                    }
                 }, 2000);
             } else {
                 app.showModal('Error', `<p>Failed to clean up: ${result.error || 'Unknown error'}</p>`, null, 'Close');
