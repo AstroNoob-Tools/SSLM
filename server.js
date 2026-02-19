@@ -436,6 +436,28 @@ app.get('/api/cleanup/subframe-info', async (req, res) => {
   }
 });
 
+// Delete Session Files
+app.post('/api/cleanup/session', async (req, res) => {
+  try {
+    const { mainFolderPath, subFolderPath, mainFiles, subFiles } = req.body;
+
+    if (!mainFolderPath || !mainFiles) {
+      return res.status(400).json({ success: false, error: 'mainFolderPath and mainFiles are required' });
+    }
+
+    const result = await FileCleanup.deleteSessionFiles({
+      mainFolderPath,
+      subFolderPath,
+      mainFiles,
+      subFiles: subFiles || []
+    });
+
+    res.json(result);
+  } catch (error) {
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
 // Import API Routes
 app.get('/api/import/detect-seestar', async (req, res) => {
   try {

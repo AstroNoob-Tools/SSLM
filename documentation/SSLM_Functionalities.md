@@ -89,9 +89,18 @@ Cleanup operations differ from standard "delete" commands. They strictly target 
 - **Targets**: `*.jpg` (previews), `*_thn.jpg` (thumbnails).
 - **Protected**: `*.fit` (FITS data), `*.mp4` (videos), and any files in the main object directory (stacked results).
 
+### Session Deletion
+
+A targeted deletion operation removes all files belonging to a single imaging session:
+- **Main folder targets**: All stacked image files (`.fit`, `.jpg`, `_thn.jpg`) whose filename timestamp matches any snapshot within the session.
+- **Sub-folder targets**: All light frame files (`Light_...`) whose filename contains the session date (`YYYYMMDD`), the session exposure (e.g., `30.0s`), and the session filter.
+- **API**: `POST /api/cleanup/session` — body: `{ mainFolderPath, subFolderPath, mainFiles[], subFiles[] }`
+- **Safety**: Requires explicit file list passed from the client (no wildcard deletion). Each file's size is read before deletion and reported in the response as `spaceFreed`.
+
 ### Safety Mechanisms
 - **Context Awareness**: Cleanup is only available for `_sub` directories. The main object directories (containing your final stacks) are never subjected to bulk cleanup.
 - **Empty Directory Pruning**: Recursive removal of directories that contain 0 files (often left over from renaming objects on the mobile app).
+- **Session Deletion Confirmation**: Session deletion always requires user confirmation in a dialog showing the file count before any files are removed.
 
 ---
 
@@ -106,4 +115,19 @@ Total integration time is not just a sum of file counts. It is calculated by:
 - **Aggregation**: These values are aggregated per object, per session, per catalog, and for the global library.
 
 ### Session Grouping
-Images are programmatically grouped into "Sessions" based on temporal proximity and identical capture parameters (Filter + Exposure), allowing users to view their data as logical events rather than just a flat list of files.
+
+Images are grouped into "Sessions" based on date and identical capture parameters (Filter + Exposure). The grouping key is `YYYYMMDD_exposure_filter` — time-of-day is intentionally excluded.
+
+**Why time is excluded**: The SeeStar saves progressive stacking snapshots throughout a live session (e.g., a snapshot at 09:09 PM with 74 frames, and another at 11:48 PM with 453 frames on the same night). Including the time in the key would create multiple sessions for the same night. By keying on date only, all snapshots from the same night are merged into one session entry.
+
+**Conflict resolution within a group**: When multiple files map to the same session key, the entry retains the **highest frame count** (the final result of the night's stacking). All file timestamps from every snapshot are accumulated in a `rawTimestamps` set, ensuring that session-scoped operations (detail view, delete) can locate every associated file.
+
+**Stacking Counts display**: The metadata panel shows `[total] total ([s1], [s2] per session)` — the total is the sum of each session's final frame count; the per-session values show the depth of each individual session's stack.
+
+### Session Detail View
+
+A dedicated screen (`sessionDetailScreen`) allows the user to inspect all files belonging to one session:
+- **Main folder files**: filtered by matching any timestamp in `session.rawTimestamps`
+- **Sub-frame light frames**: filtered by `session.rawDateStr` (YYYYMMDD) + `session.exposure.toFixed(1)s` + `session.filter`
+- File sections are expanded by default for immediate visibility
+- Provides a **Delete Session** action that calls `POST /api/cleanup/session`

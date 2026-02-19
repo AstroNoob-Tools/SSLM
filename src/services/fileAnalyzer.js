@@ -247,9 +247,12 @@ class FileAnalyzer {
                             objectData.dates.push(date);
                         }
 
-                        const stackCount = CatalogParser.extractStackingCount(file);
-                        if (stackCount && !objectData.stackingCounts.includes(stackCount)) {
-                            objectData.stackingCounts.push(stackCount);
+                        // Only extract stacking counts from .fit files (not .jpg or thumbnails)
+                        if (file.endsWith('.fit')) {
+                            const stackCount = CatalogParser.extractStackingCount(file);
+                            if (stackCount && !objectData.stackingCounts.includes(stackCount)) {
+                                objectData.stackingCounts.push(stackCount);
+                            }
                         }
 
                         const exposure = CatalogParser.extractExposure(file);
