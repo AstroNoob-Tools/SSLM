@@ -473,7 +473,7 @@ app.get('/api/import/detect-seestar', async (req, res) => {
 
 app.post('/api/import/validate-space', async (req, res) => {
   try {
-    const { sourcePath, destinationPath, strategy } = req.body;
+    const { sourcePath, destinationPath, strategy, subframeMode } = req.body;
 
     if (!sourcePath || !destinationPath) {
       return res.status(400).json({
@@ -483,12 +483,14 @@ app.post('/api/import/validate-space', async (req, res) => {
     }
 
     const importStrategy = strategy || 'full'; // Default to full if not specified
-    console.log(`Validating disk space (${importStrategy}): ${sourcePath} -> ${destinationPath}`);
+    const importSubframeMode = subframeMode || 'all';
+    console.log(`Validating disk space (${importStrategy}, ${importSubframeMode}): ${sourcePath} -> ${destinationPath}`);
     const result = await DiskSpaceValidator.hasEnoughSpace(
       sourcePath,
       destinationPath,
       importStrategy,
-      1.1  // 10% safety buffer
+      1.1,  // 10% safety buffer
+      importSubframeMode
     );
 
     console.log(`Space validation: ${result.hasEnoughSpace ? 'OK' : 'INSUFFICIENT'} - Required: ${result.requiredFormatted}`);
@@ -501,7 +503,7 @@ app.post('/api/import/validate-space', async (req, res) => {
 
 app.post('/api/import/start', async (req, res) => {
   try {
-    const { sourcePath, destinationPath, strategy, socketId } = req.body;
+    const { sourcePath, destinationPath, strategy, socketId, subframeMode } = req.body;
 
     if (!sourcePath || !destinationPath || !strategy || !socketId) {
       return res.status(400).json({
@@ -510,11 +512,12 @@ app.post('/api/import/start', async (req, res) => {
       });
     }
 
-    console.log(`Starting import: ${sourcePath} -> ${destinationPath} (${strategy})`);
+    const importSubframeMode = subframeMode || 'all';
+    console.log(`Starting import: ${sourcePath} -> ${destinationPath} (${strategy}, ${importSubframeMode})`);
 
     // Start import asynchronously (don't await - it's long-running)
     const operationId = Date.now().toString();
-    importService.startImport(sourcePath, destinationPath, strategy, socketId, operationId)
+    importService.startImport(sourcePath, destinationPath, strategy, socketId, operationId, importSubframeMode)
       .then(() => {
         console.log(`Import completed successfully`);
       })
@@ -547,7 +550,7 @@ app.post('/api/import/cancel', async (req, res) => {
 
 app.post('/api/import/validate', async (req, res) => {
   try {
-    const { sourcePath, destinationPath, socketId } = req.body;
+    const { sourcePath, destinationPath, socketId, subframeMode = 'all' } = req.body;
 
     if (!sourcePath || !destinationPath || !socketId) {
       return res.status(400).json({
@@ -557,10 +560,10 @@ app.post('/api/import/validate', async (req, res) => {
     }
 
     const operationId = Date.now().toString();
-    console.log(`Starting transfer validation: ${sourcePath} -> ${destinationPath}`);
+    console.log(`Starting transfer validation: ${sourcePath} -> ${destinationPath} (subframeMode: ${subframeMode})`);
 
     // Start validation asynchronously
-    importService.validateTransfer(sourcePath, destinationPath, socketId, operationId)
+    importService.validateTransfer(sourcePath, destinationPath, socketId, operationId, subframeMode)
       .catch(error => {
         io.to(socketId).emit('validate:error', {
           error: error.message,
@@ -578,7 +581,7 @@ app.post('/api/import/validate', async (req, res) => {
 // Merge API Routes
 app.post('/api/merge/analyze', async (req, res) => {
   try {
-    const { sourcePaths, destinationPath, socketId } = req.body;
+    const { sourcePaths, destinationPath, socketId, subframeMode } = req.body;
 
     if (!sourcePaths || !Array.isArray(sourcePaths) || sourcePaths.length < 2) {
       return res.status(400).json({
@@ -594,8 +597,9 @@ app.post('/api/merge/analyze', async (req, res) => {
       });
     }
 
-    console.log(`Analyzing ${sourcePaths.length} libraries for merge...`);
-    const result = await mergeService.analyzeSources(sourcePaths, destinationPath, socketId);
+    const mergeSubframeMode = subframeMode || 'all';
+    console.log(`Analyzing ${sourcePaths.length} libraries for merge (${mergeSubframeMode})...`);
+    const result = await mergeService.analyzeSources(sourcePaths, destinationPath, socketId, mergeSubframeMode);
 
     res.json({ success: true, ...result });
   } catch (error) {
@@ -606,7 +610,7 @@ app.post('/api/merge/analyze', async (req, res) => {
 
 app.post('/api/merge/validate-space', async (req, res) => {
   try {
-    const { sourcePaths, destinationPath } = req.body;
+    const { sourcePaths, destinationPath, subframeMode } = req.body;
 
     if (!sourcePaths || !destinationPath) {
       return res.status(400).json({
@@ -615,10 +619,11 @@ app.post('/api/merge/validate-space', async (req, res) => {
       });
     }
 
-    console.log(`Validating disk space for merge: ${sourcePaths.length} sources`);
+    const mergeSubframeMode = subframeMode || 'all';
+    console.log(`Validating disk space for merge: ${sourcePaths.length} sources (${mergeSubframeMode})`);
 
     // Calculate deduplicated space required
-    const required = await DiskSpaceValidator.getMergeRequiredSpace(sourcePaths);
+    const required = await DiskSpaceValidator.getMergeRequiredSpace(sourcePaths, mergeSubframeMode);
     const requiredWithBuffer = Math.ceil(required * 1.1); // 10% buffer
 
     // Get available space

@@ -7,6 +7,24 @@ const execAsync = promisify(exec);
 
 class DiskSpaceValidator {
     /**
+     * Returns true when a file lives inside a _sub directory AND is not a .fit file.
+     * @param {string} relativePath - File path relative to its library root
+     * @returns {boolean}
+     */
+    static isSubframeNonFit(relativePath) {
+        const ext = path.extname(relativePath).toLowerCase();
+        if (ext === '.fit') return false;
+
+        const parts = relativePath.replace(/\\/g, '/').split('/');
+        for (let i = 0; i < parts.length - 1; i++) {
+            if (parts[i].toLowerCase().endsWith('_sub')) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    /**
      * Get available space on a drive (in bytes)
      * @param {string} targetPath - Path to check (file or directory)
      * @returns {Promise<number>} Available space in bytes
@@ -40,9 +58,10 @@ class DiskSpaceValidator {
     /**
      * Calculate total size of a directory recursively
      * @param {string} sourcePath - Directory path to scan
+     * @param {string} subframeMode - 'all' or 'fit_only'
      * @returns {Promise<number>} Total size in bytes
      */
-    static async getRequiredSpace(sourcePath) {
+    static async getRequiredSpace(sourcePath, subframeMode = 'all') {
         try {
             let totalSize = 0;
 
@@ -59,6 +78,11 @@ class DiskSpaceValidator {
                             if (stats.isDirectory()) {
                                 await scanDirectory(itemPath);
                             } else {
+                                // Skip non-fit files in _sub dirs when in expurged mode
+                                if (subframeMode === 'fit_only') {
+                                    const relativePath = path.relative(sourcePath, itemPath);
+                                    if (this.isSubframeNonFit(relativePath)) continue;
+                                }
                                 totalSize += stats.size;
                             }
                         } catch (err) {
@@ -83,9 +107,10 @@ class DiskSpaceValidator {
      * Calculate incremental space required (only for new/modified files)
      * @param {string} sourcePath - Source directory to scan
      * @param {string} destinationPath - Destination directory
+     * @param {string} subframeMode - 'all' or 'fit_only'
      * @returns {Promise<number>} Required size in bytes for incremental copy
      */
-    static async getIncrementalRequiredSpace(sourcePath, destinationPath) {
+    static async getIncrementalRequiredSpace(sourcePath, destinationPath, subframeMode = 'all') {
         try {
             let requiredSize = 0;
 
@@ -104,6 +129,12 @@ class DiskSpaceValidator {
                                 // Recurse into subdirectory
                                 await scanDirectory(sourceItemPath, destItemPath);
                             } else {
+                                // Skip non-fit files in _sub dirs when in expurged mode
+                                if (subframeMode === 'fit_only') {
+                                    const relativePath = path.relative(sourcePath, sourceItemPath);
+                                    if (this.isSubframeNonFit(relativePath)) continue;
+                                }
+
                                 // Check if file needs to be copied
                                 const shouldCopy = await this.shouldCopyFile(
                                     sourceItemPath,
@@ -170,15 +201,16 @@ class DiskSpaceValidator {
     /**
      * Calculate space required for merge operation (deduplicated size)
      * @param {Array<string>} sourcePaths - Array of source library paths
+     * @param {string} subframeMode - 'all' or 'fit_only'
      * @returns {Promise<number>} Required size in bytes (after deduplication)
      */
-    static async getMergeRequiredSpace(sourcePaths) {
+    static async getMergeRequiredSpace(sourcePaths, subframeMode = 'all') {
         try {
             const fileInventory = new Map();
 
             // Build file inventory from all sources
             for (const sourcePath of sourcePaths) {
-                await this.buildMergeInventory(sourcePath, sourcePath, fileInventory);
+                await this.buildMergeInventory(sourcePath, sourcePath, fileInventory, subframeMode);
             }
 
             // Calculate size of unique files only
@@ -208,8 +240,9 @@ class DiskSpaceValidator {
      * @param {string} dirPath - Directory to scan
      * @param {string} basePath - Base path for relative paths
      * @param {Map} inventory - File inventory map
+     * @param {string} subframeMode - 'all' or 'fit_only'
      */
-    static async buildMergeInventory(dirPath, basePath, inventory) {
+    static async buildMergeInventory(dirPath, basePath, inventory, subframeMode = 'all') {
         try {
             const items = await fs.readdir(dirPath);
 
@@ -220,9 +253,14 @@ class DiskSpaceValidator {
                     const stats = await fs.stat(itemPath);
 
                     if (stats.isDirectory()) {
-                        await this.buildMergeInventory(itemPath, basePath, inventory);
+                        await this.buildMergeInventory(itemPath, basePath, inventory, subframeMode);
                     } else {
                         const relativePath = path.relative(basePath, itemPath);
+
+                        // Skip non-fit files in _sub dirs when in expurged mode
+                        if (subframeMode === 'fit_only' && this.isSubframeNonFit(relativePath)) {
+                            continue;
+                        }
 
                         if (!inventory.has(relativePath)) {
                             inventory.set(relativePath, []);
@@ -251,7 +289,7 @@ class DiskSpaceValidator {
      * @param {number} buffer - Safety buffer multiplier (e.g., 1.1 for 10% extra)
      * @returns {Promise<Object>} Validation result with space information
      */
-    static async hasEnoughSpace(sourcePath, destinationPath, strategy = 'full', buffer = 1.1) {
+    static async hasEnoughSpace(sourcePath, destinationPath, strategy = 'full', buffer = 1.1, subframeMode = 'all') {
         try {
             // Validate paths exist
             const sourceExists = await fs.pathExists(sourcePath);
@@ -266,12 +304,12 @@ class DiskSpaceValidator {
                 };
             }
 
-            // Calculate required space based on strategy
+            // Calculate required space based on strategy and subframe mode
             let required;
             if (strategy === 'incremental') {
-                required = await this.getIncrementalRequiredSpace(sourcePath, destinationPath);
+                required = await this.getIncrementalRequiredSpace(sourcePath, destinationPath, subframeMode);
             } else {
-                required = await this.getRequiredSpace(sourcePath);
+                required = await this.getRequiredSpace(sourcePath, subframeMode);
             }
 
             const requiredWithBuffer = Math.ceil(required * buffer);

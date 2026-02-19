@@ -11,6 +11,9 @@ class MergeWizard {
         this.validationResult = null;
         this.operationId = null;
         this.currentBrowsePath = null;
+        this.subframeMode = 'all'; // 'all' = Full (default), 'fit_only' = Expurged
+        this.mergeStartTime = null;
+        this.mergeElapsedTimer = null;
 
         console.log('MergeWizard initialized');
         this.init();
@@ -136,6 +139,17 @@ class MergeWizard {
         if (backBtn && nextBtn) {
             backBtn.style.display = this.currentStep > 1 && this.currentStep < 5 ? 'inline-block' : 'none';
             nextBtn.style.display = this.currentStep < 5 ? 'inline-block' : 'none';
+
+            // On step 4 the footer button starts the merge instead of advancing
+            if (this.currentStep === 4) {
+                nextBtn.textContent = 'Start Merge →';
+                nextBtn.classList.add('btn-success');
+                nextBtn.classList.remove('btn-primary');
+            } else {
+                nextBtn.textContent = 'Next →';
+                nextBtn.classList.add('btn-primary');
+                nextBtn.classList.remove('btn-success');
+            }
         }
 
         // Ensure footer has proper flexbox layout for button positioning
@@ -149,6 +163,11 @@ class MergeWizard {
     }
 
     async nextStep() {
+        if (this.currentStep === 4) {
+            // Step 4 footer button starts the merge instead of navigating
+            await this.startMerge();
+            return;
+        }
         if (this.currentStep < this.maxSteps) {
             if (await this.validateCurrentStep()) {
                 await this.renderStep(this.currentStep + 1);
@@ -294,6 +313,22 @@ class MergeWizard {
                 <button class="btn btn-primary" id="browseDestinationBtn">
                     Browse for Folder
                 </button>
+
+                <div style="margin-top: 2rem; padding-top: 1.5rem; border-top: 1px solid var(--border-color);">
+                    <h4 style="margin-bottom: 0.75rem;">Sub-frame Files</h4>
+                    <label style="display: flex; align-items: flex-start; gap: 0.75rem; cursor: pointer;">
+                        <input type="checkbox" id="mergeExpurgedModeCheckbox"
+                               ${this.subframeMode === 'fit_only' ? 'checked' : ''}
+                               style="margin-top: 3px; width: 16px; height: 16px; cursor: pointer; flex-shrink: 0;">
+                        <div>
+                            <strong>Expurged</strong> — skip non-.FIT files in <code>_sub</code> directories
+                            <p style="margin: 0.25rem 0 0; color: var(--text-secondary); font-size: 0.875rem;">
+                                When checked, JPG and thumbnail files inside sub-frame folders are excluded from the merge,
+                                saving significant disk space. Only the raw .FIT light frames are merged.
+                            </p>
+                        </div>
+                    </label>
+                </div>
             </div>
         `;
 
@@ -304,6 +339,14 @@ class MergeWizard {
                 await this.renderStep2_DestinationSelection();
             }
         });
+
+        // Expurged mode checkbox
+        const expurgedCheckbox = document.getElementById('mergeExpurgedModeCheckbox');
+        if (expurgedCheckbox) {
+            expurgedCheckbox.addEventListener('change', () => {
+                this.subframeMode = expurgedCheckbox.checked ? 'fit_only' : 'all';
+            });
+        }
     }
 
     // ========================================================================
@@ -344,7 +387,8 @@ class MergeWizard {
                 body: JSON.stringify({
                     sourcePaths: this.sourcePaths,
                     destinationPath: this.destinationPath,
-                    socketId: app.socket?.id
+                    socketId: app.socket?.id,
+                    subframeMode: this.subframeMode
                 })
             });
 
@@ -536,7 +580,8 @@ class MergeWizard {
                 body: JSON.stringify({
                     sourcePath: this.sourcePaths[0],  // Any source (not used for space calc)
                     destinationPath: this.destinationPath,
-                    strategy: 'full'
+                    strategy: 'full',
+                    subframeMode: this.subframeMode
                 })
             });
 
@@ -680,25 +725,29 @@ class MergeWizard {
                             <tr>
                                 <td colspan="2" style="padding-left: 2rem;">• No source libraries will be modified (read-only operation)</td>
                             </tr>
+                            <tr>
+                                <td colspan="2" style="padding-left: 2rem;">
+                                    • Sub-frame files:
+                                    <strong>${this.subframeMode === 'fit_only'
+                                        ? '🔬 Expurged — only .FIT files copied from _sub directories'
+                                        : '📁 Full — all files copied from _sub directories'}</strong>
+                                </td>
+                            </tr>
                         </tbody>
                     </table>
                 </div>
 
-                <div class="confirmation-actions" style="margin-top: 2rem; display: flex; justify-content: space-between; align-items: center;">
-                    <button class="btn btn-secondary" onclick="mergeWizard.previousStep()">
-                        ← Back to Preview
-                    </button>
-                    <button class="btn btn-primary" id="startMergeBtn"
-                            ${spaceValidation && !spaceValidation.hasEnoughSpace ? 'disabled' : ''}>
-                        Start Merge →
-                    </button>
-                </div>
+                ${spaceValidation && !spaceValidation.hasEnoughSpace ? `
+                <div style="margin-top: 1.5rem; padding: 1rem; background: rgba(231,76,60,0.1); border: 1px solid var(--danger-color); border-radius: 8px; color: var(--danger-color); text-align: center;">
+                    ⚠️ Insufficient disk space — free up space on the destination drive before proceeding.
+                </div>` : ''}
             </div>
         `;
 
-        const startBtn = document.getElementById('startMergeBtn');
-        if (startBtn && (!spaceValidation || spaceValidation.hasEnoughSpace)) {
-            startBtn.addEventListener('click', () => this.startMerge());
+        // Disable the footer Start Merge button if there's not enough space
+        const footerNextBtn = document.getElementById('mergeWizardNextBtn');
+        if (footerNextBtn && spaceValidation && !spaceValidation.hasEnoughSpace) {
+            footerNextBtn.disabled = true;
         }
     }
 
@@ -730,23 +779,27 @@ class MergeWizard {
                     </div>
                 </div>
 
-                <!-- Statistics Cards -->
-                <div style="display: grid; grid-template-columns: repeat(2, 1fr); gap: 1rem; margin: 1.5rem 0;">
-                    <div style="padding: 1rem; background: var(--bg-secondary); border-radius: 8px; border: 1px solid var(--border-color);">
-                        <div style="font-size: 0.85em; color: var(--text-secondary); margin-bottom: 0.5rem;">Files</div>
-                        <div id="mergeFilesProgress" style="font-size: 1.25em; font-weight: 600; color: var(--primary-color);">0 / 0</div>
+                <!-- Statistics Pills Row -->
+                <div class="stats-pills-row" style="margin: 1.5rem 0;">
+                    <div>
+                        <div style="font-size: 0.75em; color: var(--text-secondary); margin-bottom: 0.25rem;">Files</div>
+                        <div id="mergeFilesProgress" style="font-weight: 600; color: var(--primary-color);">0 / 0</div>
                     </div>
-                    <div style="padding: 1rem; background: var(--bg-secondary); border-radius: 8px; border: 1px solid var(--border-color);">
-                        <div style="font-size: 0.85em; color: var(--text-secondary); margin-bottom: 0.5rem;">Size</div>
-                        <div id="mergeBytesProgress" style="font-size: 1.25em; font-weight: 600; color: var(--primary-color);">0 MB / 0 MB</div>
+                    <div>
+                        <div style="font-size: 0.75em; color: var(--text-secondary); margin-bottom: 0.25rem;">Size</div>
+                        <div id="mergeBytesProgress" style="font-weight: 600; color: var(--primary-color);">0 MB / 0 MB</div>
                     </div>
-                    <div style="padding: 1rem; background: var(--bg-secondary); border-radius: 8px; border: 1px solid var(--border-color);">
-                        <div style="font-size: 0.85em; color: var(--text-secondary); margin-bottom: 0.5rem;">Speed</div>
-                        <div id="mergeSpeed" style="font-size: 1.25em; font-weight: 600;">-</div>
+                    <div>
+                        <div style="font-size: 0.75em; color: var(--text-secondary); margin-bottom: 0.25rem;">Speed</div>
+                        <div id="mergeSpeed" style="font-weight: 600;">-</div>
                     </div>
-                    <div style="padding: 1rem; background: var(--bg-secondary); border-radius: 8px; border: 1px solid var(--border-color);">
-                        <div style="font-size: 0.85em; color: var(--text-secondary); margin-bottom: 0.5rem;">Time Remaining</div>
-                        <div id="mergeETA" style="font-size: 1.25em; font-weight: 600;">-</div>
+                    <div style="color: var(--warning-color);">
+                        <div style="font-size: 0.75em; margin-bottom: 0.25rem;">Time Remaining</div>
+                        <div id="mergeETA" style="font-weight: 600;">-</div>
+                    </div>
+                    <div style="color: var(--success-color);">
+                        <div style="font-size: 0.75em; margin-bottom: 0.25rem;">Total Time</div>
+                        <div id="mergeElapsedTime" style="font-weight: 600;">0:00</div>
                     </div>
                 </div>
 
@@ -761,6 +814,38 @@ class MergeWizard {
         const cancelBtn = document.getElementById('cancelMergeBtn');
         if (cancelBtn) {
             cancelBtn.addEventListener('click', () => this.cancelMerge());
+        }
+    }
+
+    // ========================================================================
+    // Elapsed Timer
+    // ========================================================================
+
+    formatElapsed(ms) {
+        const totalSeconds = Math.floor(ms / 1000);
+        const hours = Math.floor(totalSeconds / 3600);
+        const minutes = Math.floor((totalSeconds % 3600) / 60);
+        const seconds = totalSeconds % 60;
+        if (hours > 0) {
+            return `${hours}:${String(minutes).padStart(2, '0')}:${String(seconds).padStart(2, '0')}`;
+        }
+        return `${minutes}:${String(seconds).padStart(2, '0')}`;
+    }
+
+    startElapsedTimer() {
+        this.mergeStartTime = Date.now();
+        this.mergeElapsedTimer = setInterval(() => {
+            const el = document.getElementById('mergeElapsedTime');
+            if (el) {
+                el.textContent = this.formatElapsed(Date.now() - this.mergeStartTime);
+            }
+        }, 1000);
+    }
+
+    stopElapsedTimer() {
+        if (this.mergeElapsedTimer) {
+            clearInterval(this.mergeElapsedTimer);
+            this.mergeElapsedTimer = null;
         }
     }
 
@@ -788,10 +873,21 @@ class MergeWizard {
             return;
         }
 
+        // Guard: socket must be connected for progress events to arrive
+        const socketId = app.socket?.id;
+        if (!socketId) {
+            app.showModal('Error', 'Socket.IO not connected — cannot receive merge progress. Please refresh the page and try again.');
+            return;
+        }
+
         // Normal merge process - move to progress step
         await this.renderStep(5);
+        this.startElapsedTimer();
 
         try {
+            console.log('[MergeWizard] Starting merge, socketId:', socketId);
+            console.log('[MergeWizard] Files to copy:', this.mergePlan?.filesToCopy?.length);
+
             const response = await fetch('/api/merge/start', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
@@ -799,25 +895,27 @@ class MergeWizard {
                     sourcePaths: this.sourcePaths,
                     destinationPath: this.destinationPath,
                     mergePlan: this.mergePlan,
-                    socketId: app.socket.id
+                    socketId: socketId
                 })
             });
 
             const result = await response.json();
+            console.log('[MergeWizard] API response:', result);
 
             if (result.success) {
                 this.operationId = result.operationId;
-                console.log('Merge started:', result.operationId);
+                console.log('[MergeWizard] Merge started, operationId:', result.operationId);
             } else {
                 throw new Error(result.error || 'Failed to start merge');
             }
         } catch (error) {
-            console.error('Error starting merge:', error);
+            console.error('[MergeWizard] Error starting merge:', error);
             app.showModal('Error', `Failed to start merge: ${error.message}`);
         }
     }
 
     handleProgressUpdate(data) {
+        console.log('[MergeWizard] Progress event received:', data.status, data.filesCopied, '/', data.totalFiles);
         const progressBar = document.getElementById('mergeProgressBar');
         const progressPercentage = document.getElementById('mergeProgressPercentage');
         const currentFile = document.getElementById('mergeCurrentFile');
@@ -826,9 +924,16 @@ class MergeWizard {
         const speed = document.getElementById('mergeSpeed');
         const eta = document.getElementById('mergeETA');
 
-        if (progressBar) progressBar.style.width = `${data.filesPercentage}%`;
-        if (progressPercentage) progressPercentage.textContent = `${data.filesPercentage}%`;
-        if (currentFile) currentFile.textContent = `Copying: ${data.currentFile}`;
+        // Use byte percentage for smooth progress; fall back to file percentage
+        const pct = data.bytesPercentage || data.filesPercentage || 0;
+        if (progressBar) progressBar.style.width = `${pct}%`;
+        if (progressPercentage) progressPercentage.textContent = `${pct}%`;
+
+        if (currentFile) {
+            currentFile.textContent = data.status === 'starting'
+                ? `Preparing merge (${data.totalFiles} files to copy)...`
+                : `Copying: ${data.currentFile}`;
+        }
         if (filesProgress) filesProgress.textContent = `${data.filesCopied} / ${data.totalFiles}`;
         if (bytesProgress) bytesProgress.textContent = `${this.formatBytes(data.bytesCopied)} / ${this.formatBytes(data.totalBytes)}`;
         if (speed) speed.textContent = data.speedFormatted || '-';
@@ -837,6 +942,7 @@ class MergeWizard {
 
     handleMergeComplete(data) {
         console.log('Merge complete:', data);
+        this.stopElapsedTimer();
 
         // Update progress display to show 100% completion
         const progressBar = document.getElementById('mergeProgressBar');
@@ -853,7 +959,7 @@ class MergeWizard {
         if (filesProgress) filesProgress.textContent = `${data.filesCopied} / ${data.totalFiles}`;
         if (bytesProgress) bytesProgress.textContent = `${this.formatBytes(data.bytesCopied)} / ${this.formatBytes(data.totalBytes)}`;
         if (speed) speed.textContent = '-';
-        if (eta) eta.textContent = '0s';
+        if (eta) eta.textContent = '-';
 
         // Store merge results for display in validation screen if needed
         this.mergeResults = {
@@ -876,6 +982,7 @@ class MergeWizard {
 
     handleMergeCancelled(data) {
         console.log('Merge cancelled:', data);
+        this.stopElapsedTimer();
         app.showModal('Cancelled', 'Merge operation was cancelled.');
     }
 

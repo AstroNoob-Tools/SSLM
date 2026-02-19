@@ -161,45 +161,51 @@ class App {
         const modalTitle = document.getElementById('modalTitle');
         const modalBody = document.getElementById('modalBody');
         const modalFooter = document.getElementById('modalFooter');
-        const modalCancel = document.getElementById('modalCancel');
-        const modalConfirm = document.getElementById('modalConfirm');
 
-        if (modal && modalTitle && modalBody && modalFooter && modalCancel && modalConfirm) {
-            modalTitle.textContent = title;
+        if (!modal || !modalTitle || !modalBody || !modalFooter) return;
 
-            if (typeof body === 'string') {
-                modalBody.innerHTML = body;
-            } else {
-                modalBody.innerHTML = '';
-                modalBody.appendChild(body);
-            }
+        modalTitle.textContent = title;
 
-            // Clear modal footer and restore buttons based on mode
-            modalFooter.innerHTML = '';
-
-            if (confirmCallback) {
-                // Two-button mode: Cancel + Confirm
-                const newCancelBtn = modalCancel.cloneNode(true);
-                newCancelBtn.addEventListener('click', () => this.hideModal());
-                modalFooter.appendChild(newCancelBtn);
-
-                const newConfirmBtn = modalConfirm.cloneNode(true);
-                newConfirmBtn.textContent = confirmText;
-                newConfirmBtn.addEventListener('click', () => {
-                    confirmCallback();
-                    this.hideModal();
-                });
-                modalFooter.appendChild(newConfirmBtn);
-            } else {
-                // Single-button mode: just a close/done button
-                const newConfirmBtn = modalConfirm.cloneNode(true);
-                newConfirmBtn.textContent = confirmText;
-                newConfirmBtn.addEventListener('click', () => this.hideModal());
-                modalFooter.appendChild(newConfirmBtn);
-            }
-
-            modal.classList.add('active');
+        if (typeof body === 'string') {
+            modalBody.innerHTML = body;
+        } else {
+            modalBody.innerHTML = '';
+            modalBody.appendChild(body);
         }
+
+        // Always recreate both buttons from scratch so they always exist in the DOM
+        // (cloneNode approach caused modalCancel to disappear after single-button mode,
+        // making subsequent two-button modal calls silently fail)
+        modalFooter.innerHTML = '';
+
+        const newCancelBtn = document.createElement('button');
+        newCancelBtn.className = 'btn btn-secondary';
+        newCancelBtn.id = 'modalCancel';
+        newCancelBtn.textContent = 'Cancel';
+
+        const newConfirmBtn = document.createElement('button');
+        newConfirmBtn.className = 'btn btn-primary';
+        newConfirmBtn.id = 'modalConfirm';
+        newConfirmBtn.textContent = confirmText;
+
+        if (confirmCallback) {
+            // Two-button mode: Cancel + Confirm
+            newCancelBtn.addEventListener('click', () => this.hideModal());
+            newConfirmBtn.addEventListener('click', () => {
+                confirmCallback();
+                this.hideModal();
+            });
+            modalFooter.appendChild(newCancelBtn);
+        } else {
+            // Single-button mode: hide cancel but keep it in DOM so next showModal call
+            // can find it via getElementById without crashing
+            newCancelBtn.style.display = 'none';
+            newConfirmBtn.addEventListener('click', () => this.hideModal());
+            modalFooter.appendChild(newCancelBtn);
+        }
+
+        modalFooter.appendChild(newConfirmBtn);
+        modal.classList.add('active');
     }
 
     hideModal() {
