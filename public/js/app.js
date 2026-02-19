@@ -224,11 +224,18 @@ class App {
     }
 
     scrollToDashboardTop() {
-        // Check if we're on object detail screen
         const objectDetailScreen = document.getElementById('objectDetailScreen');
+        const sessionDetailScreen = document.getElementById('sessionDetailScreen');
         const dashboardScreen = document.getElementById('dashboardScreen');
 
-        if (objectDetailScreen && objectDetailScreen.classList.contains('active')) {
+        if (sessionDetailScreen && sessionDetailScreen.classList.contains('active')) {
+            // We're viewing a session detail, navigate back to main dashboard
+            this.showScreen('dashboardScreen');
+            if (window.dashboard && window.dashboard.data) {
+                window.dashboard.render();
+            }
+            window.scrollTo(0, 0);
+        } else if (objectDetailScreen && objectDetailScreen.classList.contains('active')) {
             // We're viewing object details, navigate back to main dashboard
             this.showScreen('dashboardScreen');
             if (window.dashboard && window.dashboard.data) {

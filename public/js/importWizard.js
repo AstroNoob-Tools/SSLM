@@ -136,7 +136,10 @@ class ImportWizard {
         const nextBtn = document.getElementById('wizardNextBtn');
 
         if (backBtn) {
-            backBtn.style.display = this.currentStep === 1 || this.currentStep === 5 ? 'none' : 'inline-block';
+            // Hide back only during the active progress step (step 5)
+            backBtn.style.display = this.currentStep === 5 ? 'none' : 'inline-block';
+            // On step 1 the back button returns to the Welcome screen
+            backBtn.textContent = this.currentStep === 1 ? '← Home' : '← Back';
         }
 
         if (nextBtn) {
@@ -161,7 +164,9 @@ class ImportWizard {
     }
 
     previousStep() {
-        if (this.currentStep > 1) {
+        if (this.currentStep === 1) {
+            app.goHome();
+        } else if (this.currentStep > 1) {
             this.renderStep(this.currentStep - 1);
         }
     }
