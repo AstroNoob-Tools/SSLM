@@ -174,27 +174,28 @@ class App {
                 modalBody.appendChild(body);
             }
 
-            // Clear modal footer and restore only default buttons
+            // Clear modal footer and restore buttons based on mode
             modalFooter.innerHTML = '';
 
-            // Re-add Cancel button
-            const newCancelBtn = modalCancel.cloneNode(true);
-            modalFooter.appendChild(newCancelBtn);
-
-            // Re-add Confirm button
-            const newConfirmBtn = modalConfirm.cloneNode(true);
-            newConfirmBtn.textContent = confirmText;
-            modalFooter.appendChild(newConfirmBtn);
-
-            // Add new event listener to confirm button
             if (confirmCallback) {
-                newConfirmBtn.style.display = '';  // Ensure button is visible
+                // Two-button mode: Cancel + Confirm
+                const newCancelBtn = modalCancel.cloneNode(true);
+                newCancelBtn.addEventListener('click', () => this.hideModal());
+                modalFooter.appendChild(newCancelBtn);
+
+                const newConfirmBtn = modalConfirm.cloneNode(true);
+                newConfirmBtn.textContent = confirmText;
                 newConfirmBtn.addEventListener('click', () => {
                     confirmCallback();
                     this.hideModal();
                 });
+                modalFooter.appendChild(newConfirmBtn);
             } else {
-                newConfirmBtn.style.display = 'none';
+                // Single-button mode: just a close/done button
+                const newConfirmBtn = modalConfirm.cloneNode(true);
+                newConfirmBtn.textContent = confirmText;
+                newConfirmBtn.addEventListener('click', () => this.hideModal());
+                modalFooter.appendChild(newConfirmBtn);
             }
 
             modal.classList.add('active');
