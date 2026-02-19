@@ -82,9 +82,28 @@ class ImportService {
      * @param {string} socketId - Socket.IO client ID for progress updates
      * @param {string} operationId - Unique operation ID
      */
-    async startImport(sourcePath, destinationPath, strategy, socketId, operationId) {
+    /**
+     * Returns true when a file lives inside a _sub directory AND is not a .fit file.
+     * Used by 'fit_only' subframeMode to skip thumbnail/jpg files in sub-frame dirs.
+     * @param {string} relativePath - File path relative to the library root
+     * @returns {boolean}
+     */
+    isSubframeNonFit(relativePath) {
+        const ext = path.extname(relativePath).toLowerCase();
+        if (ext === '.fit') return false;
+
+        const parts = relativePath.replace(/\\/g, '/').split('/');
+        for (let i = 0; i < parts.length - 1; i++) {
+            if (parts[i].toLowerCase().endsWith('_sub')) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    async startImport(sourcePath, destinationPath, strategy, socketId, operationId, subframeMode = 'all') {
         this.cancelled = false;
-        this.currentOperation = { sourcePath, destinationPath, strategy, socketId, operationId };
+        this.currentOperation = { sourcePath, destinationPath, strategy, socketId, operationId, subframeMode };
         this.progressSamples = [];
 
         const startTime = Date.now();
@@ -104,6 +123,12 @@ class ImportService {
                 try {
                     const stats = await fs.stat(file.sourcePath);
                     file.size = stats.size;
+
+                    // Expurged mode: skip non-.fit files inside _sub directories
+                    if (subframeMode === 'fit_only' && this.isSubframeNonFit(file.relativePath)) {
+                        console.log(`[SKIP-EXPURGED] ${file.relativePath} - non-fit file in _sub directory`);
+                        continue;
+                    }
 
                     // For incremental, check if file needs to be copied
                     if (strategy === 'incremental') {
@@ -540,11 +565,11 @@ class ImportService {
      * @param {string} operationId - Unique operation ID
      * @returns {Promise<Object>} Validation result with mismatches
      */
-    async validateTransfer(sourcePath, destinationPath, socketId, operationId) {
+    async validateTransfer(sourcePath, destinationPath, socketId, operationId, subframeMode = 'all') {
         const startTime = Date.now();
 
         try {
-            console.log(`Starting transfer validation: ${sourcePath} -> ${destinationPath}`);
+            console.log(`Starting transfer validation: ${sourcePath} -> ${destinationPath} (subframeMode: ${subframeMode})`);
 
             // Scan source directory
             this.emitEvent(socketId, 'validate:progress', {
@@ -555,7 +580,13 @@ class ImportService {
             });
 
             // Pass destinationPath explicitly since currentOperation is null after import completes
-            const sourceFiles = await this.scanDirectory(sourcePath, null, destinationPath);
+            const allSourceFiles = await this.scanDirectory(sourcePath, null, destinationPath);
+
+            // In expurged mode, skip non-.fit files in _sub directories — they were intentionally not copied
+            const sourceFiles = subframeMode === 'fit_only'
+                ? allSourceFiles.filter(f => !this.isSubframeNonFit(f.relativePath))
+                : allSourceFiles;
+
             const totalFiles = sourceFiles.length;
 
             console.log(`Validating ${totalFiles} files from ${sourcePath} against ${destinationPath}...`);

@@ -28,6 +28,12 @@ SSLM (SeaStar Library Manager) is an application that manages astrophotography f
 - ✅ 5-step wizard workflow with visual feedback
 - ✅ Transfer validation with real-time progress display
 - ✅ Post-import completion UI with "Done" button
+- ✅ Expurged mode: selectively skip non-.fit files from `_sub` directories
+- ✅ Space savings preview when Expurged mode is selected
+- ✅ Indeterminate progress bar during preparation/scan phase
+- ✅ Total elapsed time counter on progress screen
+- ✅ Single-row stats layout with colour-coded time indicators
+- ✅ Expurged-aware transfer validation (no false missing-file errors)
 
 **Phase 3 - COMPLETE**: Multi-library merge functionality
 - ✅ Combine multiple SeeStar library copies into one consolidated library
@@ -40,6 +46,9 @@ SSLM (SeaStar Library Manager) is an application that manages astrophotography f
 - ✅ Disk space validation for merged library size (deduplicated calculation)
 - ✅ Tabular display for merge statistics and confirmation
 - ✅ Compact header design for better screen space utilization
+- ✅ Expurged mode: selectively skip non-.fit files from `_sub` directories during merge
+- ✅ Continuous merge progress feedback (immediate start event + per-chunk updates)
+- ✅ Step 4 footer button is "Start Merge →" — no more ambiguous dual-button confusion
 
 ## Domain Context
 
@@ -1287,6 +1296,93 @@ Also changed cleanup result dialogs from showing a non-functional Cancel to show
 **Fix**: Changed display to show both total and per-session breakdown: `751 total (298, 453 per session)`. Values are now derived from `parseImagingSessions()` rather than `obj.stackingCounts`, ensuring intermediate snapshots are excluded.
 
 **Files Modified**: `public/js/dashboard.js`
+
+## Recent Improvements (2026-02-19 — Session 2)
+
+### Expurged Sub-Frame Mode (Import & Merge)
+
+**Feature**: Both the Import Wizard and Merge Wizard now support a **Full / Expurged** mode for `_sub` directories.
+
+- **Full** (default, unchecked): all files copied including JPGs and thumbnails from `_sub` directories
+- **Expurged** (checkbox checked): only `.fit` light frames copied from `_sub` directories; all JPGs and thumbnails are skipped
+
+**Detection logic**: a file is "subframe non-fit" when its relative path contains a parent directory ending with `_sub` **and** the file extension is not `.fit`.
+
+**subframeMode values**: `'all'` (Full) | `'fit_only'` (Expurged)
+
+**Files modified**:
+- `src/services/importService.js` — added `isSubframeNonFit()`, filters files during scan when `fit_only`
+- `src/services/mergeService.js` — added `isSubframeNonFit()`, filters inventory during analysis when `fit_only`
+- `src/utils/diskSpaceValidator.js` — added `static isSubframeNonFit()`, all space calculation methods honour `subframeMode`
+- `server.js` — all relevant endpoints extract and forward `subframeMode`
+- `public/js/importWizard.js` — checkbox UI in Step 2, `subframeMode` passed to all API calls
+- `public/js/mergeWizard.js` — checkbox UI in Step 2, `subframeMode` passed to analyze call
+
+### Space Savings Display (Import Wizard Step 3)
+
+When Expurged mode is selected, the Disk Space Validation screen shows how much space is saved compared to a Full import, e.g.:
+
+> 🔬 Expurged mode saves **4.2 GB** (full import would require 22.1 GB)
+
+Implemented by making a second `/api/import/validate-space` call with `subframeMode: 'all'` and computing the difference client-side.
+
+**Files modified**: `public/js/importWizard.js`
+
+### Expurged-Aware Transfer Validation
+
+**Issue**: After an Expurged import, the transfer validation flagged all intentionally-skipped JPG/thumbnail files in `_sub` directories as missing, generating thousands of false errors.
+
+**Fix**: `validateTransfer()` now accepts `subframeMode` and filters out `isSubframeNonFit` files before validation when mode is `fit_only`. The frontend passes `subframeMode` to `/api/import/validate`.
+
+**Files modified**: `src/services/importService.js`, `server.js`, `public/js/importWizard.js`
+
+### Import Progress Screen Improvements
+
+**Indeterminate progress bar during preparation**:
+- Replaced static "Preparing import..." text with a pulsing CSS animation bar (`@keyframes importPulse`)
+- Automatically switches to the real percentage bar when the first `import:progress` Socket.IO event arrives
+- Stats rows (files, data, speed, ETA) are hidden until copying begins
+
+**Total Time for Import counter**:
+- Added a live "Total Time: M:SS" display that starts ticking from the moment "Start Import" is clicked
+- Timer captures the full duration including the scan/preparation phase
+- Freezes at final value when import completes or is cancelled
+- Helper methods: `formatElapsed()`, `startElapsedTimer()`, `stopElapsedTimer()`
+
+**Stats row layout**:
+- Changed from wrapping grid to single-row `flex-wrap: nowrap` layout (`stats-pills-row` CSS class)
+- All stat pills fit on one line with `flex: 1` equal widths
+- "Time Remaining" pill: yellow (`--warning-color`)
+- "Total Time" pill: green (`--success-color`)
+- Current file display uses `text-overflow: ellipsis` to prevent wrapping
+
+**Files modified**: `public/js/importWizard.js`, `public/css/styles.css`
+
+### Merge Progress Continuous Feedback
+
+**Issue**: Merge progress screen stayed at "Starting merge… 0 / 0" with no updates because progress events were only emitted *after* each complete file was copied, and the initial state showed nothing.
+
+**Fix**:
+1. `executeMerge()` now emits an immediate `merge:progress` event (via `emitEvent`, bypassing throttle) at startup — UI instantly shows "Preparing merge (N files to copy)…" and the correct total file count
+2. The `copyFileWithProgress()` callback (previously empty) now calls `emitProgress()` on every chunk, providing continuous byte-level progress updates throttled at 500ms
+3. A definitive post-file event is also emitted after each file completes to keep counts accurate
+4. `handleProgressUpdate()` uses `bytesPercentage` for the progress bar (smooth) with fallback to `filesPercentage`
+5. Socket ID guard added to `startMerge()` — shows clear error if Socket.IO is not connected
+
+**Files modified**: `src/services/mergeService.js`, `public/js/mergeWizard.js`
+
+### Merge Wizard Step 4 UX Fix
+
+**Issue**: Step 4 (Confirm Merge) had two "Start Merge" buttons — one inside the scrollable content area and one "Next →" always-visible footer button. Users clicked "Next →" which rendered the progress screen without starting the merge, causing the screen to appear permanently stuck.
+
+**Fix**:
+- Footer button on step 4 now reads **"Start Merge →"** (green, `btn-success` style) and calls `startMerge()` directly
+- `nextStep()` intercepts step 4 and calls `startMerge()` instead of advancing to step 5
+- Duplicate inline "Start Merge / Back to Preview" buttons removed from step 4 content
+- Insufficient-space warning shown as a red banner; footer button disabled in that case
+- Added `btn-success` CSS class for green action buttons
+
+**Files modified**: `public/js/mergeWizard.js`, `public/css/styles.css`
 
 ### Future Enhancement Ideas
 

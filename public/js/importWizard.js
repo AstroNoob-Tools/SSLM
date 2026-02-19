@@ -7,11 +7,14 @@ class ImportWizard {
         this.maxSteps = 5;
         this.selectedDevice = null;
         this.selectedStrategy = 'incremental';
+        this.subframeMode = 'all'; // 'all' = Full (default), 'fit_only' = Expurged
         this.destinationPath = null;
         this.validationResult = null;
         this.currentBrowsePath = null;
         this.operationId = null;
         this.seestarDirectoryName = 'MyWorks'; // Default value
+        this.importStartTime = null;
+        this.elapsedTimer = null;
 
         this.init();
     }
@@ -388,10 +391,26 @@ class ImportWizard {
                         </div>
                     </div>
                 </div>
+
+                <div style="margin-top: 2rem; padding-top: 1.5rem; border-top: 1px solid var(--border-color);">
+                    <h4 style="margin-bottom: 0.75rem;">Sub-frame Files</h4>
+                    <label style="display: flex; align-items: flex-start; gap: 0.75rem; cursor: pointer;">
+                        <input type="checkbox" id="expurgedModeCheckbox"
+                               ${this.subframeMode === 'fit_only' ? 'checked' : ''}
+                               style="margin-top: 3px; width: 16px; height: 16px; cursor: pointer; flex-shrink: 0;">
+                        <div>
+                            <strong>Expurged</strong> — skip non-.FIT files in <code>_sub</code> directories
+                            <p style="margin: 0.25rem 0 0; color: var(--text-secondary); font-size: 0.875rem;">
+                                When checked, JPG and thumbnail files inside sub-frame folders are not copied,
+                                saving significant disk space. Only the raw .FIT light frames are imported.
+                            </p>
+                        </div>
+                    </label>
+                </div>
             </div>
         `;
 
-        // Add click handlers
+        // Add click handlers for strategy cards
         content.querySelectorAll('.strategy-card').forEach(card => {
             card.addEventListener('click', () => {
                 this.selectedStrategy = card.getAttribute('data-strategy');
@@ -401,6 +420,14 @@ class ImportWizard {
                 card.classList.add('selected');
             });
         });
+
+        // Expurged mode checkbox
+        const expurgedCheckbox = document.getElementById('expurgedModeCheckbox');
+        if (expurgedCheckbox) {
+            expurgedCheckbox.addEventListener('change', () => {
+                this.subframeMode = expurgedCheckbox.checked ? 'fit_only' : 'all';
+            });
+        }
     }
 
     // ==================== STEP 3: Destination Selection ====================
@@ -684,13 +711,15 @@ class ImportWizard {
         if (!spaceContent) return;
 
         try {
+            // Fetch space needed for the chosen mode
             const response = await fetch('/api/import/validate-space', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({
                     sourcePath: this.selectedDevice.fullPath,
                     destinationPath: this.destinationPath,
-                    strategy: this.selectedStrategy || 'full'
+                    strategy: this.selectedStrategy || 'full',
+                    subframeMode: this.subframeMode
                 })
             });
 
@@ -703,6 +732,34 @@ class ImportWizard {
                 const strategyNote = isIncremental
                     ? '<p style="color: var(--text-secondary); margin-top: 0.5rem; font-size: 0.875rem;">ℹ️ Incremental copy: showing space needed for new/modified files only</p>'
                     : '';
+
+                // When in expurged mode, also fetch the full (non-expurged) size to show savings
+                let savingsHtml = '';
+                if (this.subframeMode === 'fit_only') {
+                    try {
+                        const fullResponse = await fetch('/api/import/validate-space', {
+                            method: 'POST',
+                            headers: { 'Content-Type': 'application/json' },
+                            body: JSON.stringify({
+                                sourcePath: this.selectedDevice.fullPath,
+                                destinationPath: this.destinationPath,
+                                strategy: this.selectedStrategy || 'full',
+                                subframeMode: 'all'
+                            })
+                        });
+                        const fullData = await fullResponse.json();
+                        if (fullData.success && fullData.required > data.required) {
+                            const saved = fullData.required - data.required;
+                            savingsHtml = `
+                                <p style="color: var(--success-color); margin-top: 0.5rem; font-size: 0.875rem;">
+                                    🔬 Expurged mode saves <strong>${this.formatBytes(saved)}</strong>
+                                    (full import would require ${fullData.requiredFormatted})
+                                </p>`;
+                        }
+                    } catch (e) {
+                        // Savings calculation is best-effort — ignore errors
+                    }
+                }
 
                 spaceContent.innerHTML = `
                     <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 1rem;">
@@ -724,6 +781,7 @@ class ImportWizard {
                         ${data.hasEnoughSpace ? '✓ Sufficient disk space' : '✗ Insufficient disk space'}
                     </div>
                     ${strategyNote}
+                    ${savingsHtml}
                     ${!data.hasEnoughSpace ? `
                         <p style="color: var(--danger-color); margin-top: 0.5rem; font-size: 0.875rem;">
                             Please select a destination with at least ${data.requiredFormatted} of free space.
@@ -770,6 +828,14 @@ class ImportWizard {
                             </td>
                         </tr>
                         <tr>
+                            <td style="padding: 0.75rem; font-weight: 600; color: var(--text-secondary);">Sub-frame Files:</td>
+                            <td style="padding: 0.75rem;">
+                                ${this.subframeMode === 'fit_only'
+                                    ? '🔬 Expurged (FIT only in _sub directories)'
+                                    : '📁 Full (all files)'}
+                            </td>
+                        </tr>
+                        <tr>
                             <td style="padding: 0.75rem; font-weight: 600; color: var(--text-secondary);">Required Space:</td>
                             <td style="padding: 0.75rem;">${this.validationResult.requiredFormatted}</td>
                         </tr>
@@ -809,6 +875,27 @@ class ImportWizard {
         const content = document.getElementById('importWizardContent');
 
         content.innerHTML = `
+            <style>
+                @keyframes importPulse {
+                    0%   { left: -40%; width: 40%; }
+                    100% { left: 100%; width: 40%; }
+                }
+                .progress-bar-indeterminate {
+                    position: relative;
+                    overflow: hidden;
+                    background: var(--bg-tertiary);
+                    border-radius: 8px;
+                    height: 100%;
+                }
+                .progress-bar-indeterminate::after {
+                    content: '';
+                    position: absolute;
+                    top: 0; bottom: 0;
+                    background: var(--primary-color);
+                    border-radius: 8px;
+                    animation: importPulse 1.4s ease-in-out infinite;
+                }
+            </style>
             <div style="padding: 2rem;">
                 <div class="import-progress">
                     <div class="progress-header" style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 1.5rem;">
@@ -819,17 +906,27 @@ class ImportWizard {
                         </div>
                     </div>
 
-                    <div class="progress-bar-container">
+                    <!-- Indeterminate bar shown during scan/preparation -->
+                    <div class="progress-bar-container" id="progressBarIndeterminate">
+                        <div class="progress-bar-indeterminate"></div>
+                    </div>
+                    <!-- Determinate bar shown once copying starts (hidden initially) -->
+                    <div class="progress-bar-container" id="progressBarContainer" style="display: none;">
                         <div class="progress-bar" id="progressBar" style="width: 0%;">0%</div>
                     </div>
 
                     <div class="progress-stats" id="progressStats">
-                        <div class="current-file" id="currentFile">Preparing import...</div>
-                        <div id="fileCount">Files: 0 / 0</div>
-                        <div id="byteCount">Data: 0 B / 0 B</div>
-                        <div id="speed">Speed: 0 MB/s</div>
-                        <div id="eta">Time Remaining: Calculating...</div>
-                        <div id="skipped" style="display: none;">Skipped: 0</div>
+                        <div class="current-file" id="currentFile" style="color: var(--text-secondary); font-style: italic;">
+                            Scanning source files...
+                        </div>
+                        <div class="stats-pills-row">
+                            <div id="fileCount" style="display: none;">Files: 0 / 0</div>
+                            <div id="byteCount" style="display: none;">Data: 0 B / 0 B</div>
+                            <div id="speed" style="display: none;">Speed: 0 MB/s</div>
+                            <div id="eta" style="display: none; color: var(--warning-color);">Time Remaining: Calculating...</div>
+                            <div id="elapsedTime" style="color: var(--success-color);">Total Time: 0:00</div>
+                            <div id="skipped" style="display: none;">Skipped: 0</div>
+                        </div>
                     </div>
                 </div>
             </div>
@@ -852,10 +949,41 @@ class ImportWizard {
         }
     }
 
+    formatElapsed(ms) {
+        const totalSeconds = Math.floor(ms / 1000);
+        const hours = Math.floor(totalSeconds / 3600);
+        const minutes = Math.floor((totalSeconds % 3600) / 60);
+        const seconds = totalSeconds % 60;
+        if (hours > 0) {
+            return `${hours}:${String(minutes).padStart(2, '0')}:${String(seconds).padStart(2, '0')}`;
+        }
+        return `${minutes}:${String(seconds).padStart(2, '0')}`;
+    }
+
+    startElapsedTimer() {
+        this.importStartTime = Date.now();
+        this.elapsedTimer = setInterval(() => {
+            const el = document.getElementById('elapsedTime');
+            if (el) {
+                el.textContent = `Total Time: ${this.formatElapsed(Date.now() - this.importStartTime)}`;
+            }
+        }, 1000);
+    }
+
+    stopElapsedTimer() {
+        if (this.elapsedTimer) {
+            clearInterval(this.elapsedTimer);
+            this.elapsedTimer = null;
+        }
+    }
+
     async startImport() {
         try {
             // Move to progress step
             await this.renderStep(5);
+
+            // Start elapsed time counter
+            this.startElapsedTimer();
 
             // Get socket ID
             const socketId = app.socket?.id;
@@ -871,7 +999,8 @@ class ImportWizard {
                     sourcePath: this.selectedDevice.fullPath,
                     destinationPath: this.destinationPath,
                     strategy: this.selectedStrategy,
-                    socketId: socketId
+                    socketId: socketId,
+                    subframeMode: this.subframeMode
                 })
             });
 
@@ -893,6 +1022,8 @@ class ImportWizard {
         if (!confirm('Are you sure you want to cancel the import?')) {
             return;
         }
+
+        this.stopElapsedTimer();
 
         try {
             const response = await fetch('/api/import/cancel', {
@@ -918,6 +1049,20 @@ class ImportWizard {
         const speed = document.getElementById('speed');
         const eta = document.getElementById('eta');
         const skipped = document.getElementById('skipped');
+
+        // Switch from indeterminate to real progress bar on first update
+        const indeterminate = document.getElementById('progressBarIndeterminate');
+        const realBar = document.getElementById('progressBarContainer');
+        if (indeterminate && indeterminate.style.display !== 'none') {
+            indeterminate.style.display = 'none';
+            if (realBar) realBar.style.display = 'block';
+            // Show the stats rows
+            if (fileCount) fileCount.style.display = '';
+            if (byteCount) byteCount.style.display = '';
+            if (speed) speed.style.display = '';
+            if (eta) eta.style.display = '';
+            if (currentFile) currentFile.style.fontStyle = 'normal';
+        }
 
         if (progressBar) {
             const percentage = data.bytesPercentage || 0;
@@ -955,6 +1100,9 @@ class ImportWizard {
 
     async handleImportComplete(data) {
         console.log('Import complete:', data);
+
+        // Freeze elapsed timer
+        this.stopElapsedTimer();
 
         // Store import completion data for validation
         this.importCompleteData = data;
@@ -1138,7 +1286,8 @@ class ImportWizard {
                 body: JSON.stringify({
                     sourcePath: this.selectedDevice.fullPath,
                     destinationPath: this.destinationPath,
-                    socketId: app.socket.id
+                    socketId: app.socket.id,
+                    subframeMode: this.subframeMode
                 })
             });
 

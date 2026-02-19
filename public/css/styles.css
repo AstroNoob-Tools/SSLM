@@ -143,7 +143,9 @@ body {
 .merge-wizard-screen.active {
     display: flex;
     flex-direction: column;
-    height: 100vh;
+    /* 100vh minus sticky header (~3.5rem) and app-main top+bottom padding (4rem) */
+    height: calc(100vh - 7.5rem);
+    overflow: hidden;
 }
 
 @keyframes fadeIn {
@@ -260,6 +262,17 @@ body {
 .btn-secondary:hover {
     background: var(--bg-secondary);
     border-color: var(--primary-color);
+}
+
+.btn-success {
+    background: var(--success-color);
+    color: white;
+}
+
+.btn-success:hover {
+    background: #27ae60;
+    transform: translateY(-2px);
+    box-shadow: var(--shadow);
 }
 
 .btn:disabled {
@@ -673,23 +686,38 @@ body {
 }
 
 .progress-stats {
-    display: grid;
-    grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
-    gap: 1rem;
+    display: flex;
+    flex-direction: column;
+    gap: 0.75rem;
     margin-top: 1.5rem;
 }
 
-.progress-stats>div {
-    padding: 0.75rem;
+.current-file {
+    padding: 0.6rem 0.75rem;
     background: var(--bg-tertiary);
     border-radius: 8px;
-    font-size: 0.875rem;
+    font-family: 'Courier New', monospace;
+    font-size: 0.8rem;
+    color: var(--accent-color);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
 }
 
-.current-file {
-    grid-column: 1 / -1;
-    font-family: 'Courier New', monospace;
-    color: var(--accent-color);
+.stats-pills-row {
+    display: flex;
+    flex-wrap: nowrap;
+    gap: 0.5rem;
+}
+
+.stats-pills-row > div {
+    flex: 1;
+    padding: 0.5rem 0.75rem;
+    background: var(--bg-tertiary);
+    border-radius: 8px;
+    font-size: 0.8rem;
+    white-space: nowrap;
+    text-align: center;
 }
 
 .import-wizard-footer {

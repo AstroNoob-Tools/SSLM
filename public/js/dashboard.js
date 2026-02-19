@@ -67,55 +67,7 @@ class Dashboard {
 
         dashboardContent.innerHTML = `
             <div class="dashboard" style="display: flex; gap: 2rem; position: relative;">
-                <!-- Left Sidebar Navigation -->
-                <aside class="dashboard-nav" style="width: 220px; position: sticky; top: 5rem; align-self: flex-start; max-height: calc(100vh - 8rem); overflow-y: auto;">
-                    <!-- Actions Section -->
-                    <h3 style="font-size: 1rem; margin-bottom: 1rem; color: var(--text-secondary); text-transform: uppercase; font-weight: 600;">Actions</h3>
-                    <nav style="display: flex; flex-direction: column; gap: 0.5rem; margin-bottom: 1.5rem;">
-                        <button id="dashboardImportBtn" class="action-btn" style="padding: 0.75rem 1rem; background: var(--primary-color); border: none; border-radius: 8px; color: white; cursor: pointer; transition: all 0.2s; display: flex; align-items: center; gap: 0.5rem; font-size: 0.875rem; font-weight: 600; text-align: left;">
-                            <span>📥</span> Import from SeeStar
-                        </button>
-                        <button id="dashboardLocalBtn" class="action-btn" style="padding: 0.75rem 1rem; background: var(--secondary-color); border: none; border-radius: 8px; color: white; cursor: pointer; transition: all 0.2s; display: flex; align-items: center; gap: 0.5rem; font-size: 0.875rem; font-weight: 600; text-align: left;">
-                            <span>📁</span> Use Local Copy
-                        </button>
-                        <button id="dashboardMergeBtn" class="action-btn" style="padding: 0.75rem 1rem; background: var(--accent-color); border: none; border-radius: 8px; color: white; cursor: pointer; transition: all 0.2s; display: flex; align-items: center; gap: 0.5rem; font-size: 0.875rem; font-weight: 600; text-align: left;">
-                            <span>🔀</span> Merge Library
-                        </button>
-                    </nav>
-                    
-                    <!-- Separator -->
-                    <hr style="border: none; border-top: 2px solid var(--border-color); margin: 1.5rem 0;">
-                    
-                    <!-- Navigation Section -->
-                    <h3 style="font-size: 1rem; margin-bottom: 1rem; color: var(--text-secondary); text-transform: uppercase; font-weight: 600;">Navigation</h3>
-                    <nav style="display: flex; flex-direction: column; gap: 0.5rem;">
-                        <a href="#dashboard-top" class="nav-link" id="dashboardTopLink" style="padding: 0.75rem 1rem; background: var(--primary-color); border-radius: 8px; text-decoration: none; color: white; transition: all 0.2s; display: flex; align-items: center; gap: 0.5rem; font-weight: 600;">
-                            <span>📊</span> Dashboard
-                        </a>
-                        <a href="#summary" class="nav-link" style="padding: 0.75rem 1rem; background: var(--bg-tertiary); border-radius: 8px; text-decoration: none; color: var(--text-primary); transition: all 0.2s; display: flex; align-items: center; gap: 0.5rem;">
-                            <span>📈</span> Summary
-                        </a>
-                        <a href="#file-types" class="nav-link" style="padding: 0.75rem 1rem; background: var(--bg-tertiary); border-radius: 8px; text-decoration: none; color: var(--text-primary); transition: all 0.2s; display: flex; align-items: center; gap: 0.5rem;">
-                            <span>📄</span> File Types
-                        </a>
-                        <a href="#catalogs" class="nav-link" style="padding: 0.75rem 1rem; background: var(--bg-tertiary); border-radius: 8px; text-decoration: none; color: var(--text-primary); transition: all 0.2s; display: flex; align-items: center; gap: 0.5rem;">
-                            <span>📚</span> Catalogs
-                        </a>
-                        ${emptyDirectories && emptyDirectories.length > 0 ? `
-                        <a href="#empty-dirs" class="nav-link" style="padding: 0.75rem 1rem; background: var(--bg-tertiary); border-radius: 8px; text-decoration: none; color: var(--text-primary); transition: all 0.2s; display: flex; align-items: center; gap: 0.5rem;">
-                            <span>⚠️</span> Empty Dirs
-                        </a>
-                        ` : ''}
-                        ${this.hasSubFrameCleanup(objects) ? `
-                        <a href="#cleanup" class="nav-link" style="padding: 0.75rem 1rem; background: var(--bg-tertiary); border-radius: 8px; text-decoration: none; color: var(--text-primary); transition: all 0.2s; display: flex; align-items: center; gap: 0.5rem;">
-                            <span>🧹</span> Cleanup
-                        </a>
-                        ` : ''}
-                        <a href="#objects" class="nav-link" style="padding: 0.75rem 1rem; background: var(--bg-tertiary); border-radius: 8px; text-decoration: none; color: var(--text-primary); transition: all 0.2s; display: flex; align-items: center; gap: 0.5rem;">
-                            <span>🎯</span> Objects
-                        </a>
-                    </nav>
-                </aside>
+                ${this.renderSidebarHTML('dashboard-top')}
 
                 <!-- Main Content -->
                 <div class="dashboard-main" style="flex: 1; min-width: 0;">
@@ -181,6 +133,160 @@ class Dashboard {
 
         // Add event listeners
         this.attachEventListeners();
+    }
+
+    // ── Shared Sidebar ────────────────────────────────────────────────────────
+
+    renderSidebarHTML(activeSection = null) {
+        const { objects, emptyDirectories } = this.data || {};
+        const navStyle = (section) => {
+            const active = section === activeSection;
+            return active
+                ? 'padding: 0.75rem 1rem; background: var(--primary-color); border-radius: 8px; text-decoration: none; color: white; transition: all 0.2s; display: flex; align-items: center; gap: 0.5rem; font-weight: 600;'
+                : 'padding: 0.75rem 1rem; background: var(--bg-tertiary); border-radius: 8px; text-decoration: none; color: var(--text-primary); transition: all 0.2s; display: flex; align-items: center; gap: 0.5rem;';
+        };
+        return `
+            <aside class="dashboard-nav" style="width: 220px; position: sticky; top: 5rem; align-self: flex-start; max-height: calc(100vh - 8rem); overflow-y: auto;">
+                <h3 style="font-size: 1rem; margin-bottom: 1rem; color: var(--text-secondary); text-transform: uppercase; font-weight: 600;">Actions</h3>
+                <nav style="display: flex; flex-direction: column; gap: 0.5rem; margin-bottom: 1.5rem;">
+                    <button id="dashboardImportBtn" class="action-btn" style="padding: 0.75rem 1rem; background: var(--primary-color); border: none; border-radius: 8px; color: white; cursor: pointer; transition: all 0.2s; display: flex; align-items: center; gap: 0.5rem; font-size: 0.875rem; font-weight: 600; text-align: left;">
+                        <span>📥</span> Import from SeeStar
+                    </button>
+                    <button id="dashboardLocalBtn" class="action-btn" style="padding: 0.75rem 1rem; background: var(--secondary-color); border: none; border-radius: 8px; color: white; cursor: pointer; transition: all 0.2s; display: flex; align-items: center; gap: 0.5rem; font-size: 0.875rem; font-weight: 600; text-align: left;">
+                        <span>📁</span> Use Local Copy
+                    </button>
+                    <button id="dashboardMergeBtn" class="action-btn" style="padding: 0.75rem 1rem; background: var(--accent-color); border: none; border-radius: 8px; color: white; cursor: pointer; transition: all 0.2s; display: flex; align-items: center; gap: 0.5rem; font-size: 0.875rem; font-weight: 600; text-align: left;">
+                        <span>🔀</span> Merge Library
+                    </button>
+                </nav>
+                <hr style="border: none; border-top: 2px solid var(--border-color); margin: 1.5rem 0;">
+                <h3 style="font-size: 1rem; margin-bottom: 1rem; color: var(--text-secondary); text-transform: uppercase; font-weight: 600;">Navigation</h3>
+                <nav style="display: flex; flex-direction: column; gap: 0.5rem;">
+                    <a href="#dashboard-top" class="nav-link" data-section="dashboard-top" style="${navStyle('dashboard-top')}">
+                        <span>📊</span> Dashboard
+                    </a>
+                    <a href="#summary" class="nav-link" data-section="summary" style="${navStyle('summary')}">
+                        <span>📈</span> Summary
+                    </a>
+                    <a href="#file-types" class="nav-link" data-section="file-types" style="${navStyle('file-types')}">
+                        <span>📄</span> File Types
+                    </a>
+                    <a href="#catalogs" class="nav-link" data-section="catalogs" style="${navStyle('catalogs')}">
+                        <span>📚</span> Catalogs
+                    </a>
+                    ${emptyDirectories && emptyDirectories.length > 0 ? `
+                    <a href="#empty-dirs" class="nav-link" data-section="empty-dirs" style="${navStyle('empty-dirs')}">
+                        <span>⚠️</span> Empty Dirs
+                    </a>` : ''}
+                    ${objects && this.hasSubFrameCleanup(objects) ? `
+                    <a href="#cleanup" class="nav-link" data-section="cleanup" style="${navStyle('cleanup')}">
+                        <span>🧹</span> Cleanup
+                    </a>` : ''}
+                    <a href="#objects" class="nav-link" data-section="objects" style="${navStyle('objects')}">
+                        <span>🎯</span> Objects
+                    </a>
+                </nav>
+            </aside>`;
+    }
+
+    navigateToDashboardSection(sectionId) {
+        if (app.currentScreen !== 'dashboard') {
+            // Coming from a separate screen (objectDetail, sessionDetail)
+            app.showScreen('dashboardScreen');
+            setTimeout(() => this._scrollToSection(sectionId), 80);
+        } else {
+            // Already on dashboardScreen — may be showing catalog detail
+            const target = document.getElementById(sectionId);
+            if (!target) {
+                // Sections were replaced (catalog detail view) — re-render main dashboard first
+                this.render();
+                setTimeout(() => this._scrollToSection(sectionId), 80);
+            } else {
+                this._scrollToSection(sectionId);
+            }
+        }
+    }
+
+    _scrollToSection(sectionId) {
+        const target = document.getElementById(sectionId);
+        if (target) {
+            const header = document.querySelector('.app-header');
+            const offset = (header ? header.offsetHeight : 0) + 20;
+            const pos = target.getBoundingClientRect().top + window.pageYOffset - offset;
+            window.scrollTo({ top: pos, behavior: 'smooth' });
+        } else {
+            window.scrollTo(0, 0);
+        }
+        // Update active state on all visible nav links
+        document.querySelectorAll('.nav-link').forEach(l => {
+            if (l.dataset.section === sectionId) {
+                l.style.background = 'var(--primary-color)';
+                l.style.color = 'white';
+            } else {
+                l.style.background = 'var(--bg-tertiary)';
+                l.style.color = 'var(--text-primary)';
+            }
+        });
+    }
+
+    attachSidebarListeners() {
+        const dashboardImportBtn = document.getElementById('dashboardImportBtn');
+        if (dashboardImportBtn) {
+            dashboardImportBtn.addEventListener('click', async () => {
+                app.showScreen('importWizardScreen');
+                if (window.importWizard) {
+                    window.importWizard.currentStep = 1;
+                    window.importWizard.selectedDevice = null;
+                    await window.importWizard.renderStep(1);
+                } else {
+                    window.importWizard = new ImportWizard();
+                }
+            });
+            dashboardImportBtn.addEventListener('mouseenter', function () { this.style.opacity = '0.9'; this.style.transform = 'translateY(-2px)'; });
+            dashboardImportBtn.addEventListener('mouseleave', function () { this.style.opacity = '1'; this.style.transform = 'translateY(0)'; });
+        }
+
+        const dashboardLocalBtn = document.getElementById('dashboardLocalBtn');
+        if (dashboardLocalBtn) {
+            dashboardLocalBtn.addEventListener('click', () => {
+                if (window.modeSelection) window.modeSelection.selectLocalMode();
+            });
+            dashboardLocalBtn.addEventListener('mouseenter', function () { this.style.opacity = '0.9'; this.style.transform = 'translateY(-2px)'; });
+            dashboardLocalBtn.addEventListener('mouseleave', function () { this.style.opacity = '1'; this.style.transform = 'translateY(0)'; });
+        }
+
+        const dashboardMergeBtn = document.getElementById('dashboardMergeBtn');
+        if (dashboardMergeBtn) {
+            dashboardMergeBtn.addEventListener('click', async () => {
+                app.showScreen('mergeWizardScreen');
+                if (window.mergeWizard) {
+                    window.mergeWizard.currentStep = 1;
+                    window.mergeWizard.sourcePaths = [];
+                    window.mergeWizard.destinationPath = null;
+                    window.mergeWizard.mergePlan = null;
+                    await window.mergeWizard.renderStep(1);
+                } else {
+                    window.mergeWizard = new MergeWizard();
+                }
+            });
+            dashboardMergeBtn.addEventListener('mouseenter', function () { this.style.opacity = '0.9'; this.style.transform = 'translateY(-2px)'; });
+            dashboardMergeBtn.addEventListener('mouseleave', function () { this.style.opacity = '1'; this.style.transform = 'translateY(0)'; });
+        }
+
+        // Nav links: always navigate via the unified helper
+        document.querySelectorAll('.nav-link').forEach(link => {
+            link.addEventListener('click', (e) => {
+                e.preventDefault();
+                const sectionId = link.dataset.section || link.getAttribute('href').substring(1);
+                this.navigateToDashboardSection(sectionId);
+            });
+            link.addEventListener('mouseenter', function () {
+                if (this.style.background !== 'var(--primary-color)') this.style.background = 'var(--bg-secondary)';
+            });
+            link.addEventListener('mouseleave', function () {
+                if (this.style.background !== 'var(--primary-color)') this.style.background = 'var(--bg-tertiary)';
+            });
+        });
     }
 
     renderSummaryCard(icon, label, value, colorClass) {
@@ -517,84 +623,7 @@ class Dashboard {
     }
 
     attachEventListeners() {
-        // Action buttons
-        const dashboardImportBtn = document.getElementById('dashboardImportBtn');
-        if (dashboardImportBtn) {
-            dashboardImportBtn.addEventListener('click', async () => {
-                console.log('Dashboard: Launching Import Wizard');
-                // Show screen first
-                app.showScreen('importWizardScreen');
-
-                // Reset and render import wizard
-                if (window.importWizard) {
-                    window.importWizard.currentStep = 1;
-                    window.importWizard.selectedDevice = null;
-                    await window.importWizard.renderStep(1);
-                } else {
-                    // Create new instance if it doesn't exist
-                    window.importWizard = new ImportWizard();
-                }
-            });
-            // Hover effect
-            dashboardImportBtn.addEventListener('mouseenter', function () {
-                this.style.opacity = '0.9';
-                this.style.transform = 'translateY(-2px)';
-            });
-            dashboardImportBtn.addEventListener('mouseleave', function () {
-                this.style.opacity = '1';
-                this.style.transform = 'translateY(0)';
-            });
-        }
-
-        const dashboardLocalBtn = document.getElementById('dashboardLocalBtn');
-        if (dashboardLocalBtn) {
-            dashboardLocalBtn.addEventListener('click', () => {
-                console.log('Dashboard: Opening Local Copy Browser');
-                // Trigger the local mode selection (same as clicking "Use Local Copy" on welcome screen)
-                if (window.modeSelection) {
-                    window.modeSelection.selectLocalMode();
-                }
-            });
-            // Hover effect
-            dashboardLocalBtn.addEventListener('mouseenter', function () {
-                this.style.opacity = '0.9';
-                this.style.transform = 'translateY(-2px)';
-            });
-            dashboardLocalBtn.addEventListener('mouseleave', function () {
-                this.style.opacity = '1';
-                this.style.transform = 'translateY(0)';
-            });
-        }
-
-        const dashboardMergeBtn = document.getElementById('dashboardMergeBtn');
-        if (dashboardMergeBtn) {
-            dashboardMergeBtn.addEventListener('click', async () => {
-                console.log('Dashboard: Launching Merge Wizard');
-                // Show screen first
-                app.showScreen('mergeWizardScreen');
-
-                // Reset and render merge wizard
-                if (window.mergeWizard) {
-                    window.mergeWizard.currentStep = 1;
-                    window.mergeWizard.sourcePaths = [];
-                    window.mergeWizard.destinationPath = null;
-                    window.mergeWizard.mergePlan = null;
-                    await window.mergeWizard.renderStep(1);
-                } else {
-                    // Create new instance if it doesn't exist
-                    window.mergeWizard = new MergeWizard();
-                }
-            });
-            // Hover effect
-            dashboardMergeBtn.addEventListener('mouseenter', function () {
-                this.style.opacity = '0.9';
-                this.style.transform = 'translateY(-2px)';
-            });
-            dashboardMergeBtn.addEventListener('mouseleave', function () {
-                this.style.opacity = '1';
-                this.style.transform = 'translateY(0)';
-            });
-        }
+        this.attachSidebarListeners();
 
         // Search functionality
         const searchInput = document.getElementById('objectSearch');
@@ -619,54 +648,6 @@ class Dashboard {
                 this.handleCleanupSubFrames();
             });
         }
-
-        // Navigation links - smooth scrolling with header offset
-        const navLinks = document.querySelectorAll('.nav-link');
-        navLinks.forEach(link => {
-            link.addEventListener('click', (e) => {
-                e.preventDefault();
-                const targetId = link.getAttribute('href').substring(1);
-                const targetElement = document.getElementById(targetId);
-
-                if (targetElement) {
-                    // Get header height and add some padding
-                    const header = document.querySelector('.app-header');
-                    const headerHeight = header ? header.offsetHeight : 0;
-                    const offset = headerHeight + 20; // 20px extra padding
-
-                    // Calculate position accounting for header
-                    const elementPosition = targetElement.getBoundingClientRect().top;
-                    const offsetPosition = elementPosition + window.pageYOffset - offset;
-
-                    // Smooth scroll to position
-                    window.scrollTo({
-                        top: offsetPosition,
-                        behavior: 'smooth'
-                    });
-
-                    // Update active state
-                    navLinks.forEach(l => {
-                        l.style.background = 'var(--bg-tertiary)';
-                        l.style.color = 'var(--text-primary)';
-                    });
-                    link.style.background = 'var(--primary-color)';
-                    link.style.color = 'white';
-                }
-            });
-
-            // Hover effects
-            link.addEventListener('mouseenter', function () {
-                if (this.style.background !== 'var(--primary-color)') {
-                    this.style.background = 'var(--bg-secondary)';
-                }
-            });
-
-            link.addEventListener('mouseleave', function () {
-                if (this.style.background !== 'var(--primary-color)') {
-                    this.style.background = 'var(--bg-tertiary)';
-                }
-            });
-        });
     }
 
     filterObjects(searchTerm) {
@@ -1028,7 +1009,7 @@ class Dashboard {
     }
 
     renderCatalogDetail(catalogName, filteredObjects) {
-        const dashboardContent = document.querySelector('.dashboard-content');
+        const dashboardContent = document.querySelector('.dashboard-main');
         if (!dashboardContent) return;
 
         const catalogIcons = {
@@ -1131,15 +1112,18 @@ class Dashboard {
             </div>
         `;
 
-        // Add back button event listener
+        // Re-attach sidebar nav listeners (sidebar DOM unchanged, but re-wiring is cheap)
+        this.attachSidebarListeners();
+
+        // Back button
         const backBtn = document.getElementById('backToMainDashboardBtn');
         if (backBtn) {
             backBtn.addEventListener('click', () => {
-                this.render(); // Re-render the main dashboard
+                this.render();
             });
         }
 
-        // Add search functionality
+        // Search functionality
         const searchInput = document.getElementById('objectSearch');
         if (searchInput) {
             searchInput.addEventListener('input', (e) => {
@@ -1217,7 +1201,10 @@ class Dashboard {
         const totalSize = obj.mainFolder.size + (obj.subFolder ? obj.subFolder.size : 0);
 
         detailContent.innerHTML = `
-            <div class="object-detail" style="padding: 2rem; max-width: 1400px; margin: 0 auto;">
+            <div style="display: flex; gap: 2rem; position: relative;">
+                ${this.renderSidebarHTML()}
+                <div class="dashboard-main" style="flex: 1; min-width: 0;">
+                <div class="object-detail" style="padding: 2rem;">
                 <!-- Header with Back Button -->
                 <div style="margin-bottom: 2rem;">
                     <button id="backToDashboardBtn" class="btn" style="background: var(--bg-tertiary); color: var(--text-primary);
@@ -1318,8 +1305,13 @@ class Dashboard {
                         ${this.renderFileList(obj.subFolder.files, 'Sub-Frame Files', obj.subFolder.path)}
                     </div>
                 ` : ''}
+                </div>
+                </div>
             </div>
         `;
+
+        // Attach sidebar nav listeners for this screen
+        this.attachSidebarListeners();
 
         // Store current object and parsed sessions for session detail/delete handlers
         this._currentSessionObj = obj;
@@ -1384,7 +1376,10 @@ class Dashboard {
         if (!detailContent) return;
 
         detailContent.innerHTML = `
-            <div style="padding: 2rem; max-width: 1400px; margin: 0 auto;">
+            <div style="display: flex; gap: 2rem; position: relative;">
+                ${this.renderSidebarHTML()}
+                <div class="dashboard-main" style="flex: 1; min-width: 0;">
+                <div style="padding: 2rem;">
                 <!-- Header -->
                 <div style="margin-bottom: 2rem; display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 1rem;">
                     <button id="backToObjectDetailBtn" class="btn"
@@ -1437,8 +1432,13 @@ class Dashboard {
                             : '<p style="color: var(--text-muted);">No sub-frame files found for this session.</p>'}
                     </div>
                 ` : ''}
+                </div>
+                </div>
             </div>
         `;
+
+        // Attach sidebar nav listeners for this screen
+        this.attachSidebarListeners();
 
         // Back button
         document.getElementById('backToObjectDetailBtn').addEventListener('click', () => {

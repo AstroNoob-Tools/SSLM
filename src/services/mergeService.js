@@ -20,7 +20,25 @@ class MergeService {
      * @param {string} socketId - Socket ID for progress updates (optional)
      * @returns {Promise<Object>} Analysis result with merge plan
      */
-    async analyzeSources(sourcePaths, destinationPath, socketId = null) {
+    /**
+     * Returns true when a file lives inside a _sub directory AND is not a .fit file.
+     * @param {string} relativePath - File path relative to the library root
+     * @returns {boolean}
+     */
+    isSubframeNonFit(relativePath) {
+        const ext = path.extname(relativePath).toLowerCase();
+        if (ext === '.fit') return false;
+
+        const parts = relativePath.replace(/\\/g, '/').split('/');
+        for (let i = 0; i < parts.length - 1; i++) {
+            if (parts[i].toLowerCase().endsWith('_sub')) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    async analyzeSources(sourcePaths, destinationPath, socketId = null, subframeMode = 'all') {
         console.log(`\n===== MERGE ANALYSIS =====`);
         console.log(`Sources: ${sourcePaths.length} libraries`);
         sourcePaths.forEach((src, i) => console.log(`  [${i + 1}] ${src}`));
@@ -28,7 +46,7 @@ class MergeService {
 
         try {
             // Build file inventory from all sources
-            const inventory = await this.buildFileInventory(sourcePaths, socketId);
+            const inventory = await this.buildFileInventory(sourcePaths, socketId, subframeMode);
             console.log(`Total unique relative paths: ${inventory.size}`);
 
             // Emit progress: scanning destination
@@ -79,7 +97,7 @@ class MergeService {
      * @param {string} socketId - Socket ID for progress updates (optional)
      * @returns {Promise<Map>} Map of relativePath -> Array of file candidates
      */
-    async buildFileInventory(sourcePaths, socketId = null) {
+    async buildFileInventory(sourcePaths, socketId = null, subframeMode = 'all') {
         const inventory = new Map();
 
         for (let i = 0; i < sourcePaths.length; i++) {
@@ -101,7 +119,17 @@ class MergeService {
                 // Recursively scan this source library
                 const files = await this.scanDirectory(sourcePath, sourcePath);
 
-                console.log(`  Found ${files.length} files`);
+                // Filter non-fit subframe files when in expurged mode
+                const filteredFiles = subframeMode === 'fit_only'
+                    ? files.filter(f => !this.isSubframeNonFit(f.relativePath))
+                    : files;
+
+                const skippedCount = files.length - filteredFiles.length;
+                if (skippedCount > 0) {
+                    console.log(`  Found ${files.length} files, skipping ${skippedCount} non-fit _sub files (expurged mode)`);
+                } else {
+                    console.log(`  Found ${files.length} files`);
+                }
 
                 // Emit progress: found files in this source
                 if (socketId) {
@@ -110,13 +138,13 @@ class MergeService {
                         currentSource: i + 1,
                         totalSources: sourcePaths.length,
                         sourcePath: sourcePath,
-                        filesFound: files.length,
-                        message: `Found ${files.length.toLocaleString()} files in library ${i + 1}`
+                        filesFound: filteredFiles.length,
+                        message: `Found ${filteredFiles.length.toLocaleString()} files in library ${i + 1}`
                     });
                 }
 
                 // Add each file to inventory
-                for (const file of files) {
+                for (const file of filteredFiles) {
                     const relativePath = file.relativePath;
 
                     if (!inventory.has(relativePath)) {
@@ -438,14 +466,23 @@ class MergeService {
         const errors = [];
 
         try {
-            // Group files by source library for organized progress display
-            const filesBySource = {};
-            for (const file of filesToCopy) {
-                if (!filesBySource[file.sourceLibrary]) {
-                    filesBySource[file.sourceLibrary] = [];
-                }
-                filesBySource[file.sourceLibrary].push(file);
-            }
+            // Emit immediate start event so the UI shows total file count right away
+            this.emitEvent(socketId, 'merge:progress', {
+                status: 'starting',
+                currentFile: 'Preparing...',
+                currentSource: '',
+                filesCopied: 0,
+                totalFiles: filesToCopy.length,
+                filesPercentage: 0,
+                bytesCopied: 0,
+                totalBytes,
+                bytesPercentage: 0,
+                speed: 0,
+                speedFormatted: '-',
+                timeRemaining: 0,
+                timeRemainingFormatted: 'Calculating...',
+                operationId
+            });
 
             // Copy files
             for (const file of filesToCopy) {
@@ -468,19 +505,31 @@ class MergeService {
                     // Ensure destination directory exists
                     await fs.ensureDir(path.dirname(destPath));
 
-                    // Copy file with progress callback
+                    // Copy file — emit throttled progress on each chunk so large files
+                    // show continuous byte-level feedback instead of going silent
                     await this.copyFileWithProgress(
                         file.sourcePath,
                         destPath,
-                        (currentBytes, totalFileBytes) => {
-                            // File-level progress (not emitted individually to avoid spam)
+                        (currentFileBytes) => {
+                            this.emitProgress(socketId, {
+                                status: 'copying',
+                                currentFile: file.relativePath,
+                                currentSource: file.sourceLibrary,
+                                filesCopied,
+                                totalFiles: filesToCopy.length,
+                                filesPercentage: Math.round((filesCopied / filesToCopy.length) * 100),
+                                bytesCopied: bytesCopied + currentFileBytes,
+                                totalBytes,
+                                bytesPercentage: Math.round(((bytesCopied + currentFileBytes) / totalBytes) * 100),
+                                operationId
+                            });
                         }
                     );
 
                     bytesCopied += file.size;
                     filesCopied++;
 
-                    // Emit progress after each file
+                    // Emit a definitive post-file event (resets in-file byte accumulation)
                     this.emitProgress(socketId, {
                         status: 'copying',
                         currentFile: file.relativePath,
