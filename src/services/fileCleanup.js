@@ -179,6 +179,48 @@ class FileCleanup {
     }
 
     /**
+     * Delete all files belonging to a specific imaging session
+     * @param {Object} params
+     * @param {string} params.mainFolderPath - Full path to the main object folder
+     * @param {string} [params.subFolderPath] - Full path to the _sub folder (optional)
+     * @param {string[]} params.mainFiles - Filenames (not paths) in main folder to delete
+     * @param {string[]} params.subFiles - Filenames (not paths) in sub folder to delete
+     * @returns {Promise<Object>} Results of deletion
+     */
+    static async deleteSessionFiles({ mainFolderPath, subFolderPath, mainFiles = [], subFiles = [] }) {
+        const results = {
+            success: true,
+            filesDeleted: 0,
+            spaceFreed: 0,
+            errors: []
+        };
+
+        const deleteList = [
+            ...mainFiles.map(f => ({ folder: mainFolderPath, file: f })),
+            ...subFiles.map(f => ({ folder: subFolderPath, file: f }))
+        ];
+
+        for (const { folder, file } of deleteList) {
+            if (!folder) continue;
+            const filePath = path.join(folder, file);
+            try {
+                const stats = await fs.stat(filePath);
+                results.spaceFreed += stats.size;
+                await fs.remove(filePath);
+                results.filesDeleted++;
+            } catch (error) {
+                results.errors.push({ file, error: error.message });
+            }
+        }
+
+        if (results.errors.length > 0) {
+            results.success = false;
+        }
+
+        return results;
+    }
+
+    /**
      * Format bytes to human-readable string
      * @param {number} bytes - Bytes to format
      * @param {number} decimals - Decimal places

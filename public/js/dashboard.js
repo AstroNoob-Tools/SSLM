@@ -1321,6 +1321,10 @@ class Dashboard {
             </div>
         `;
 
+        // Store current object and parsed sessions for session detail/delete handlers
+        this._currentSessionObj = obj;
+        this._currentSessions = this.parseImagingSessions(obj);
+
         // Add back button event listener
         const backBtn = document.getElementById('backToDashboardBtn');
         if (backBtn) {
@@ -1328,12 +1332,211 @@ class Dashboard {
                 app.showScreen('dashboardScreen');
             });
         }
+
+        // Session table event delegation
+        detailContent.addEventListener('click', (e) => {
+            const dateLink = e.target.closest('.session-date-link');
+            if (dateLink) {
+                const idx = parseInt(dateLink.dataset.sessionIndex, 10);
+                this.showSessionDetail(idx);
+                return;
+            }
+            const deleteBtn = e.target.closest('.session-delete-btn');
+            if (deleteBtn) {
+                const idx = parseInt(deleteBtn.dataset.sessionIndex, 10);
+                this.deleteSession(idx);
+            }
+        });
+    }
+
+    // Session Detail & Delete
+
+    _getSessionFiles(obj, session) {
+        // All main-folder files that share one of the session's exact timestamps
+        const mainFiles = obj.mainFolder.files.filter(f =>
+            Array.from(session.rawTimestamps).some(ts => f.includes(ts))
+        );
+
+        // Sub-folder light frames: same date + exposure + filter
+        let subFiles = [];
+        if (obj.subFolder && obj.subFolder.files) {
+            const exposureToken = `${session.exposure.toFixed(1)}s`;
+            subFiles = obj.subFolder.files.filter(f => {
+                if (!f.includes(session.rawDateStr)) return false;
+                if (!f.includes(exposureToken)) return false;
+                if (session.filter !== 'N/A' && !f.includes(session.filter)) return false;
+                return true;
+            });
+        }
+
+        return { mainFiles, subFiles };
+    }
+
+    showSessionDetail(sessionIdx) {
+        const obj = this._currentSessionObj;
+        const session = this._currentSessions && this._currentSessions[sessionIdx];
+        if (!obj || !session) return;
+
+        const { mainFiles, subFiles } = this._getSessionFiles(obj, session);
+        const totalIntegration = session.stackCount * session.exposure;
+
+        const detailContent = document.querySelector('.session-detail-content');
+        if (!detailContent) return;
+
+        detailContent.innerHTML = `
+            <div style="padding: 2rem; max-width: 1400px; margin: 0 auto;">
+                <!-- Header -->
+                <div style="margin-bottom: 2rem; display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 1rem;">
+                    <button id="backToObjectDetailBtn" class="btn"
+                            style="background: var(--bg-tertiary); color: var(--text-primary);
+                                   padding: 0.75rem 1.5rem; border: 2px solid var(--border-color); border-radius: 8px;
+                                   cursor: pointer; font-weight: 600; transition: all 0.2s; display: inline-flex; align-items: center; gap: 0.5rem;"
+                            onmouseover="this.style.background='var(--bg-secondary)'"
+                            onmouseout="this.style.background='var(--bg-tertiary)'">
+                        ← Back to ${obj.displayName}
+                    </button>
+                    <button id="deleteSessionBtn"
+                            style="background: #e74c3c; color: white; border: none;
+                                   border-radius: 8px; padding: 0.75rem 1.5rem; cursor: pointer;
+                                   font-size: 1rem; font-weight: 600; transition: opacity 0.2s;"
+                            onmouseover="this.style.opacity='0.8'"
+                            onmouseout="this.style.opacity='1'">
+                        🗑️ Delete Session
+                    </button>
+                </div>
+
+                <!-- Session Header -->
+                <div style="background: var(--bg-card); border-radius: 16px; padding: 2rem; margin-bottom: 2rem;">
+                    <h1 style="font-size: 2rem; margin-bottom: 1rem;">
+                        📅 Imaging Session — ${session.date}
+                    </h1>
+                    <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(160px, 1fr)); gap: 1rem;">
+                        ${this.renderSummaryCard('🕐', 'Time', session.time, 'primary')}
+                        ${this.renderSummaryCard('📚', 'Stacked Frames', session.stackCount, 'secondary')}
+                        ${this.renderSummaryCard('⏱️', 'Exposure', `${session.exposure}s`, 'accent')}
+                        ${this.renderSummaryCard('🔭', 'Filter', session.filter, 'info')}
+                        ${this.renderSummaryCard('🌟', 'Integration', this.formatIntegrationTime(totalIntegration), 'success')}
+                        ${this.renderSummaryCard('📄', 'Total Files', mainFiles.length + subFiles.length, 'warning')}
+                    </div>
+                </div>
+
+                <!-- Main Folder Files -->
+                <div style="background: var(--bg-card); border-radius: 16px; padding: 1.5rem; margin-bottom: 2rem;">
+                    <h3 style="margin-bottom: 1rem;">📁 Main Folder Files (${mainFiles.length})</h3>
+                    ${mainFiles.length > 0
+                        ? this.renderFileList(mainFiles, 'Session Stacked Images', obj.mainFolder.path, true)
+                        : '<p style="color: var(--text-muted);">No main folder files found for this session.</p>'}
+                </div>
+
+                <!-- Sub-Frame Light Frames -->
+                ${obj.subFolder ? `
+                    <div style="background: var(--bg-card); border-radius: 16px; padding: 1.5rem; margin-bottom: 2rem;">
+                        <h3 style="margin-bottom: 1rem;">📦 Sub-Frame Light Frames (${subFiles.length})</h3>
+                        ${subFiles.length > 0
+                            ? this.renderFileList(subFiles, 'Session Light Frames', obj.subFolder.path, true)
+                            : '<p style="color: var(--text-muted);">No sub-frame files found for this session.</p>'}
+                    </div>
+                ` : ''}
+            </div>
+        `;
+
+        // Back button
+        document.getElementById('backToObjectDetailBtn').addEventListener('click', () => {
+            app.showScreen('objectDetailScreen');
+            window.scrollTo(0, 0);
+        });
+
+        // Delete button
+        document.getElementById('deleteSessionBtn').addEventListener('click', () => {
+            this.deleteSession(sessionIdx);
+        });
+
+        app.showScreen('sessionDetailScreen');
+        window.scrollTo(0, 0);
+    }
+
+    async deleteSession(sessionIdx) {
+        const obj = this._currentSessionObj;
+        const session = this._currentSessions && this._currentSessions[sessionIdx];
+        if (!obj || !session) return;
+
+        const { mainFiles, subFiles } = this._getSessionFiles(obj, session);
+        const totalFiles = mainFiles.length + subFiles.length;
+
+        if (totalFiles === 0) {
+            app.showModal('Nothing to Delete', '<p>No files found for this session.</p>', null, 'Close');
+            return;
+        }
+
+        const confirmMessage = `
+            <div style="text-align: left;">
+                <p>Delete all files from the session on <strong>${session.date} at ${session.time}</strong>?</p>
+                <ul style="list-style: none; padding: 0; margin-top: 1rem;">
+                    <li style="margin-bottom: 0.5rem;">📁 Main folder: <strong>${mainFiles.length}</strong> file${mainFiles.length !== 1 ? 's' : ''}</li>
+                    ${subFiles.length > 0 ? `<li style="margin-bottom: 0.5rem;">📦 Sub-frames: <strong>${subFiles.length}</strong> file${subFiles.length !== 1 ? 's' : ''}</li>` : ''}
+                    <li style="margin-top: 0.5rem; font-weight: 600;">Total: <strong>${totalFiles}</strong> files</li>
+                </ul>
+                <p style="margin-top: 1rem; color: #e74c3c; font-size: 0.875rem;">⚠️ This cannot be undone.</p>
+            </div>
+        `;
+
+        app.showModal('🗑️ Delete Session', confirmMessage, async () => {
+            try {
+                app.showLoading('Deleting session files...');
+
+                const response = await fetch('/api/cleanup/session', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        mainFolderPath: obj.mainFolder.path,
+                        subFolderPath: obj.subFolder ? obj.subFolder.path : null,
+                        mainFiles,
+                        subFiles
+                    })
+                });
+
+                const result = await response.json();
+                app.hideLoading();
+
+                if (result.success || result.filesDeleted > 0) {
+                    app.showModal('Session Deleted', `
+                        <div style="text-align: left;">
+                            <p style="color: var(--success-color); font-weight: 600; margin-bottom: 1rem;">✓ Session deleted!</p>
+                            <ul style="list-style: none; padding: 0;">
+                                <li style="margin-bottom: 0.5rem;">🗑️ Files deleted: <strong>${result.filesDeleted}</strong></li>
+                                <li>💾 Space freed: <strong>${app.formatBytes(result.spaceFreed)}</strong></li>
+                            </ul>
+                        </div>
+                    `, null, 'Done');
+
+                    setTimeout(async () => {
+                        await this.refreshDashboard();
+                        // Return to object detail with fresh data
+                        if (this.data && this.data.objects) {
+                            const updatedObj = this.data.objects.find(o => o.name === obj.name);
+                            if (updatedObj) {
+                                this.renderObjectDetail(updatedObj);
+                            }
+                        }
+                        app.showScreen('objectDetailScreen');
+                        window.scrollTo(0, 0);
+                    }, 2000);
+                } else {
+                    app.showModal('Error', `<p>Failed to delete session: ${result.errors && result.errors[0] ? result.errors[0].error : 'Unknown error'}</p>`, null, 'Close');
+                }
+            } catch (error) {
+                app.hideLoading();
+                app.showModal('Error', `<p>An error occurred: ${error.message}</p>`, null, 'Close');
+            }
+        }, 'Delete');
     }
 
     parseImagingSessions(obj) {
         // Parse main folder files to extract imaging sessions
         const sessionMap = new Map(); // Use Map to group sessions by unique key
-        const mainFiles = obj.mainFolder.files.filter(f => f.startsWith('Stacked_') || f.startsWith('DSO_Stacked_'));
+        const mainFiles = obj.mainFolder.files.filter(f =>
+            (f.startsWith('Stacked_') || f.startsWith('DSO_Stacked_')) && f.endsWith('.fit')
+        );
 
         mainFiles.forEach(filename => {
             // Extract: Stacked_210_NGC 6729_30.0s_IRCUT_20250822-231258.fit
@@ -1355,14 +1558,21 @@ class Dashboard {
                 const dateStr = date.toLocaleDateString();
                 const timeStr = date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
 
-                // Create a unique key for this session (date + time + exposure + filter)
-                const sessionKey = `${dateStr}_${timeStr}_${exposure}_${filter}`;
+                // Create a unique key for this session (date + exposure + filter only — no time)
+                // This groups intermediate stacking results from the same night into one session
+                const sessionKey = `${dateStr}_${exposure}_${filter}`;
 
                 if (sessionMap.has(sessionKey)) {
-                    // Session already exists, add to stack count
+                    // Session already exists — keep the highest stack count (final result)
                     const existingSession = sessionMap.get(sessionKey);
-                    existingSession.stackCount += stackCount;
+                    if (stackCount > existingSession.stackCount) {
+                        existingSession.stackCount = stackCount;
+                        existingSession.time = timeStr;
+                        existingSession.datetime = date;
+                    }
                     existingSession.fileCount++;
+                    existingSession.rawTimestamps.add(dateTimeStr);
+                    existingSession.files.push(filename);
                 } else {
                     // New session
                     sessionMap.set(sessionKey, {
@@ -1373,7 +1583,10 @@ class Dashboard {
                         time: timeStr,
                         datetime: date,
                         fileCount: 1,
-                        filename
+                        filename,
+                        rawDateStr: dateTimeStr.substring(0, 8),   // YYYYMMDD
+                        rawTimestamps: new Set([dateTimeStr]),       // YYYYMMDD-HHMMSS
+                        files: [filename]                            // all stacked filenames
                     });
                 }
             }
@@ -1418,11 +1631,17 @@ class Dashboard {
         // Basic metadata
         const metadata = [];
 
-        if (obj.stackingCounts && obj.stackingCounts.length > 0) {
+        // Derive stacking counts from sessions (one per session, already deduped by max per night)
+        const sessionStackCounts = sessions.map(s => s.stackCount).sort((a, b) => a - b);
+        if (sessionStackCounts.length > 0) {
+            const totalFrames = sessionStackCounts.reduce((sum, c) => sum + c, 0);
             metadata.push({
                 label: 'Stacking Counts',
-                value: obj.stackingCounts.sort((a, b) => a - b).join(', '),
-                help: 'Number of sub-frames stacked in each final image. Higher counts typically mean better image quality.'
+                value: `${totalFrames} total (${sessionStackCounts.join(', ')} per session)`,
+                help: 'Each imaging session produces one stacked image by combining many individual sub-frames. ' +
+                      'The "per session" values show how many sub-frames were combined in each session\'s final stacked image. ' +
+                      'The "total" is the sum across all sessions. ' +
+                      'Higher counts generally mean better signal-to-noise and image quality.'
             });
         }
 
@@ -1537,6 +1756,7 @@ class Dashboard {
                                         <th style="padding: 0.75rem; text-align: right; font-size: 0.875rem;">Exposure</th>
                                         <th style="padding: 0.75rem; text-align: center; font-size: 0.875rem;">Filter</th>
                                         <th style="padding: 0.75rem; text-align: right; font-size: 0.875rem;">Total Integration</th>
+                                        <th style="padding: 0.75rem; text-align: center; font-size: 0.875rem;">Actions</th>
                                     </tr>
                                 </thead>
                                 <tbody>
@@ -1544,8 +1764,12 @@ class Dashboard {
                             const totalIntegration = session.stackCount * session.exposure;
                             const bgColor = idx % 2 === 0 ? 'transparent' : 'var(--bg-tertiary)';
                             return `
-                                            <tr style="background: ${bgColor}; border-bottom: 1px solid var(--border-color);">
-                                                <td style="padding: 0.75rem; font-family: monospace; font-size: 0.875rem;">${session.date}</td>
+                                            <tr data-session-index="${idx}" style="background: ${bgColor}; border-bottom: 1px solid var(--border-color);">
+                                                <td style="padding: 0.75rem; font-family: monospace; font-size: 0.875rem;">
+                                                    <span class="session-date-link" data-session-index="${idx}"
+                                                          style="cursor: pointer; color: var(--primary-color); text-decoration: underline;"
+                                                          title="View session files">${session.date}</span>
+                                                </td>
                                                 <td style="padding: 0.75rem; font-family: monospace; font-size: 0.875rem;">${session.time}</td>
                                                 <td style="padding: 0.75rem; text-align: right; font-family: monospace; font-size: 0.875rem; font-weight: 600; color: var(--primary-color);">${session.stackCount}</td>
                                                 <td style="padding: 0.75rem; text-align: right; font-family: monospace; font-size: 0.875rem;">${session.exposure}s</td>
@@ -1554,6 +1778,15 @@ class Dashboard {
                                                 </td>
                                                 <td style="padding: 0.75rem; text-align: right; font-family: monospace; font-size: 0.875rem; color: var(--success-color); font-weight: 600;">
                                                     ${this.formatIntegrationTime(totalIntegration)}
+                                                </td>
+                                                <td style="padding: 0.75rem; text-align: center;">
+                                                    <button class="session-delete-btn" data-session-index="${idx}"
+                                                            style="background: var(--danger-color, #e74c3c); color: white; border: none;
+                                                                   border-radius: 6px; padding: 0.25rem 0.6rem; cursor: pointer;
+                                                                   font-size: 0.875rem; transition: opacity 0.2s;"
+                                                            onmouseover="this.style.opacity='0.8'"
+                                                            onmouseout="this.style.opacity='1'"
+                                                            title="Delete this session">🗑️</button>
                                                 </td>
                                             </tr>
                                         `;
@@ -1588,7 +1821,7 @@ class Dashboard {
         return null;
     }
 
-    renderFileList(files, title, folderPath) {
+    renderFileList(files, title, folderPath, defaultOpen = false) {
         if (!files || files.length === 0) {
             return '';
         }
@@ -1605,7 +1838,7 @@ class Dashboard {
         );
 
         return `
-            <details style="cursor: pointer;">
+            <details ${defaultOpen ? 'open' : ''} style="cursor: pointer;">
                 <summary style="padding: 0.75rem 1rem; background: var(--bg-tertiary); border-radius: 8px;
                                 user-select: none; font-weight: 600;">
                     ${title} (${files.length})

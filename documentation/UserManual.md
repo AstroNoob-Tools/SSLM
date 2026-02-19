@@ -16,12 +16,13 @@
 6. [Merging Libraries](#merging-libraries)
 7. [The Dashboard](#the-dashboard)
 8. [Object Detail View](#object-detail-view)
-9. [Catalog Detail View](#catalog-detail-view)
-10. [Cleanup Operations](#cleanup-operations)
-11. [Image Viewer](#image-viewer)
-12. [Navigation & Tips](#navigation--tips)
-13. [Favorites](#favorites)
-14. [Frequently Asked Questions](#frequently-asked-questions)
+9. [Session Detail View](#session-detail-view)
+10. [Catalog Detail View](#catalog-detail-view)
+11. [Cleanup Operations](#cleanup-operations)
+12. [Image Viewer](#image-viewer)
+13. [Navigation & Tips](#navigation--tips)
+14. [Favorites](#favorites)
+15. [Frequently Asked Questions](#frequently-asked-questions)
 
 ---
 
@@ -393,7 +394,9 @@ Clicking an object name opens a detailed view with comprehensive information abo
 ### Imaging Metadata
 
 Shows all unique combinations of:
-- **Stacking count**: How many sub-frames were stacked
+- **Stacking Counts**: Displays the total frames across all sessions and the per-session breakdown.
+  Format: `751 total (298, 453 per session)`. The total is the sum of all sessions' final frame counts. Each per-session value is the number of sub-frames combined in that session's final stacked image.
+  > **Note**: The SeeStar saves progressive stacking snapshots during a live session (e.g., 74 frames mid-session, 453 frames at the end). SSLM shows only the final result per session, not the intermediate snapshots.
 - **Exposure time**: Time per sub-frame (e.g., 30.0s, 10.0s)
 - **Filters used**: IR Cut (IRCUT), Light Pollution (LP), etc.
 
@@ -405,18 +408,27 @@ Visual cards showing:
 
 ### Imaging Sessions Table
 
-Each row represents a distinct imaging session:
+Each row represents a distinct imaging session. Sessions captured on the same night with the same exposure and filter are automatically grouped into a single row (only the final result is shown, not intermediate progress snapshots).
 
 | Column | Description |
 |--------|-------------|
-| Date | Date the session was captured |
-| Time | Time the session started |
-| Stacked Frames | Number of frames combined |
+| Date | Date the session was captured — **click to open Session Detail View** |
+| Time | Time of the final stacked image for this session |
+| Stacked Frames | Number of frames in the final stacked image |
 | Exposure | Per-frame exposure time |
 | Filter | Filter used |
 | Integration | Total time for this session |
+| Actions | 🗑️ Delete button — permanently deletes all files for this session |
 
-Sessions with identical parameters (same date, time, exposure, filter) are grouped together.
+#### Clicking a Session Date
+
+Click any date link (shown in blue) to open the **Session Detail View** for that session.
+
+#### Deleting a Session
+
+Click the 🗑️ button on a session row to permanently delete all files belonging to that session (stacked images in the main folder and corresponding light frames in the sub-frames folder). A confirmation dialog appears before any files are deleted.
+
+> **Warning**: Session deletion is permanent. Deleted files cannot be recovered from the Recycle Bin.
 
 ### File Lists
 
@@ -442,6 +454,42 @@ If the sub-frame directory contains non-.fit files, a **Clean Up Sub-Frames** bu
 - Click **Back to Dashboard** to return to the main dashboard
 - Click the **Dashboard** button (📊) in the header to return to the main dashboard
 - Click the **Home** button (🏠) to return to the Welcome Screen
+
+---
+
+## Session Detail View
+
+The Session Detail View opens when you click a date link in the Imaging Sessions table of an Object Detail page. It shows every file associated with that specific imaging session.
+
+### Session Header
+
+A row of summary cards at the top shows:
+
+| Card | Description |
+|------|-------------|
+| Date | Date of the session |
+| Time | Time of the final stacked image |
+| Stacked Frames | Number of sub-frames in the final stack |
+| Exposure | Per-frame exposure time |
+| Filter | Filter used |
+| Integration | Total integration time for the session |
+
+### File Sections
+
+**Stacked Images (Main Folder)**
+All stacked `.fit`, `.jpg`, and thumbnail files from this session. File sections are expanded by default for easy browsing.
+
+**Sub-Frame Light Frames**
+All individual light frame `.fit` and preview files from the sub-frames folder that match this session's date, exposure, and filter. Only shown if the object has a sub-frames directory.
+
+### Deleting the Session
+
+Click the **Delete Session** button (top right, red) to permanently delete all files for this session — both stacked images from the main folder and light frames from the sub-frames folder. A confirmation dialog shows the file count before proceeding.
+
+### Navigation
+
+- Click **← Back** to return to the Object Detail page
+- Click **Delete Session** to delete all session files (requires confirmation)
 
 ---
 
@@ -515,6 +563,25 @@ The SeeStar device saves both `.fit` (scientific data) and `.jpg`/thumbnail prev
 | `.jpg` preview images in `_sub` folders | All `.fit` data files |
 | `_thn.jpg` thumbnails in `_sub` folders | All stacked images in main folder |
 | | All `.fit` light frames |
+
+### Imaging Session Deletion
+
+To permanently remove all files for a specific imaging session:
+
+1. Open the **Object Detail View** for the object
+2. In the **Imaging Sessions** table, either:
+   - Click the 🗑️ button on the session row, **or**
+   - Click the date link to open the Session Detail View, then click **Delete Session**
+3. A confirmation dialog shows the number of files that will be deleted
+4. Click **Confirm** to proceed
+
+**What gets deleted:**
+| Deleted | Location |
+|---------|----------|
+| All stacked images for the session (`.fit`, `.jpg`, `_thn.jpg`) | Main object folder |
+| All light frames for the session (`.fit`, `.jpg`, `_thn.jpg`) | `_sub` folder |
+
+> **Warning**: Session deletion is permanent and cannot be undone. There is no Recycle Bin recovery.
 
 ---
 
@@ -630,6 +697,10 @@ Yes, for incremental imports. Files are skipped when they already exist in the d
 ### The dashboard is showing wrong statistics after a cleanup. How do I refresh?
 
 The dashboard refreshes automatically after cleanup operations. If statistics still appear wrong, click **Use Local Copy**, select the same folder again, and the library will be fully re-analysed.
+
+### Can I delete an individual imaging session?
+
+Yes. Open the Object Detail View for the object, then either click the 🗑️ button on the session row in the Imaging Sessions table, or click the session date to open the Session Detail View and use the **Delete Session** button there. A confirmation dialog will show how many files will be deleted. This removes all stacked images and corresponding sub-frame light files for that session permanently.
 
 ### Can SSLM access a library on a network drive?
 

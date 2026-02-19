@@ -974,18 +974,37 @@ Network drives will be 3-5x slower.
   - Main folder: Count of stacked images by exposure time
   - Sub-frames folder: Count of light frames by exposure time
   - Visual cards showing exposure/count pairs
+- **Stacking Counts Display**: Shows total frames across all sessions + per-session breakdown
+  - Format: `751 total (298, 453 per session)`
+  - Derived from parsed sessions (uses max stack count per night, not raw file counts)
 - **Imaging Sessions Table**:
-  - Date and time of each imaging session
-  - Number of stacked frames
+  - Date and time of each imaging session (date is a clickable link)
+  - Number of stacked frames (final count per night, not intermediate)
   - Exposure time
   - Filter used
   - Total integration time per session
+  - Actions column with a delete button (🗑️) per row
+  - Intermediate stacking snapshots from the same night are merged into one session (keeping the highest frame count)
+- **Session Detail View** (new screen: `sessionDetailScreen`):
+  - Opened by clicking the date link in the Imaging Sessions table
+  - Shows all stacked files from that session (main folder, all file types, expanded by default)
+  - Shows all sub-frame light frames for that session (matched by date + exposure + filter)
+  - Session summary header cards (date, time, frames, exposure, filter, integration)
+  - Delete Session button at the top
+  - Back button returns to Object Detail without re-rendering
+- **Delete Session**:
+  - Available from the session detail screen or via the 🗑️ button in the sessions table row
+  - Confirmation modal shows file count before proceeding
+  - Calls `POST /api/cleanup/session` to delete all matching files (main + sub folders)
+  - On success: refreshes dashboard data and re-renders the object detail
 - **File Lists**:
   - Main folder files with capture dates
   - Sub-frames folder files with capture dates
   - Grouped by file type (.fit, .jpg, thumbnails, videos)
-  - Expandable sections for each file type
+  - Expandable sections for each file type (expanded by default in Session Detail View)
 - **Individual Cleanup**: Button to clean sub-frame directory for this object
+  - Button disappears immediately after successful cleanup
+  - Object detail view re-renders automatically after the cleanup refresh
 
 ### Folder Selection & Favorites
 
@@ -1191,6 +1210,83 @@ Network drives will be 3-5x slower.
 - `public/js/dashboard.js` (lines 1209-1261)
 
 **Impact**: Imaging sessions now display accurately, showing the true number of distinct imaging sessions rather than the number of stacked files
+
+## Recent Bug Fixes (2026-02-19)
+
+### Stale Object Detail After Sub-Frame Cleanup
+**Issue**: After cleaning up sub-frames from the object detail page, navigating to the sub-frames file list still showed the deleted JPG files.
+
+**Root Cause**: `cleanupSingleObject()` called `refreshDashboard()` which updated `this.data` and re-rendered the main dashboard HTML, but the object detail screen was already rendered with stale data and was not refreshed.
+
+**Fix**: Added a call to `showObjectDetail(object.name)` inside the post-refresh `setTimeout`, guarded by a check that the user is still on the object detail screen (`app.currentScreen === 'objectDetail'`).
+
+**Files Modified**: `public/js/dashboard.js`
+
+### Cleanup Button Not Disappearing After Cleanup
+**Issue**: After sub-frame cleanup on the object detail page, the "Clean Up Sub-Frames" button remained visible until the full 2-second refresh cycle completed.
+
+**Fix**: Added immediate DOM removal of the button on cleanup success, before the refresh timer fires.
+
+**Files Modified**: `public/js/dashboard.js`
+
+### Modal Cancel Button Non-Functional
+**Issue**: The "Cancel" button in cleanup result modals did not close the modal. `cloneNode(true)` does not copy event listeners, so the cloned cancel button had no handler.
+
+**Fix**: Rewrote `app.showModal()` to operate in two modes:
+- **Single-button mode** (no `confirmCallback`): renders one close/Done button with a fresh `addEventListener`
+- **Two-button mode** (with `confirmCallback`): renders Cancel + Confirm, both with fresh `addEventListener` calls
+
+Also changed cleanup result dialogs from showing a non-functional Cancel to showing a "Done" button.
+
+**Files Modified**: `public/js/app.js`
+
+### Session Detail View & Delete Session (New Feature)
+**Feature**: Clicking the date in the Imaging Sessions table opens a full-screen Session Detail View showing all files for that session. A delete button (🗑️) per row allows permanent deletion of all session files.
+
+**Implementation**:
+- `src/services/fileCleanup.js`: Added `deleteSessionFiles()` static method
+- `server.js`: Added `POST /api/cleanup/session` endpoint
+- `public/index.html`: Added `sessionDetailScreen` div with `.session-detail-content` container
+- `public/js/dashboard.js`:
+  - `parseImagingSessions()`: Added `rawDateStr`, `rawTimestamps` (Set), `files[]` fields per session
+  - Sessions table HTML: clickable date links (`.session-date-link`), delete buttons (`.session-delete-btn`), Actions column
+  - `renderObjectDetail()`: Event delegation for date clicks and delete clicks; stores `_currentSessionObj` and `_currentSessions`
+  - New `_getSessionFiles(obj, session)`: returns `{ mainFiles, subFiles }` matched by timestamps and date+exposure+filter
+  - New `showSessionDetail(sessionIdx)`: renders full-screen session view
+  - New `deleteSession(sessionIdx)`: confirms and calls API, then refreshes
+  - `renderFileList()`: Added `defaultOpen` parameter (session detail passes `true`)
+
+### Sub-Frame Exposure Token Mismatch Fix
+**Issue**: Sub-frame light frames showed 0 files in the session detail view. The exposure token `"20s"` (JS float) did not match `"20.0s"` in filenames — `"20.0s".includes("20s")` is `false`.
+
+**Fix**: Changed `_getSessionFiles()` to use `session.exposure.toFixed(1) + 's'` for sub-frame file matching.
+
+**Files Modified**: `public/js/dashboard.js`
+
+### Stacking Counts Including JPG Files
+**Issue**: The "Stacking Counts" metadata and imaging sessions table showed inflated or incorrect frame counts because `parseImagingSessions()` processed all files including `.jpg` and `_thn.jpg` versions of stacked images, tripling the apparent counts.
+
+**Fix**:
+- `parseImagingSessions()` now filters main folder files with `.endsWith('.fit')` before parsing
+- `fileAnalyzer.js` `scanFolderFiles()` now only calls `extractStackingCount()` for `.fit` files
+
+**Files Modified**: `public/js/dashboard.js`, `src/services/fileAnalyzer.js`
+
+### Intermediate Stacking Results Shown as Separate Sessions
+**Issue**: The SeeStar saves progressive stacking snapshots during a session (e.g., 74 frames at 09:09 PM, 453 frames at 11:48 PM on the same night). These appeared as two separate sessions instead of one.
+
+**Root Cause**: Session key included time-of-day (`${dateStr}_${timeStr}_${exposure}_${filter}`), making each snapshot unique.
+
+**Fix**: Changed session key to date-only (`${dateStr}_${exposure}_${filter}`). When multiple snapshots share a key, the **highest stack count** is kept (the final result) and the time updates to the latest snapshot. All snapshot timestamps are accumulated in `rawTimestamps` for reliable session file matching.
+
+**Files Modified**: `public/js/dashboard.js`
+
+### Stacking Counts Metadata Display
+**Issue**: "Stacking Counts" showed a list of raw values (e.g., `74, 298, 453`) which was confusing — users expected a total.
+
+**Fix**: Changed display to show both total and per-session breakdown: `751 total (298, 453 per session)`. Values are now derived from `parseImagingSessions()` rather than `obj.stackingCounts`, ensuring intermediate snapshots are excluded.
+
+**Files Modified**: `public/js/dashboard.js`
 
 ### Future Enhancement Ideas
 
