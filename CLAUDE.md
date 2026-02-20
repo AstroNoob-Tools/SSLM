@@ -308,20 +308,30 @@ SSLM ships as a self-contained Windows installer. The end user does **not** need
 **Step 1 — Build the executable:**
 ```bash
 npm run build
-# Produces: dist/sslm.exe (~46 MB, self-contained)
+# Produces: dist/sslm.exe (~46 MB, self-contained, with embedded icon)
 ```
+The `--icon public/assets/sslm.ico` flag is included in the build script so the correct icon appears in Explorer, the taskbar, and Start Menu shortcuts.
 
 **Step 2 — Build the installer:**
 - Open `installer/sslm.iss` in Inno Setup Compiler and press F9
 - OR run headlessly: `"C:\Program Files (x86)\Inno Setup 6\ISCC.exe" installer\sslm.iss`
-- Produces: `installer/output/SSLM-Setup-v1.0.0.exe`
+- Produces: `installer/output/SSLM-Setup-v1.0.0-beta.1.exe`
 
 ### What the Installer Does
-1. Installs `sslm.exe` to `%LOCALAPPDATA%\SSLM\` (no admin/UAC required)
+1. Installs `sslm.exe` + `sslm.ico` to `%LOCALAPPDATA%\SSLM\` (no admin/UAC required)
 2. Creates Start Menu shortcut
 3. Optionally creates Desktop shortcut (user choice during install)
-4. Registers uninstaller in Windows "Add or Remove Programs"
+4. Registers uninstaller in Windows "Add or Remove Programs" (with SSLM icon)
 5. Offers to launch the app immediately after install
+
+### Installer Branding (sslm.iss)
+
+| Setting | File used | Where it appears |
+|---------|-----------|-----------------|
+| `WizardImageFile` | `public/assets/sslm.png` | Left banner on Welcome & Finish pages |
+| `WizardSmallImageFile` | `public/assets/sslmLogo.png` | Top-right corner on all inner pages |
+| `SetupIconFile` | `public/assets/sslm.ico` | Installer exe icon |
+| `UninstallDisplayIcon` | `{app}\sslm.ico` | Add/Remove Programs icon |
 
 ### Packaged vs Development Behaviour
 
@@ -333,20 +343,58 @@ npm run build
 
 **Config in APPDATA**: When running as a packaged exe the installation folder (`%LOCALAPPDATA%\SSLM\`) is read-only for user accounts. All user settings (favourites, last paths, etc.) are therefore stored in `%APPDATA%\SSLM\settings.json`, which is fully writable. On first run the default config is written there automatically.
 
+### Application Header Features
+
+The top header bar contains the following controls (left to right):
+- **Logo** (`public/assets/sslmLogo.png`) — application logo
+- **SSLM** title with "SeaStar Library Manager" subtitle
+- **Mode indicator** — Offline/Online badge
+- **📊 Dashboard** button — scroll to dashboard (visible only when on dashboard)
+- **🏠 Home** button — return to welcome screen
+- **⚙️ Settings** button — open settings dialog
+- **ℹ️ About** button — opens About modal (version from `sslm.iss`, contact email)
+- **⏻ Quit** button — confirmation dialog → `POST /api/quit` → graceful server shutdown
+
+### Version Reading (`readAppVersion()` in server.js)
+
+The canonical version is defined in `installer/sslm.iss` as `#define AppVersion "x.x.x"`.
+`server.js` reads this at startup via `readAppVersion()` and exposes it through `/api/config`.
+Falls back to `package.json` version if the `.iss` file is not readable.
+The frontend displays the version in the About dialog (`app.config.version`).
+
+### Application Assets (`public/assets/`)
+
+| File | Used for |
+|------|---------|
+| `sslm.png` | Welcome screen logo (160×160, large version) |
+| `sslmLogo.png` | Header bar + browser favicon + installer small image |
+| `astroNoobLogo.png` | About dialog (personal/author logo) |
+| `sslm.ico` | Windows exe icon (embedded in exe + installed by installer) |
+
 ### Key Files
 
 | File | Purpose |
 |------|---------|
-| `installer/sslm.iss` | Inno Setup script (source of truth for installer behaviour) |
+| `installer/sslm.iss` | Inno Setup script — source of truth for version + installer behaviour |
 | `installer/output/` | Build output — gitignored, contains the distributable setup exe |
 | `dist/sslm.exe` | Intermediate pkg build — gitignored |
-| `server.js` (top) | `isPackaged` flag + APPDATA config logic + browser auto-open |
-| `package.json` → `pkg` section | Declares target (node20-win-x64) and bundled assets |
+| `server.js` (top) | `isPackaged` flag + APPDATA config logic + browser auto-open + `readAppVersion()` |
+| `package.json` → `pkg` section | Declares target (node20-win-x64), bundled assets, and `--icon` flag |
+| `notes/HOW_TO_RELEASE.md` | Local-only release checklist (gitignored) |
 
 ### Updating the Version
-1. Bump `"version"` in `package.json`
-2. Update `#define AppVersion` in `installer/sslm.iss`
+1. Update `#define AppVersion` in `installer/sslm.iss` (this is the source of truth)
+2. Optionally bump `"version"` in `package.json` to keep them in sync
 3. Run `npm run build` then recompile the `.iss` script
+
+### Publishing a Release to GitHub
+See `notes/HOW_TO_RELEASE.md` for the full step-by-step checklist. Summary:
+1. `npm run build` → produces `dist/sslm.exe`
+2. Compile `sslm.iss` in Inno Setup → produces `installer/output/SSLM-Setup-vX.X.X.exe`
+3. Commit and push source code
+4. `gh release create vX.X.X "installer/output/SSLM-Setup-vX.X.X.exe" --title "SSLM vX.X.X" --notes "..." --prerelease`
+- Requires `gh auth login` on first use
+- Run as a **single line** in CMD/PowerShell (no `\` line continuation)
 
 ## Development Notes
 

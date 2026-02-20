@@ -1,7 +1,7 @@
 # SSLM - SeaStar Library Manager
 ## Installation Manual
 
-**Version**: 1.0.0
+**Version**: 1.0.0-beta.1
 **Date**: February 2026
 **Platform**: Windows 10 / 11
 
@@ -19,6 +19,7 @@
 8. [Uninstallation](#uninstallation)
 9. [Troubleshooting](#troubleshooting)
 10. [npm Dependencies Reference](#npm-dependencies-reference)
+11. [Publishing a Release](#publishing-a-release)
 
 ---
 
@@ -58,6 +59,10 @@ SeeStar telescope storage capacity:
 ---
 
 ## Prerequisites
+
+> **Using the Windows Installer?** Skip this entire section. Node.js is bundled inside `sslm.exe` — no prerequisites needed.
+>
+> Prerequisites below apply only if you are running from source code.
 
 ### 1. Node.js
 
@@ -100,7 +105,32 @@ Git is only needed if you want to clone the repository directly or receive updat
 
 ## Installation
 
-### Method A: From ZIP File
+### Method A: Windows Installer ⭐ (Recommended)
+
+This is the easiest installation method. No Node.js or developer tools required.
+
+1. Download the latest `SSLM-Setup-vX.X.X.exe` from the [GitHub Releases page](https://github.com/AstroNoob-Tools/SSLM/releases)
+
+2. Run the installer — no administrator rights required
+
+3. Follow the wizard:
+   - Choose install location (default: `%LOCALAPPDATA%\SSLM\`)
+   - Optionally create a Desktop shortcut
+
+4. After installation, launch SSLM from:
+   - The Start Menu shortcut, or
+   - The Desktop shortcut (if created), or
+   - `%LOCALAPPDATA%\SSLM\sslm.exe` directly
+
+5. Your default browser opens automatically at `http://localhost:3000`
+
+**User settings** (favourites, last paths, preferences) are stored in `%APPDATA%\SSLM\settings.json` and are preserved across updates and reinstalls.
+
+**To uninstall**: Use Windows "Add or Remove Programs" and search for SSLM.
+
+---
+
+### Method B: From ZIP File (Source)
 
 1. **Unzip** the project archive to your preferred location.
 
@@ -125,7 +155,7 @@ Git is only needed if you want to clone the repository directly or receive updat
 
 4. Proceed to the [Configuration](#configuration) section.
 
-### Method B: From Git Repository
+### Method C: From Git Repository
 
 1. **Open a Command Prompt** or PowerShell in the folder where you want to install SSLM.
 
@@ -327,9 +357,21 @@ Your `config/settings.json` is not tracked by Git and will not be overwritten.
 
 ## Uninstallation
 
-SSLM does not install any system components, registry entries, or services. Uninstalling is straightforward:
+### If installed via Windows Installer (Method A)
 
-1. Stop the application (close the terminal window)
+1. Open Windows **Settings → Apps** (or **Control Panel → Add or Remove Programs**)
+2. Search for **SSLM** and click **Uninstall**
+3. Follow the uninstaller wizard
+
+> **Note**: Your user settings (`%APPDATA%\SSLM\settings.json`) are intentionally **not** deleted during uninstall, so your favourites and preferences survive a reinstall.
+
+To fully remove all traces including settings:
+1. Uninstall via Add or Remove Programs
+2. Delete `%APPDATA%\SSLM\` manually
+
+### If running from source (Methods B or C)
+
+1. Stop the application (close the terminal window or press `Ctrl+C`)
 2. Delete the project folder (e.g., `C:\Apps\SeeStarFileManager\`)
 3. Optionally remove Node.js if it is no longer needed
 
@@ -497,6 +539,7 @@ SeeStarFileManager/
 | `npm install` | Install/update all dependencies |
 | `npm start` | Start the application |
 | `npm run dev` | Start in development mode (auto-reload) |
+| `npm run build` | Build `dist/sslm.exe` (self-contained, with embedded icon) |
 
 ### Default URLs
 
@@ -595,6 +638,25 @@ These packages are only used during development. They are installed by `npm inst
 
 ---
 
+#### `@yao-pkg/pkg` — v6.14.0
+
+**Category**: Build tool
+**npm**: https://www.npmjs.com/package/@yao-pkg/pkg
+
+`@yao-pkg/pkg` compiles a Node.js application together with the Node.js runtime into a single self-contained executable. The result (`sslm.exe`) runs on any Windows 10/11 machine without Node.js installed.
+
+**Used for:**
+- `npm run build` — produces `dist/sslm.exe` targeting `node20-win-x64`
+- Bundles all assets declared under `"pkg": { "assets": [...] }` in `package.json`
+  - `public/**/*` — all frontend files (HTML, CSS, JS, images, icons)
+  - `config/**/*` — default configuration template
+  - `installer/sslm.iss` — Inno Setup script (read at runtime for version number)
+- `--icon public/assets/sslm.ico` — embeds the application icon into the exe
+
+**Why @yao-pkg/pkg**: Fork of the original `pkg` by Vercel, actively maintained for Node.js 20+. Produces a standalone exe that end users can install without any developer tooling.
+
+---
+
 #### `nodemon` — v3.0.3
 
 **Category**: Development tool
@@ -619,6 +681,7 @@ These packages are only used during development. They are installed by `npm inst
 | `socket.io` | ^4.6.1 | Production | Real-time progress events (import, merge, validation) |
 | `fs-extra` | ^11.2.0 | Production | File system operations (copy, scan, read, write, delete) |
 | `check-disk-space` | ^3.4.0 | Production | Disk free space validation before operations |
+| `@yao-pkg/pkg` | ^6.14.0 | Development | Bundle Node.js runtime + app into `sslm.exe` |
 | `nodemon` | ^3.0.3 | Development | Auto-restart server on file changes |
 
 ### Transitive Dependencies
@@ -657,5 +720,56 @@ npm update
 
 ---
 
-*SSLM - SeaStar Library Manager v1.0.0 — Installation Manual*
+## Publishing a Release
+
+> This section is for the **developer/maintainer** only.
+
+### Prerequisites
+- `gh` CLI installed: [cli.github.com](https://cli.github.com)
+- Authenticated: `gh auth login` (first time only — choose GitHub.com → HTTPS → browser)
+- Inno Setup 6.x installed
+
+### Release Checklist
+
+**1. Bump the version** (in two places):
+- `installer/sslm.iss` → `#define AppVersion "X.X.X"` ← source of truth
+- `package.json` → `"version": "X.X.X"` ← keep in sync
+
+**2. Build the exe:**
+```
+npm run build
+```
+
+**3. Build the installer** (Inno Setup):
+```
+"C:\Program Files (x86)\Inno Setup 6\ISCC.exe" installer\sslm.iss
+```
+Output: `installer/output/SSLM-Setup-vX.X.X.exe`
+
+**4. Commit and push source code:**
+```
+git add .
+git commit -m "vX.X.X — description"
+git push origin <branch>
+```
+
+**5. Create the GitHub Release** (single line — no `\` in CMD/PowerShell):
+
+Pre-release (beta):
+```
+gh release create vX.X.X "installer/output/SSLM-Setup-vX.X.X.exe" --title "SSLM vX.X.X" --notes "Release notes here." --prerelease
+```
+
+Stable release:
+```
+gh release create vX.X.X "installer/output/SSLM-Setup-vX.X.X.exe" --title "SSLM vX.X.X" --notes "Release notes here."
+```
+
+The installer will be downloadable at: `https://github.com/AstroNoob-Tools/SSLM/releases`
+
+> **Full checklist**: See `notes/HOW_TO_RELEASE.md` (local file, gitignored).
+
+---
+
+*SSLM - SeaStar Library Manager v1.0.0-beta.1 — Installation Manual*
 *Last updated: February 2026*

@@ -1,52 +1,113 @@
-# Introduction
+# SSLM — SeaStar Library Manager
 
-The goal of this application is to manage my astrophotography stored on my seestar. I would like to maintain them and organise them.
+> Astrophotography library management for SeeStar telescope devices.
 
+SSLM is a self-contained Windows desktop application that helps you import, organise, and manage your astrophotography collection from a SeeStar telescope. It runs as a local web server and opens in your browser — no internet connection required.
 
-#   Connected Seestar Scenario
+---
 
-if the seestar is connected, the pictures would be placed under a root folder on the seestar called MyWork. From there, the application should ask me where i would put the local copy of the images stored on the seestar.
-if the seestar is connected, the pictures would be placed under a root folder on the seestar called MyWork.
+## Features
 
+- **Import from SeeStar** — copy files from a connected SeeStar device (USB or network) to local storage, with full or incremental strategies and real-time progress tracking
+- **Expurged mode** — skip non-FITS files in `_sub` directories to save disk space during import or merge
+- **Multi-library merge** — combine multiple SeeStar library copies into one consolidated library with intelligent duplicate detection and conflict resolution
+- **Dashboard** — interactive statistics: object counts, catalog breakdowns, integration times, file sizes, and more
+- **Object detail view** — per-object metadata, imaging sessions, stacking counts, and file lists
+- **Session detail & delete** — view all files from a single imaging session and delete them if needed
+- **Cleanup tools** — remove empty directories and unnecessary JPG/thumbnail files from `_sub` directories
+- **Favourites** — quick access to frequently used library folders
+- **About dialog** — version information and contact details
+- **Quit button** — gracefully shuts down the server from the browser UI
 
-#   Disconnected SeeStar Scenario
+---
 
-If the seestar is not connected, the application should ask me where my local copy of the seestar content is located
-If i work on a local copy made to my computer, the pictures will be under a chosen directory.
+## Installation (End Users)
 
+Download the latest installer from the [Releases](https://github.com/AstroNoob-Tools/SSLM/releases) page.
 
-So, this application should ask me first on which external drive is the seestar connected or if i want to work with a local copy stored on my computer.
+**No prerequisites required** — Node.js is bundled inside the installer.
 
-# File Organisation
+1. Run `SSLM-Setup-vX.X.X.exe`
+2. Follow the wizard (installs to `%LOCALAPPDATA%\SSLM\` — no admin rights needed)
+3. Launch SSLM from the Start Menu or Desktop shortcut
+4. Your browser opens automatically at `http://localhost:3000`
 
-In both case, the structure of the files under the main directory will be the same. There will be 2 type of configuration.
+User settings and favourites are stored in `%APPDATA%\SSLM\settings.json` and survive uninstall/reinstall.
 
-##   No sub frames  
+---
 
-if the pictures were taken without sub frames, there will be only one folder named after the registered catalog name of the objects of which the picture was taken. For example M47, M48, IC 434, NGC 2024 etc etc. Under this folder, there will be 2 types of files
-    1)  Files with the extension ".fit"
-    2)  standard image file (.jpg, .tiff ... ...)
+## Development Setup
 
-## With sub frames
+### Prerequisites
 
-If the picture was taken with sub frame, there will be 2 directories, one with the name of the object discribed above and another one with the same name suffixed with "_sub".
-For example, if the object name is IC 2177, there will be a directory called IC 2177 and one called IC 2177_sub.
-the directory of the object name will still contain as described above.
-the directory "_sub" will contain a lot of fit files and jpg files.
-the jpg files inside the "_sub" directory are actually not needed.
+- [Node.js](https://nodejs.org) v18 or later
+- npm (bundled with Node.js)
 
-#   Functionalities
+### Install & Run
 
-#   First Steps
+```bash
+git clone https://github.com/AstroNoob-Tools/SSLM.git
+cd SSLM
+npm install
+npm start
+```
 
-The application should first ask the question if i want to import the content of the seestar on local drive or work directly on the local copy of the seestar drive.
+Then open `http://localhost:3000` in your browser.
 
-IMPORTANT: The application must not work directly on the hard drive of the see star.
+For auto-reload during development:
+```bash
+npm run dev
+```
 
-If selection of importing seestar content is choosen, ask where on the local system this copy should be placed (the seestar can contain up to 50GB of data).
+### Build the Windows Installer
 
-Once copy is done or selected drive done, i should have a dashboard presenting me aggregated data like number of objects present, number of objects with sub frames, number of object without subframes etc.
+Requires [Inno Setup 6.x](https://jrsoftware.org/isinfo.php) installed separately.
 
-# Further Steps
+```bash
+# Step 1 — build the self-contained exe
+npm run build
 
-Will be considered once dashbloard is finalised.
+# Step 2 — compile the installer (Inno Setup must be installed)
+"C:\Program Files (x86)\Inno Setup 6\ISCC.exe" installer\sslm.iss
+```
+
+Output: `installer/output/SSLM-Setup-vX.X.X.exe`
+
+---
+
+## Technology Stack
+
+| Layer | Technology |
+|-------|-----------|
+| Backend | Node.js + Express |
+| Real-time progress | Socket.IO |
+| Frontend | Vanilla HTML / CSS / JavaScript |
+| Packaging | `@yao-pkg/pkg` (bundles Node.js runtime) |
+| Installer | Inno Setup 6.x |
+
+---
+
+## Project Structure
+
+```
+SSLM/
+├── public/               # Frontend (HTML, CSS, JS, assets)
+│   ├── assets/           # Logos and icons
+│   ├── css/styles.css
+│   └── js/               # app.js, dashboard.js, importWizard.js, mergeWizard.js ...
+├── src/
+│   ├── services/         # fileAnalyzer, importService, mergeService, fileCleanup
+│   └── utils/            # directoryBrowser, diskSpaceValidator
+├── installer/
+│   └── sslm.iss          # Inno Setup script (source of truth for version)
+├── documentation/        # User and installation manuals
+├── config/               # settings.json (gitignored)
+├── server.js             # Express server + API endpoints
+└── package.json
+```
+
+---
+
+## Contact
+
+astronoob001@gmail.com
