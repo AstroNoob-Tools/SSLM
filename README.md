@@ -4,6 +4,21 @@ A local desktop web application for managing astrophotography files captured wit
 
 ---
 
+## Installation (End Users)
+
+Download the latest installer from the **[Releases](https://github.com/AstroNoob-Tools/SSLM/releases)** page.
+
+**No prerequisites** — Node.js is bundled inside the installer.
+
+1. Run `SSLM-Setup-vX.X.X.exe`
+2. Follow the wizard (installs to `%LOCALAPPDATA%\SSLM\` — no admin rights needed)
+3. Launch from the **Start Menu** or **Desktop shortcut**
+4. Your browser opens automatically at `http://localhost:3000`
+
+> User settings and favourites are stored in `%APPDATA%\SSLM\settings.json` and survive uninstall/reinstall.
+
+---
+
 ## What It Does
 
 - **Import** files from a connected SeeStar device (USB or Wi-Fi) to local storage
@@ -18,52 +33,6 @@ A local desktop web application for managing astrophotography files captured wit
 - SSLM never writes to, modifies, or deletes files on your SeeStar device
 - SSLM does not stack or process images
 - SSLM does not control the telescope
-
----
-
-## Requirements
-
-- Windows 10 or later
-- [Node.js](https://nodejs.org/) v18 or later
-- A SeeStar S50 library (local copy or connected device)
-
----
-
-## Installation
-
-```bash
-git clone <repository-url>
-cd SeeStarFileManager
-npm install
-```
-
-See [documentation/InstallationManual.md](documentation/InstallationManual.md) for full details.
-
----
-
-## Starting the Application
-
-```bash
-npm start
-```
-
-Then open your browser at: **http://localhost:3000**
-
-To start with auto-reload during development:
-
-```bash
-npm run dev
-```
-
----
-
-## Quick Start
-
-1. Start the application and open `http://localhost:3000`
-2. Choose one of the three modes on the Welcome Screen:
-   - **Import from SeeStar** — copy files from a connected device to your PC
-   - **Use Local Copy** — open an existing library folder on your PC
-   - **Merge Libraries** — combine multiple library copies into one
 
 ---
 
@@ -90,6 +59,7 @@ npm run dev
 ### Import Wizard (5 steps)
 - Auto-detection of SeeStar on USB drives and network path (`\\seestar`)
 - Full copy or incremental (smart sync) strategies
+- Expurged mode: skip non-FITS files from `_sub` directories to save space
 - Real-time progress: speed, ETA, files/bytes transferred
 - Post-import transfer validation
 
@@ -97,6 +67,7 @@ npm run dev
 - Combine 2 or more library copies
 - Intelligent deduplication by relative file path
 - Conflict resolution: keep newer version by modification date
+- Expurged mode support
 - Real-time analysis progress and per-source breakdown
 - Post-merge validation
 
@@ -105,44 +76,10 @@ npm run dev
 - Remove JPG/thumbnail previews from `_sub` directories (`.fit` files always kept)
 - Delete individual imaging sessions (stacked images + light frames)
 
----
-
-## Documentation
-
-| Document | Description |
-|----------|-------------|
-| [documentation/UserManual.md](documentation/UserManual.md) | Full user guide |
-| [documentation/InstallationManual.md](documentation/InstallationManual.md) | Installation instructions |
-| [documentation/SSLM_Functionalities.md](documentation/SSLM_Functionalities.md) | Technical internals reference |
-
----
-
-## Project Structure
-
-```
-SeeStarFileManager/
-├── config/
-│   └── settings.json          # User configuration and favourites
-├── documentation/             # User and technical documentation
-├── public/
-│   ├── css/styles.css         # Application stylesheet
-│   ├── js/
-│   │   ├── app.js             # Core app (navigation, modals, status)
-│   │   ├── dashboard.js       # Dashboard, object/session detail views
-│   │   ├── modeSelection.js   # Welcome screen and local copy selection
-│   │   ├── importWizard.js    # 5-step import wizard
-│   │   └── mergeWizard.js     # 6-step merge wizard
-│   └── index.html             # Single-page application shell
-├── src/
-│   └── services/
-│       ├── catalogParser.js   # Filename and catalog name parsing
-│       ├── fileAnalyzer.js    # Directory scanning and statistics
-│       ├── fileCleanup.js     # Cleanup and session deletion operations
-│       ├── importService.js   # File copy, incremental sync, validation
-│       └── mergeService.js    # Multi-library merge and deduplication
-├── server.js                  # Express server and API routes
-└── package.json
-```
+### Application Header
+- **⚙️ Settings** — configure port, SeeStar directory name, import strategy
+- **ℹ️ About** — version number and contact details
+- **⏻ Quit** — gracefully shuts down the server from the browser
 
 ---
 
@@ -155,4 +92,91 @@ SeeStarFileManager/
 
 ---
 
-*SSLM — SeaStar Library Manager | Last updated: February 2026*
+## Development Setup
+
+### Requirements
+
+- Windows 10 or later
+- [Node.js](https://nodejs.org/) v18 or later
+
+### Install & Run
+
+```bash
+git clone https://github.com/AstroNoob-Tools/SSLM.git
+cd SSLM
+npm install
+npm start
+```
+
+Then open: **http://localhost:3000**
+
+Auto-reload during development:
+```bash
+npm run dev
+```
+
+### Build the Windows Installer
+
+Requires [Inno Setup 6.x](https://jrsoftware.org/isinfo.php).
+
+```bash
+# Step 1 — build the self-contained exe (icon embedded)
+npm run build
+
+# Step 2 — compile the installer
+"C:\Program Files (x86)\Inno Setup 6\ISCC.exe" installer\sslm.iss
+```
+
+Output: `installer/output/SSLM-Setup-vX.X.X.exe`
+
+See [documentation/InstallationManual.md](documentation/InstallationManual.md) for the full release checklist.
+
+---
+
+## Project Structure
+
+```
+SSLM/
+├── public/
+│   ├── assets/            # Logos and icons (sslm.png, sslmLogo.png, sslm.ico, astroNoobLogo.png)
+│   ├── css/styles.css
+│   └── js/
+│       ├── app.js         # Core app (navigation, modals, About, Quit)
+│       ├── dashboard.js   # Dashboard, object/session detail views
+│       ├── modeSelection.js
+│       ├── importWizard.js
+│       └── mergeWizard.js
+├── src/
+│   └── services/
+│       ├── catalogParser.js
+│       ├── fileAnalyzer.js
+│       ├── fileCleanup.js
+│       ├── importService.js
+│       └── mergeService.js
+├── installer/
+│   └── sslm.iss           # Inno Setup script (source of truth for version)
+├── documentation/         # User and installation manuals
+├── config/                # settings.json (gitignored)
+├── server.js
+└── package.json
+```
+
+---
+
+## Documentation
+
+| Document | Description |
+|----------|-------------|
+| [documentation/UserManual.md](documentation/UserManual.md) | Full user guide |
+| [documentation/InstallationManual.md](documentation/InstallationManual.md) | Installation & release instructions |
+| [documentation/SSLM_Functionalities.md](documentation/SSLM_Functionalities.md) | Technical internals reference |
+
+---
+
+## Contact
+
+astronoob001@gmail.com
+
+---
+
+*SSLM — SeaStar Library Manager v1.0.0-beta.1 | Last updated: February 2026*
