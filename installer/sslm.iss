@@ -32,6 +32,7 @@ AppUpdatesURL={#AppURL}
 ; will automatically re-launch elevated and request UAC consent.
 DefaultDirName={localappdata}\{#AppShortName}
 DefaultGroupName={#AppName}
+DisableDirPage=no
 DisableProgramGroupPage=yes
 PrivilegesRequired=lowest
 PrivilegesRequiredOverridesAllowed=dialog
