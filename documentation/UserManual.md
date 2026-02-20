@@ -1,7 +1,7 @@
 # SSLM - SeaStar Library Manager
 ## User Manual
 
-**Version**: 1.0.0
+**Version**: 1.0.0-beta.1
 **Date**: February 2026
 
 ---
@@ -37,6 +37,7 @@
 - **Analyses** your collection with detailed statistics
 - **Merges** multiple library copies into one consolidated library
 - **Cleans up** unnecessary files (thumbnails, preview images) to save space
+- **Expurged mode** — optionally skips JPG/thumbnail files from sub-frame directories during import or merge, saving significant disk space
 - **Displays** imaging sessions, integration times, and exposure details
 
 ### What SSLM Does NOT Do
@@ -57,13 +58,15 @@
 2. Open your browser and go to `http://localhost:3000`
 3. The **Welcome Screen** appears
 
-The application header contains three buttons available at all times:
+The application header contains buttons available at all times:
 
 | Button | Icon | Action |
 |--------|------|--------|
 | Dashboard | 📊 | Return to the dashboard (visible once a library is loaded) |
 | Home | 🏠 | Return to the Welcome Screen |
 | Settings | ⚙️ | Open settings (online/offline mode) |
+| About | ℹ️ | Show application version and contact information |
+| Quit | ⏻ | Gracefully shut down the SSLM server and close the application |
 
 ---
 
@@ -106,6 +109,19 @@ SSLM automatically scans all drive letters (C: through Z:) and looks for the See
 | **Incremental Copy** | Copies only new or changed files | Updating an existing library after a new session |
 
 > **Tip**: Use **Incremental Copy** for regular updates. It compares file sizes and dates, skipping files already in your library. This saves significant time when your library is large.
+
+#### Expurged Mode
+
+A checkbox labelled **Expurged** is also available on this step:
+
+| Mode | Behaviour |
+|------|-----------|
+| **Full** (unchecked, default) | All files copied, including JPG and thumbnail previews in `_sub` directories |
+| **Expurged** (checked) | Only `.fit` light frames are copied from `_sub` directories — JPG and thumbnail files are intentionally skipped |
+
+> **When to use Expurged mode**: If you plan to process only the raw `.fit` data and don't need preview images in your sub-frame directories, Expurged mode can save several gigabytes of disk space.
+>
+> When Expurged mode is selected, the **Disk Space** screen (Step 3) shows how much space is saved compared to a Full import.
 
 ### Step 3: Select Destination
 
@@ -205,11 +221,22 @@ Use this option when you have multiple copies of a SeeStar library (e.g., from d
 
 Click **Next** when all sources are added.
 
-### Step 2: Select Destination
+### Step 2: Select Destination & Mode
 
 Browse to or create the destination folder for your merged library.
 
 > **Recommended**: Create a new empty folder for the merged library. Do not select one of your source libraries as the destination.
+
+#### Expurged Mode
+
+A checkbox labelled **Expurged** is also available on this step:
+
+| Mode | Behaviour |
+|------|-----------|
+| **Full** (unchecked, default) | All files merged, including JPG and thumbnail previews in `_sub` directories |
+| **Expurged** (checked) | Only `.fit` light frames are merged from `_sub` directories — JPG and thumbnail files are skipped |
+
+The required disk space shown on this step reflects the selected mode.
 
 SSLM shows required space vs. available space. The required space is the deduplicated size — files that exist in multiple libraries are only counted once.
 
@@ -619,6 +646,8 @@ The image viewer supports: **JPG, JPEG, PNG, GIF, BMP, TIF, TIFF**
 | 📊 Dashboard | A library is loaded | Returns to main dashboard from any page |
 | 🏠 Home | Always | Returns to the Welcome Screen |
 | ⚙️ Settings | Always | Opens settings dialog |
+| ℹ️ About | Always | Shows version number and contact email |
+| ⏻ Quit | Always | Shows confirmation dialog, then shuts down the server |
 
 ### Dashboard Button Behaviour
 
@@ -690,6 +719,14 @@ When the same file (same relative path) exists in multiple source libraries, SSL
 
 Integration time is calculated from stacked image filenames. Each stacked image filename contains the number of stacked frames (e.g., `Stacked_210_...`) and the exposure per frame (e.g., `30.0s`). Integration time = frames × exposure time. For example, 210 frames × 30 seconds = 6,300 seconds = 1 hour 45 minutes.
 
+### What is Expurged mode?
+
+Expurged mode is an option available in both the Import and Merge wizards (Step 2). When enabled, SSLM skips all JPG and thumbnail preview files inside `_sub` directories and copies only `.fit` light frames. This can save several gigabytes of disk space since the SeeStar generates a JPG and thumbnail for every sub-frame captured.
+
+Use Expurged mode if you only intend to process the raw `.fit` data with stacking software and have no need for the preview images. The `.fit` files in your main object folders (stacked images) are always copied regardless of this setting.
+
+After an Expurged import, the transfer validation correctly ignores the intentionally skipped files — no false errors are reported.
+
 ### My import shows a large number of "skipped" files. Is that normal?
 
 Yes, for incremental imports. Files are skipped when they already exist in the destination with the same size and modification date. A high skip count means your local library is already up to date with the device.
@@ -760,5 +797,5 @@ Example: `Light_NGC 6729_30.0s_IRCUT_20250822-203353.fit`
 
 ---
 
-*SSLM - SeaStar Library Manager v1.0.0 — User Manual*
+*SSLM - SeaStar Library Manager v1.0.0-beta.1 — User Manual*
 *Last updated: February 2026*
