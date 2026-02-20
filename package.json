@@ -7,7 +7,7 @@
   "scripts": {
     "start": "node server.js",
     "dev": "nodemon server.js",
-    "build": "pkg . --output dist/sslm.exe",
+    "build": "pkg . --output dist/sslm.exe --icon public/assets/sslm.ico",
     "test": "echo \"Error: no test specified\" && exit 1"
   },
   "keywords": [
