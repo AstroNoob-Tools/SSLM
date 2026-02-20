@@ -340,7 +340,7 @@ The `--icon public/assets/sslm.ico` flag is included in the build script so the 
 
 **Step 2 — Build the installer:**
 - Open `installer/sslm.iss` in Inno Setup Compiler and press F9
-- OR run headlessly: `"C:\Program Files (x86)\Inno Setup 6\ISCC.exe" installer\sslm.iss`
+- OR run headlessly: `"D:\Program Files (x86)\Inno Setup 6\ISCC.exe" installer\sslm.iss`
 - Produces: `installer/output/SSLM-Setup-v1.0.0-beta.1.exe`
 
 ### What the Installer Does
