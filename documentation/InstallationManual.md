@@ -109,7 +109,7 @@ Git is only needed if you want to clone the repository directly or receive updat
 
 This is the easiest installation method. No Node.js or developer tools required.
 
-1. Download the latest `SSLM-Setup-vX.X.X.exe` from the [GitHub Releases page](https://github.com/AstroNoob-Tools/SSLM/releases)
+1. Download `SSLM-Setup-v1.0.0-beta.1.exe` (current release) from the [GitHub Releases page](https://github.com/AstroNoob-Tools/SSLM/releases)
 
 2. Run the installer — no administrator rights required
 

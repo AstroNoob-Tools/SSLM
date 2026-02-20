@@ -19,7 +19,18 @@ SSLM (SeaStar Library Manager) is an application that manages astrophotography f
 - Manage both import and local copy scenarios
 - Clean up unnecessary files to optimize storage
 
+### Release Status
+
+| Version | Status | Date | Notes |
+|---------|--------|------|-------|
+| **v1.0.0-beta.1** | 🟡 **Current — Public Beta** | February 2026 | First public release. Windows installer available on GitHub Releases. |
+
+**GitHub Releases**: https://github.com/AstroNoob-Tools/SSLM/releases
+
 ### Current Development Phase
+
+All four phases are complete. The application has been packaged and released as a self-contained Windows installer.
+
 **Phase 1 - COMPLETE**: Initial setup workflow and dashboard implementation
 - ✅ User selection: Import from SeeStar or use existing local copy
 - ✅ Interactive dashboard with collection statistics
@@ -59,6 +70,21 @@ SSLM (SeaStar Library Manager) is an application that manages astrophotography f
 - ✅ Expurged mode: selectively skip non-.fit files from `_sub` directories during merge
 - ✅ Continuous merge progress feedback (immediate start event + per-chunk updates)
 - ✅ Step 4 footer button is "Start Merge →" — no more ambiguous dual-button confusion
+
+**Phase 4 - COMPLETE**: Windows installer & application branding
+- ✅ Self-contained `sslm.exe` built with `@yao-pkg/pkg` (Node.js runtime bundled)
+- ✅ Windows installer built with Inno Setup 6 (`installer/sslm.iss`)
+- ✅ Installs to `%LOCALAPPDATA%\SSLM\` — no admin rights required
+- ✅ Browser auto-opens on first launch (packaged mode only)
+- ✅ User config stored in `%APPDATA%\SSLM\settings.json` (survives reinstall)
+- ✅ Application icons: `sslm.ico` embedded in exe + installed alongside
+- ✅ Installer wizard branding: `sslm.png` banner + `sslmLogo.png` corner image
+- ✅ Add/Remove Programs icon via `UninstallDisplayIcon`
+- ✅ About dialog: version (read from `sslm.iss`) + contact email
+- ✅ Quit button (⏻): confirmation → `POST /api/quit` → graceful server shutdown
+- ✅ Application logos: `sslmLogo.png` (header + favicon), `sslm.png` (welcome screen), `astroNoobLogo.png` (About dialog)
+- ✅ Version source of truth: `#define AppVersion` in `installer/sslm.iss`
+- ✅ Published to GitHub Releases as `v1.0.0-beta.1`
 
 ## Domain Context
 
