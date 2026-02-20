@@ -50,7 +50,7 @@ WizardImageFile=..\public\assets\sslm.png
 WizardSmallImageFile=..\public\assets\sslmLogo.png
 WizardImageStretch=yes
 SetupIconFile=..\public\assets\sslm.ico
-UninstallDisplayIcon={app}\{#AppExeName}
+UninstallDisplayIcon={app}\sslm.ico
 
 ; Minimum Windows version: Windows 10
 MinVersion=10.0
@@ -68,6 +68,8 @@ Name: "desktopicon"; Description: "{cm:CreateDesktopIcon}"; \
 [Files]
 ; Main executable (built by "npm run build")
 Source: "..\dist\{#AppExeName}"; DestDir: "{app}"; Flags: ignoreversion
+; Application icon (used by Windows for Add/Remove Programs entry)
+Source: "..\public\assets\sslm.ico"; DestDir: "{app}"; Flags: ignoreversion
 
 ; ── Shortcuts ─────────────────────────────────────────────────────────────────
 [Icons]
