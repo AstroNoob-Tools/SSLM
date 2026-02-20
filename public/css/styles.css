@@ -78,6 +78,15 @@ body {
     font-size: 1.75rem;
 }
 
+.app-logo {
+    height: 2rem;
+    width: 2rem;
+    object-fit: contain;
+    vertical-align: middle;
+    margin-right: 0.25rem;
+    border-radius: 4px;
+}
+
 .header-controls {
     display: flex;
     align-items: center;
@@ -118,6 +127,15 @@ body {
 
 .icon-button:hover {
     background: var(--bg-tertiary);
+}
+
+.icon-button--danger {
+    color: #e05a5a;
+}
+
+.icon-button--danger:hover {
+    background: rgba(220, 53, 69, 0.2);
+    color: #ff4444;
 }
 
 /* Main Content */
@@ -168,8 +186,15 @@ body {
 }
 
 .welcome-icon {
-    font-size: 5rem;
     margin-bottom: 1.5rem;
+}
+
+.welcome-logo {
+    width: 160px;
+    height: 160px;
+    object-fit: contain;
+    border-radius: 16px;
+    filter: drop-shadow(0 4px 24px rgba(99, 102, 241, 0.35));
 }
 
 .welcome-content h2 {

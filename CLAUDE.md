@@ -1,5 +1,15 @@
 # SSLM - SeaStar Library Manager
 
+## Security Policy
+
+### CRITICAL: npm Package Security
+**⚠️ IMPORTANT: Never introduce npm packages that have known security vulnerabilities.**
+- Before adding any new npm dependency, verify it has no known CVEs or security advisories
+- Prefer well-maintained packages with active security track records
+- Avoid packages that are deprecated, abandoned, or have unresolved high/critical vulnerabilities
+- Use `npm audit` after any dependency change to check for vulnerabilities
+- If a required package has a vulnerability, find a safe alternative or implement the functionality without the dependency
+
 ## Project Overview
 
 SSLM (SeaStar Library Manager) is an application that manages astrophotography files from a SeeStar telescope device. The primary goals are to:
@@ -280,6 +290,63 @@ Use this as a reference for testing and understanding actual file organization p
 - Interactive web-based user interface
 - Progress tracking for file operations
 - Dashboard with real-time statistics
+
+## Windows Installer (Phase 4 - COMPLETE)
+
+### Overview
+SSLM ships as a self-contained Windows installer. The end user does **not** need Node.js installed — the Node.js runtime is bundled inside the executable.
+
+### Toolchain
+
+| Tool | Purpose | Location |
+|------|---------|----------|
+| `@yao-pkg/pkg` (npm dev dep) | Bundles Node.js runtime + app code into a single `sslm.exe` | `npm run build` |
+| Inno Setup 6.x (external, free) | Wraps `sslm.exe` into a Windows setup wizard | [jrsoftware.org](https://jrsoftware.org/isinfo.php) |
+
+### Build Process
+
+**Step 1 — Build the executable:**
+```bash
+npm run build
+# Produces: dist/sslm.exe (~46 MB, self-contained)
+```
+
+**Step 2 — Build the installer:**
+- Open `installer/sslm.iss` in Inno Setup Compiler and press F9
+- OR run headlessly: `"C:\Program Files (x86)\Inno Setup 6\ISCC.exe" installer\sslm.iss`
+- Produces: `installer/output/SSLM-Setup-v1.0.0.exe`
+
+### What the Installer Does
+1. Installs `sslm.exe` to `%LOCALAPPDATA%\SSLM\` (no admin/UAC required)
+2. Creates Start Menu shortcut
+3. Optionally creates Desktop shortcut (user choice during install)
+4. Registers uninstaller in Windows "Add or Remove Programs"
+5. Offers to launch the app immediately after install
+
+### Packaged vs Development Behaviour
+
+| Behaviour | Development (`npm start`) | Packaged (`sslm.exe`) |
+|-----------|--------------------------|----------------------|
+| Config location | `config/settings.json` | `%APPDATA%\SSLM\settings.json` |
+| Browser auto-open | No | Yes (1.5 s after server starts) |
+| Detection | `process.pkg` is undefined | `process.pkg` is defined |
+
+**Config in APPDATA**: When running as a packaged exe the installation folder (`%LOCALAPPDATA%\SSLM\`) is read-only for user accounts. All user settings (favourites, last paths, etc.) are therefore stored in `%APPDATA%\SSLM\settings.json`, which is fully writable. On first run the default config is written there automatically.
+
+### Key Files
+
+| File | Purpose |
+|------|---------|
+| `installer/sslm.iss` | Inno Setup script (source of truth for installer behaviour) |
+| `installer/output/` | Build output — gitignored, contains the distributable setup exe |
+| `dist/sslm.exe` | Intermediate pkg build — gitignored |
+| `server.js` (top) | `isPackaged` flag + APPDATA config logic + browser auto-open |
+| `package.json` → `pkg` section | Declares target (node20-win-x64) and bundled assets |
+
+### Updating the Version
+1. Bump `"version"` in `package.json`
+2. Update `#define AppVersion` in `installer/sslm.iss`
+3. Run `npm run build` then recompile the `.iss` script
 
 ## Development Notes
 
