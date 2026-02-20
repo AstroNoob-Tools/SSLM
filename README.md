@@ -1,4 +1,4 @@
-# SSLM — SeaStar Library Manager
+# SSLM — SeeStar Library Manager
 
 A local desktop web application for managing astrophotography files captured with a **SeeStar S50** telescope. SSLM runs entirely on your Windows PC — no internet connection required.
 
