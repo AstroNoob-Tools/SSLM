@@ -97,6 +97,18 @@ class App {
             settingsBtn.addEventListener('click', () => this.showSettings());
         }
 
+        // About button
+        const aboutBtn = document.getElementById('aboutBtn');
+        if (aboutBtn) {
+            aboutBtn.addEventListener('click', () => this.showAbout());
+        }
+
+        // Quit button
+        const quitBtn = document.getElementById('quitBtn');
+        if (quitBtn) {
+            quitBtn.addEventListener('click', () => this.quit());
+        }
+
         // Modal close
         const modalClose = document.getElementById('modalClose');
         const modalCancel = document.getElementById('modalCancel');
@@ -319,6 +331,55 @@ class App {
                 this.updateModeIndicator();
             }
         }, 'Save Settings');
+    }
+
+    // About Dialog
+    showAbout() {
+        const version = this.config?.version || '—';
+        const aboutHTML = `
+            <div style="text-align: center; padding: 0.5rem 0 1rem;">
+                <img src="/assets/astroNoobLogo.png" alt="AstroNoob" style="height: 80px; width: 80px; object-fit: contain; border-radius: 8px; margin-bottom: 0.75rem;">
+                <h2 style="margin: 0 0 0.25rem; font-size: 1.4rem;">SSLM</h2>
+                <p style="margin: 0 0 1.25rem; color: var(--text-secondary); font-size: 0.9rem;">
+                    SeaStar Library Manager
+                </p>
+                <table style="width: 100%; border-collapse: collapse; text-align: left; font-size: 0.9rem;">
+                    <tr>
+                        <td style="padding: 0.5rem 1rem; color: var(--text-secondary); width: 40%;">Version</td>
+                        <td style="padding: 0.5rem 1rem; font-weight: 600;">${version}</td>
+                    </tr>
+                    <tr style="background: rgba(255,255,255,0.03);">
+                        <td style="padding: 0.5rem 1rem; color: var(--text-secondary);">Contact</td>
+                        <td style="padding: 0.5rem 1rem;">
+                            <a href="mailto:astronoob001@gmail.com"
+                               style="color: var(--primary-color); text-decoration: none;">
+                                astronoob001@gmail.com
+                            </a>
+                        </td>
+                    </tr>
+                    <tr>
+                        <td style="padding: 0.5rem 1rem; color: var(--text-secondary);">Purpose</td>
+                        <td style="padding: 0.5rem 1rem;">Astrophotography library management for SeeStar devices</td>
+                    </tr>
+                </table>
+            </div>
+        `;
+        this.showModal('About SSLM', aboutHTML, null, 'Close');
+    }
+
+    // Quit Application
+    quit() {
+        this.showModal(
+            'Quit SSLM',
+            '<p style="margin: 0.5rem 0;">Are you sure you want to quit? The server will shut down and the browser window will no longer work.</p>',
+            async () => {
+                try {
+                    await fetch('/api/quit', { method: 'POST' });
+                } catch (_) { /* server closed before response — expected */ }
+                document.body.innerHTML = '<div style="display:flex;align-items:center;justify-content:center;height:100vh;font-family:sans-serif;color:#aaa;font-size:1.2rem;">SSLM has shut down. You can close this tab.</div>';
+            },
+            'Quit'
+        );
     }
 
     // UI Updates

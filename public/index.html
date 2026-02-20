@@ -4,6 +4,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>SSLM - SeaStar Library Manager</title>
+    <link rel="icon" type="image/png" href="/assets/sslmLogo.png">
     <link rel="stylesheet" href="/css/styles.css">
 </head>
 <body>
@@ -12,7 +13,7 @@
         <header class="app-header">
             <div class="header-content">
                 <h1>
-                    <span class="logo">🔭</span>
+                    <img src="/assets/sslmLogo.png" alt="SSLM Logo" class="app-logo">
                     SSLM
                     <span style="font-size: 0.5em; color: var(--text-secondary); font-weight: 400; margin-left: 0.5rem;">SeaStar Library Manager</span>
                 </h1>
@@ -30,6 +31,12 @@
                     <button class="icon-button" id="settingsBtn" title="Settings">
                         ⚙️
                     </button>
+                    <button class="icon-button" id="aboutBtn" title="About">
+                        ℹ️
+                    </button>
+                    <button class="icon-button icon-button--danger" id="quitBtn" title="Quit SSLM">
+                        ⏻
+                    </button>
                 </div>
             </div>
         </header>
@@ -39,7 +46,7 @@
             <!-- Welcome Screen -->
             <div class="screen active" id="welcomeScreen">
                 <div class="welcome-content">
-                    <div class="welcome-icon">🌌</div>
+                    <div class="welcome-icon"><img src="/assets/sslm.png" alt="SSLM Logo" class="welcome-logo"></div>
                     <h2>Welcome to SSLM</h2>
                     <p>Organize and manage your astrophotography collection with ease.</p>
 

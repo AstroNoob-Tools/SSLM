@@ -10,13 +10,33 @@ const ImportService = require('./src/services/importService');
 const MergeService = require('./src/services/mergeService');
 const DiskSpaceValidator = require('./src/utils/diskSpaceValidator');
 
+// Detect if running as a pkg-bundled executable
+const isPackaged = typeof process.pkg !== 'undefined';
+
+// Read version from sslm.iss (source of truth), fall back to package.json
+function readAppVersion() {
+  try {
+    const issPath = path.join(__dirname, 'installer', 'sslm.iss');
+    const issContent = fs.readFileSync(issPath, 'utf8');
+    const match = issContent.match(/#define AppVersion\s+"([^"]+)"/);
+    if (match) return match[1];
+  } catch (_) { /* file not found or unreadable */ }
+  return require('./package.json').version;
+}
+const APP_VERSION = readAppVersion();
+
 // Create Express app
 const app = express();
 const server = http.createServer(app);
 const io = socketIO(server);
 
 // Load configuration
-const configPath = path.join(__dirname, 'config', 'settings.json');
+// When packaged, store user config in %APPDATA%\SSLM (writable).
+// In development, use the local config/ directory.
+const configDir = isPackaged
+  ? path.join(process.env.APPDATA || process.env.HOME || '.', 'SSLM')
+  : path.join(__dirname, 'config');
+const configPath = path.join(configDir, 'settings.json');
 let config = {};
 
 try {
@@ -30,6 +50,15 @@ try {
     paths: { lastSourcePath: '', lastDestinationPath: '' },
     preferences: { defaultImportStrategy: 'incremental' }
   };
+  // When packaged, persist the default config to APPDATA on first run
+  if (isPackaged) {
+    try {
+      fs.ensureDirSync(configDir);
+      fs.writeJSONSync(configPath, config, { spaces: 2 });
+    } catch (err) {
+      console.warn('Could not write default config to APPDATA:', err.message);
+    }
+  }
 }
 
 // Initialize ImportService and MergeService with Socket.IO and config
@@ -60,6 +89,7 @@ app.get('/api/status', (req, res) => {
 
 app.get('/api/config', (req, res) => {
   res.json({
+    version: APP_VERSION,
     mode: config.mode,
     preferences: config.preferences,
     seestar: config.seestar,
@@ -748,6 +778,19 @@ server.listen(PORT, HOST, () => {
   console.log(`║  Mode: ${config.mode.online ? 'Online ' : 'Offline'}                               ║`);
   console.log(`╚═══════════════════════════════════════════════════╝`);
   console.log(`\nPress Ctrl+C to stop the server\n`);
+
+  // When running as a packaged exe, auto-open the browser after a short delay
+  // to ensure the server socket is fully accepting connections first.
+  if (isPackaged) {
+    const { exec } = require('child_process');
+    setTimeout(() => exec(`start http://${HOST}:${PORT}`), 1500);
+  }
+});
+
+// Quit endpoint — lets the browser trigger a graceful shutdown
+app.post('/api/quit', (req, res) => {
+  res.json({ message: 'Shutting down...' });
+  setTimeout(gracefulShutdown, 200);
 });
 
 // Graceful shutdown
