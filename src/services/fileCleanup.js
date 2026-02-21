@@ -1,7 +1,7 @@
 /**
  * File Cleanup Service
- * SSLM - SeaStar Library Manager
- * Handles cleanup operations for SeaStar directories
+ * SSLM - SeeStar Library Manager
+ * Handles cleanup operations for SeeStar directories
  */
 
 const fs = require('fs-extra');

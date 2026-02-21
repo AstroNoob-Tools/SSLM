@@ -1,4 +1,4 @@
-# SSLM - SeaStar Library Manager
+# SSLM - SeeStar Library Manager
 ## Installation Manual
 
 **Version**: 1.0.0-beta.1
@@ -267,7 +267,7 @@ npm start
 
 You should see:
 ```
-SSLM - SeaStar Library Manager
+SSLM - SeeStar Library Manager
 Server running at http://localhost:3000
 Ready for connections
 ```
@@ -304,7 +304,7 @@ The application must remain running (the terminal window must stay open) while y
    Create `Start-SSLM.bat` in the project folder:
    ```batch
    @echo off
-   echo Starting SSLM - SeaStar Library Manager...
+   echo Starting SSLM - SeeStar Library Manager...
    cd /d "%~dp0"
    npm start
    ```
@@ -771,5 +771,5 @@ The installer will be downloadable at: `https://github.com/AstroNoob-Tools/SSLM/
 
 ---
 
-*SSLM - SeaStar Library Manager v1.0.0-beta.1 — Installation Manual*
+*SSLM - SeeStar Library Manager v1.0.0-beta.1 — Installation Manual*
 *Last updated: February 2026*

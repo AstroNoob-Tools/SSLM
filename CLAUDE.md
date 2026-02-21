@@ -1,4 +1,4 @@
-# SSLM - SeaStar Library Manager
+# SSLM - SeeStar Library Manager
 
 ## Security Policy
 
@@ -12,7 +12,7 @@
 
 ## Project Overview
 
-SSLM (SeaStar Library Manager) is an application that manages astrophotography files from a SeeStar telescope device. The primary goals are to:
+SSLM (SeeStar Library Manager) is an application that manages astrophotography files from a SeeStar telescope device. The primary goals are to:
 - Import and maintain local copies of SeeStar device content (never work directly on device)
 - Organize astronomical images by celestial objects
 - Provide dashboard with collection statistics (objects, sub-frames, etc.)
@@ -373,7 +373,7 @@ The `--icon public/assets/sslm.ico` flag is included in the build script so the 
 
 The top header bar contains the following controls (left to right):
 - **Logo** (`public/assets/sslmLogo.png`) — application logo
-- **SSLM** title with "SeaStar Library Manager" subtitle
+- **SSLM** title with "SeeStar Library Manager" subtitle
 - **Mode indicator** — Offline/Online badge
 - **📊 Dashboard** button — scroll to dashboard (visible only when on dashboard)
 - **🏠 Home** button — return to welcome screen

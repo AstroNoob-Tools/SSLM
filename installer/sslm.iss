@@ -1,4 +1,4 @@
-; SSLM - SeaStar Library Manager - Inno Setup Installer Script
+; SSLM - SeeStar Library Manager - Inno Setup Installer Script
 ; Requires Inno Setup 6.x  ->  https://jrsoftware.org/isinfo.php
 ;
 ; BUILD STEPS:
@@ -8,10 +8,10 @@
 ;      "C:\Program Files (x86)\Inno Setup 6\ISCC.exe" installer\sslm.iss
 ;   3. The finished installer appears at  installer\output\SSLM-Setup-v1.0.0.exe
 
-#define AppName      "SSLM - SeaStar Library Manager"
+#define AppName      "SSLM - SeeStar Library Manager"
 #define AppShortName "SSLM"
 #define AppVersion   "1.0.0-beta.1"
-#define AppPublisher "SeaStar Library Manager"
+#define AppPublisher "SeeStar Library Manager"
 #define AppExeName   "sslm.exe"
 #define AppURL       "https://github.com/"
 
@@ -75,12 +75,13 @@ Source: "..\public\assets\sslm.ico"; DestDir: "{app}"; Flags: ignoreversion
 ; ── Shortcuts ─────────────────────────────────────────────────────────────────
 [Icons]
 ; Start Menu shortcut
-Name: "{group}\{#AppName}";         Filename: "{app}\{#AppExeName}"
+Name: "{group}\{#AppName}";           Filename: "{app}\{#AppExeName}"; \
+  IconFilename: "{app}\sslm.ico"
 ; Start Menu uninstall entry
 Name: "{group}\Uninstall {#AppName}"; Filename: "{uninstallexe}"
 ; Optional Desktop shortcut (only if user ticked the task above)
 Name: "{autodesktop}\{#AppShortName}"; Filename: "{app}\{#AppExeName}"; \
-  Tasks: desktopicon
+  IconFilename: "{app}\sslm.ico"; Tasks: desktopicon
 
 ; ── Post-install launch option ────────────────────────────────────────────────
 [Run]

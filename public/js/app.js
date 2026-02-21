@@ -1,4 +1,4 @@
-// SSLM - SeaStar Library Manager - Main Application
+// SSLM - SeeStar Library Manager - Main Application
 class App {
     constructor() {
         this.socket = null;
@@ -9,16 +9,21 @@ class App {
     }
 
     async init() {
-        console.log('SSLM - SeaStar Library Manager - Initializing...');
+        console.log('SSLM - SeeStar Library Manager - Initializing...');
+
+        // Setup event listeners first so header buttons always work,
+        // even if socket.io or config loading fails later.
+        this.setupEventListeners();
 
         // Initialize Socket.IO connection
-        this.initializeSocket();
+        try {
+            this.initializeSocket();
+        } catch (err) {
+            console.error('Socket.IO initialization failed:', err);
+        }
 
         // Load configuration
         await this.loadConfig();
-
-        // Setup event listeners
-        this.setupEventListeners();
 
         // Initialize UI
         this.updateModeIndicator();
@@ -341,7 +346,7 @@ class App {
                 <img src="/assets/astroNoobLogo.png" alt="AstroNoob" style="height: 80px; width: 80px; object-fit: contain; border-radius: 8px; margin-bottom: 0.75rem;">
                 <h2 style="margin: 0 0 0.25rem; font-size: 1.4rem;">SSLM</h2>
                 <p style="margin: 0 0 1.25rem; color: var(--text-secondary); font-size: 0.9rem;">
-                    SeaStar Library Manager
+                    SeeStar Library Manager
                 </p>
                 <table style="width: 100%; border-collapse: collapse; text-align: left; font-size: 0.9rem;">
                     <tr>
