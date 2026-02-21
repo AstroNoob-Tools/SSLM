@@ -1,4 +1,4 @@
-# SSLM - SeaStar Library Manager
+# SSLM - SeeStar Library Manager
 ## Build & Packaging Guide
 
 **Version**: 1.0.0-beta.1
@@ -519,5 +519,5 @@ Choose: **GitHub.com → HTTPS → Login with a web browser**
 
 ---
 
-*SSLM - SeaStar Library Manager v1.0.0-beta.1 — Build & Packaging Guide*
+*SSLM - SeeStar Library Manager v1.0.0-beta.1 — Build & Packaging Guide*
 *Last updated: February 2026*

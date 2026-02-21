@@ -1,4 +1,4 @@
-# SSLM — SeaStar Library Manager
+# SSLM — SeeStar Library Manager
 
 > Astrophotography library management for SeeStar telescope devices.
 

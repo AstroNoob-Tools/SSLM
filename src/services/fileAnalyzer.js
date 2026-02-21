@@ -1,6 +1,6 @@
 /**
  * File Analyzer Service
- * SSLM - SeaStar Library Manager
+ * SSLM - SeeStar Library Manager
  * Analyzes SeeStar directory structure and generates statistics
  */
 

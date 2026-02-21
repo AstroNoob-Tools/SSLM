@@ -772,7 +772,7 @@ app.set('io', io);
 // Start server
 server.listen(PORT, HOST, () => {
   console.log(`╔═══════════════════════════════════════════════════╗`);
-  console.log(`║   SSLM - SeaStar Library Manager - Running       ║`);
+  console.log(`║   SSLM - SeeStar Library Manager - Running       ║`);
   console.log(`╠═══════════════════════════════════════════════════╣`);
   console.log(`║  URL:  http://${HOST}:${PORT}                   ║`);
   console.log(`║  Mode: ${config.mode.online ? 'Online ' : 'Offline'}                               ║`);
