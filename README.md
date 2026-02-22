@@ -29,6 +29,8 @@ Download the latest installer from the **[Releases](https://github.com/AstroNoob
 - **Delete** specific imaging sessions to reclaim space
 - **Merge** multiple library copies into a single consolidated library
 - **Clean up** unnecessary preview files from sub-frame directories to save disk space
+- **Look up** cross-catalog identifiers and J2000 coordinates via the SIMBAD database (optional, Online Mode)
+- **Re-classify** objects by renaming all files and folders to a different catalog designation in one operation (Online Mode)
 
 ## What It Does NOT Do
 
@@ -78,7 +80,24 @@ Download the latest installer from the **[Releases](https://github.com/AstroNoob
 - Remove JPG/thumbnail previews from `_sub` directories (`.fit` files always kept)
 - Delete individual imaging sessions (stacked images + light frames)
 
+### Online Mode — SIMBAD Catalog Lookup & Re-Classification
+
+SSLM is fully offline by default. Clicking the **Offline / Online** badge in the header enables Online Mode.
+
+When Online Mode is active, opening any object's detail page silently queries the **SIMBAD Astronomical Database** (CDS Strasbourg) and injects:
+
+- **Also known as** — cross-catalog aliases: Messier, NGC, IC, Caldwell, Sharpless, Abell, Barnard, HD, HIP, and common names
+- **J2000 coordinates** — RA and Dec in sexagesimal format (e.g. `05h 35m 17s / −05° 23′ 28″`)
+- **Re Classify button** — rename every file and folder for the object to a different catalog designation
+
+Re-Classification renames everything in one operation — main folder, `_sub` folder, and all files within — after two confirmation dialogs. A pre-flight check ensures the target name does not already exist before anything is touched.
+
+Results are cached in memory so repeated visits cost zero additional network calls. If the object is not found in SIMBAD or you are offline, the page loads exactly as normal — no errors.
+
+**Security**: Online Mode is strictly outbound-only. SSLM sends a single lookup request to SIMBAD's TAP endpoint — nothing else. No port is opened on your machine, no external party can reach SSLM, and no data about your library or files is ever transmitted.
+
 ### Application Header
+- **Offline / Online badge** — click to toggle Online Mode; all core features remain available in either state
 - **⚙️ Settings** — configure port, SeeStar directory name, import strategy
 - **ℹ️ About** — version number and contact details
 - **⏻ Quit** — gracefully shuts down the server from the browser
