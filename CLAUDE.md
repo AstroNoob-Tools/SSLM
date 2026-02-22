@@ -23,7 +23,7 @@ SSLM (SeeStar Library Manager) is an application that manages astrophotography f
 
 | Version | Status | Date | Notes |
 |---------|--------|------|-------|
-| **v1.0.0-beta.1** | 🟡 **Current — Public Beta** | February 2026 | First public release. Windows installer available on GitHub Releases. |
+| **v1.0.0-beta.2** | 🟡 **Current — Public Beta** | February 2026 | First public release. Windows installer available on GitHub Releases. |
 
 **GitHub Releases**: https://github.com/AstroNoob-Tools/SSLM/releases
 
@@ -97,7 +97,7 @@ All five phases are complete. The application has been packaged and released as 
 - ✅ Quit button (⏻): confirmation → `POST /api/quit` → graceful server shutdown
 - ✅ Application logos: `sslmLogo.png` (header + favicon), `sslm.png` (welcome screen), `astroNoobLogo.png` (About dialog)
 - ✅ Version source of truth: `#define AppVersion` in `installer/sslm.iss`
-- ✅ Published to GitHub Releases as `v1.0.0-beta.1`
+- ✅ Published to GitHub Releases as `v1.0.0-beta.2`
 
 ## Domain Context
 
@@ -354,7 +354,7 @@ The `--icon public/assets/sslm.ico` flag is included in the build script so the 
 **Step 2 — Build the installer:**
 - Open `installer/sslm.iss` in Inno Setup Compiler and press F9
 - OR run headlessly: `"D:\Program Files (x86)\Inno Setup 6\ISCC.exe" installer\sslm.iss`
-- Produces: `installer/output/SSLM-Setup-v1.0.0-beta.1.exe`
+- Produces: `installer/output/SSLM-Setup-v1.0.0-beta.2.exe`
 
 ### What the Installer Does
 1. Installs `sslm.exe` + `sslm.ico` to `%LOCALAPPDATA%\SSLM\` (no admin/UAC required)

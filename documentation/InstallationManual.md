@@ -1,7 +1,7 @@
 # SSLM - SeeStar Library Manager
 ## Installation Manual
 
-**Version**: 1.0.0-beta.1
+**Version**: 1.0.0-beta.2
 **Date**: February 2026
 **Platform**: Windows 10 / 11
 
@@ -109,7 +109,7 @@ Git is only needed if you want to clone the repository directly or receive updat
 
 This is the easiest installation method. No Node.js or developer tools required.
 
-1. Download `SSLM-Setup-v1.0.0-beta.1.exe` (current release) from the [GitHub Releases page](https://github.com/AstroNoob-Tools/SSLM/releases)
+1. Download `SSLM-Setup-v1.0.0-beta.2.exe` (current release) from the [GitHub Releases page](https://github.com/AstroNoob-Tools/SSLM/releases)
 
 2. Run the installer — no administrator rights required
 
@@ -771,5 +771,5 @@ The installer will be downloadable at: `https://github.com/AstroNoob-Tools/SSLM/
 
 ---
 
-*SSLM - SeeStar Library Manager v1.0.0-beta.1 — Installation Manual*
+*SSLM - SeeStar Library Manager v1.0.0-beta.2 — Installation Manual*
 *Last updated: February 2026*

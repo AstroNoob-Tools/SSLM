@@ -1,7 +1,7 @@
 # SSLM - SeeStar Library Manager
 ## Build & Packaging Guide
 
-**Version**: 1.0.0-beta.1
+**Version**: 1.0.0-beta.2
 **Date**: February 2026
 **Audience**: Developers and maintainers
 
@@ -273,7 +273,7 @@ Useful for automated / scripted builds.
 ### Result
 
 ```
-installer/output/SSLM-Setup-v1.0.0-beta.1.exe
+installer/output/SSLM-Setup-v1.0.0-beta.2.exe
 ```
 
 The output filename is controlled by the `OutputBaseFilename` setting in `sslm.iss`:
@@ -311,7 +311,7 @@ When run by an end user, the installer:
 The canonical version is defined in `installer/sslm.iss`:
 
 ```ini
-#define AppVersion "1.0.0-beta.1"
+#define AppVersion "1.0.0-beta.2"
 ```
 
 At runtime, `server.js` reads this value via `readAppVersion()` and exposes it through `/api/config`. The frontend displays it in the About dialog.
@@ -519,5 +519,5 @@ Choose: **GitHub.com → HTTPS → Login with a web browser**
 
 ---
 
-*SSLM - SeeStar Library Manager v1.0.0-beta.1 — Build & Packaging Guide*
+*SSLM - SeeStar Library Manager v1.0.0-beta.2 — Build & Packaging Guide*
 *Last updated: February 2026*
