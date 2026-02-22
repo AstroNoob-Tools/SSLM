@@ -230,9 +230,12 @@ class Dashboard {
     }
 
     attachSidebarListeners() {
-        const dashboardImportBtn = document.getElementById('dashboardImportBtn');
-        if (dashboardImportBtn) {
-            dashboardImportBtn.addEventListener('click', async () => {
+        // renderSidebarHTML() is called from multiple screens (dashboard, object detail, catalog detail),
+        // creating duplicate IDs. getElementById() returns only the first match (in the hidden screen).
+        // Fix: querySelectorAll finds ALL instances; data-action-bound prevents duplicate binding.
+        document.querySelectorAll('[id="dashboardImportBtn"]:not([data-action-bound])').forEach(btn => {
+            btn.dataset.actionBound = '1';
+            btn.addEventListener('click', async () => {
                 app.showScreen('importWizardScreen');
                 if (window.importWizard) {
                     window.importWizard.currentStep = 1;
@@ -242,22 +245,22 @@ class Dashboard {
                     window.importWizard = new ImportWizard();
                 }
             });
-            dashboardImportBtn.addEventListener('mouseenter', function () { this.style.opacity = '0.9'; this.style.transform = 'translateY(-2px)'; });
-            dashboardImportBtn.addEventListener('mouseleave', function () { this.style.opacity = '1'; this.style.transform = 'translateY(0)'; });
-        }
+            btn.addEventListener('mouseenter', function () { this.style.opacity = '0.9'; this.style.transform = 'translateY(-2px)'; });
+            btn.addEventListener('mouseleave', function () { this.style.opacity = '1'; this.style.transform = 'translateY(0)'; });
+        });
 
-        const dashboardLocalBtn = document.getElementById('dashboardLocalBtn');
-        if (dashboardLocalBtn) {
-            dashboardLocalBtn.addEventListener('click', () => {
+        document.querySelectorAll('[id="dashboardLocalBtn"]:not([data-action-bound])').forEach(btn => {
+            btn.dataset.actionBound = '1';
+            btn.addEventListener('click', () => {
                 if (window.modeSelection) window.modeSelection.selectLocalMode();
             });
-            dashboardLocalBtn.addEventListener('mouseenter', function () { this.style.opacity = '0.9'; this.style.transform = 'translateY(-2px)'; });
-            dashboardLocalBtn.addEventListener('mouseleave', function () { this.style.opacity = '1'; this.style.transform = 'translateY(0)'; });
-        }
+            btn.addEventListener('mouseenter', function () { this.style.opacity = '0.9'; this.style.transform = 'translateY(-2px)'; });
+            btn.addEventListener('mouseleave', function () { this.style.opacity = '1'; this.style.transform = 'translateY(0)'; });
+        });
 
-        const dashboardMergeBtn = document.getElementById('dashboardMergeBtn');
-        if (dashboardMergeBtn) {
-            dashboardMergeBtn.addEventListener('click', async () => {
+        document.querySelectorAll('[id="dashboardMergeBtn"]:not([data-action-bound])').forEach(btn => {
+            btn.dataset.actionBound = '1';
+            btn.addEventListener('click', async () => {
                 app.showScreen('mergeWizardScreen');
                 if (window.mergeWizard) {
                     window.mergeWizard.currentStep = 1;
@@ -269,9 +272,9 @@ class Dashboard {
                     window.mergeWizard = new MergeWizard();
                 }
             });
-            dashboardMergeBtn.addEventListener('mouseenter', function () { this.style.opacity = '0.9'; this.style.transform = 'translateY(-2px)'; });
-            dashboardMergeBtn.addEventListener('mouseleave', function () { this.style.opacity = '1'; this.style.transform = 'translateY(0)'; });
-        }
+            btn.addEventListener('mouseenter', function () { this.style.opacity = '0.9'; this.style.transform = 'translateY(-2px)'; });
+            btn.addEventListener('mouseleave', function () { this.style.opacity = '1'; this.style.transform = 'translateY(0)'; });
+        });
 
         // Nav links: always navigate via the unified helper
         document.querySelectorAll('.nav-link').forEach(link => {
@@ -1191,6 +1194,178 @@ class Dashboard {
 
         // Scroll to top of page
         window.scrollTo(0, 0);
+
+        // Fetch cross-catalog aliases from CDS Sesame (online mode only)
+        this._loadObjectAliases(object.name);
+    }
+
+    async _loadObjectAliases(objectName) {
+        const section = document.getElementById('object-aliases-section');
+        if (!section) return;
+
+        // Only attempt when online mode is active
+        if (!app.config || !app.config.mode || !app.config.mode.online) return;
+
+        try {
+            const response = await fetch(`/api/catalog/aliases?name=${encodeURIComponent(objectName)}`);
+            const data = await response.json();
+
+            if (!data.success || data.offline) return;
+
+            const aliases = (data.aliases || []).filter(a => a && a.trim());
+            const hasCoords = data.ra != null && data.dec != null;
+
+            if (!aliases.length && !hasCoords) return;
+
+            // Store catalog-style aliases for the Rebrand picker (M, NGC, IC, Sh — not common names)
+            const CATALOG_PREFIXES = ['M ', 'NGC ', 'IC ', 'Sh '];
+            this._currentObjectAliases = aliases.filter(a =>
+                CATALOG_PREFIXES.some(p => a.startsWith(p))
+            );
+
+            // Format RA/Dec as HH:MM:SS / ±DD:MM:SS
+            let coordsHtml = '';
+            if (hasCoords) {
+                const ra  = this._formatRA(data.ra);
+                const dec = this._formatDec(data.dec);
+                coordsHtml = `<span class="alias-coords">📍 RA ${ra} / Dec ${dec}</span>`;
+            }
+
+            let aliasesHtml = '';
+            if (aliases.length) {
+                const badges = aliases.map(a => `<span class="alias-badge">${a}</span>`).join('');
+                aliasesHtml = `<div class="alias-badges-row">${badges}</div>`;
+            }
+
+            section.innerHTML = `
+                <p class="alias-label">Also known as</p>
+                ${aliasesHtml}
+                ${coordsHtml}
+            `;
+            section.style.display = 'block';
+
+            // Inject Rebrand button if there are alternative catalog names to pick from
+            const obj = this._currentSessionObj;
+            const pickable = (this._currentObjectAliases || []).filter(a => a !== obj?.name);
+            const rebrandDiv = document.getElementById('rebrand-action');
+            // Always clear first so toggling offline→online never produces duplicates
+            if (rebrandDiv) { rebrandDiv.innerHTML = ''; rebrandDiv.style.display = ''; }
+            if (pickable.length > 0 && rebrandDiv) {
+                const btn = document.createElement('button');
+                btn.className = 'btn rebrand-btn';
+                btn.textContent = '🔀 Re Classify';
+                btn.title = 'Rename this object to another catalog designation';
+                btn.addEventListener('click', () => this._showRebrandModal(obj));
+                rebrandDiv.appendChild(btn);
+            }
+        } catch (_) {
+            // Network failure — silently skip, object detail is unaffected
+        }
+    }
+
+    /** Convert decimal degrees RA → HH MM SS.s */
+    _formatRA(deg) {
+        const total = ((deg % 360) + 360) % 360;
+        const h = Math.floor(total / 15);
+        const rem = (total / 15 - h) * 60;
+        const m = Math.floor(rem);
+        const s = ((rem - m) * 60).toFixed(1);
+        return `${String(h).padStart(2,'0')}h ${String(m).padStart(2,'0')}m ${String(s).padStart(4,'0')}s`;
+    }
+
+    /** Convert decimal degrees Dec → ±DD MM SS */
+    _formatDec(deg) {
+        const sign = deg < 0 ? '−' : '+';
+        const abs  = Math.abs(deg);
+        const d    = Math.floor(abs);
+        const rem  = (abs - d) * 60;
+        const m    = Math.floor(rem);
+        const s    = Math.round((rem - m) * 60);
+        return `${sign}${String(d).padStart(2,'0')}° ${String(m).padStart(2,'0')}′ ${String(s).padStart(2,'0')}″`;
+    }
+
+    // ── Rebrand (rename object) ───────────────────────────────────────────────
+
+    _showRebrandModal(obj) {
+        const pickable = (this._currentObjectAliases || []).filter(a => a !== obj.name);
+
+        const optionsHtml = pickable
+            .map(a => `<button class="rebrand-option" data-name="${a}">${a}</button>`)
+            .join('');
+
+        const html = `
+            <p style="margin-bottom: 1rem; color: var(--text-secondary);">
+                Select a new catalog name for <strong>${obj.displayName}</strong>:
+            </p>
+            <div class="rebrand-options-grid">${optionsHtml}</div>
+            <p style="margin-top: 1.25rem; font-size: 0.8rem; color: var(--text-muted);">
+                ⚠️ All files and folders will be permanently renamed on disk.
+            </p>
+        `;
+
+        app.showModal('Rebrand Object', html);
+
+        // Attach click handlers after modal renders
+        setTimeout(() => {
+            document.querySelectorAll('.rebrand-option').forEach(btn => {
+                btn.addEventListener('click', () => {
+                    const toName = btn.dataset.name;
+                    app.hideModal();
+                    setTimeout(() => this._confirmRebrand(obj, toName), 150);
+                });
+            });
+        }, 50);
+    }
+
+    _confirmRebrand(obj, toName) {
+        const html = `
+            <p>Rename <strong>${obj.displayName}</strong> → <strong>${toName}</strong>?</p>
+            <p style="color: var(--warning-color); margin-top: 0.75rem; font-size: 0.875rem;">
+                ⚠️ All matching files and folders will be permanently renamed. This cannot be automatically undone.
+            </p>
+        `;
+        app.showModal('Confirm Rename', html, () => this._executeRebrand(obj, toName), 'Rename →');
+    }
+
+    async _executeRebrand(obj, toName) {
+        try {
+            const response = await fetch('/api/rename-object', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    libraryPath: this.data.path,
+                    fromName: obj.name,
+                    toName
+                })
+            });
+            const result = await response.json();
+
+            if (!result.success) {
+                app.showModal('Rename Failed',
+                    `<p style="color: var(--warning-color);">❌ ${result.error || result.errors?.join('<br>')}</p>`
+                );
+                return;
+            }
+
+            // Show brief success, then refresh dashboard and open the renamed object
+            app.showModal('Rename Complete', `
+                <p>✅ <strong>${obj.displayName}</strong> has been renamed to <strong>${toName}</strong>.</p>
+                <p style="color: var(--text-secondary); margin-top: 0.5rem; font-size: 0.875rem;">
+                    ${result.renamedFolders.length} folder(s) · ${result.renamedFiles.length} file(s) renamed.
+                </p>
+            `);
+
+            await this.refreshDashboard();
+            setTimeout(() => {
+                app.hideModal();
+                this.showObjectDetail(toName);
+            }, 1500);
+
+        } catch (err) {
+            app.showModal('Rename Failed',
+                `<p style="color: var(--warning-color);">❌ ${err.message}</p>`
+            );
+        }
     }
 
     renderObjectDetail(obj) {
@@ -1228,8 +1403,9 @@ class Dashboard {
                             <p style="color: var(--text-secondary); font-size: 1.125rem;">
                                 Catalog: <strong>${obj.catalog}</strong> ${obj.catalogNumber ? `· Number: <strong>${obj.catalogNumber}</strong>` : ''}
                             </p>
+                            <div id="object-aliases-section" class="alias-section" style="display:none;"></div>
                         </div>
-                        <div style="text-align: right;">
+                        <div style="text-align: right; display: flex; flex-direction: column; gap: 0.75rem; align-items: flex-end;">
                             ${obj.hasSubFrames && obj.subFolder && obj.subFolder.files.filter(f => !f.endsWith('.fit')).length > 0 ? `
                                 <button class="cleanup-object-btn" data-object-name="${obj.name}"
                                         style="background: var(--warning-color); color: white; border: none;
@@ -1240,6 +1416,7 @@ class Dashboard {
                                     🧹 Clean Up Sub-Frames
                                 </button>
                             ` : ''}
+                            <div id="rebrand-action"></div>
                         </div>
                     </div>
                 </div>

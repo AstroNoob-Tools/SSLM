@@ -9,6 +9,7 @@ const FileCleanup = require('./src/services/fileCleanup');
 const ImportService = require('./src/services/importService');
 const MergeService = require('./src/services/mergeService');
 const DiskSpaceValidator = require('./src/utils/diskSpaceValidator');
+const FileRenamer = require('./src/utils/fileRenamer');
 
 // Detect if running as a pkg-bundled executable
 const isPackaged = typeof process.pkg !== 'undefined';
@@ -60,6 +61,9 @@ try {
     }
   }
 }
+
+// Always start in offline mode — user must explicitly enable online features each session
+config.mode.online = false;
 
 // Initialize ImportService and MergeService with Socket.IO and config
 const importService = new ImportService(io, config);
@@ -749,6 +753,136 @@ app.post('/api/merge/validate', async (req, res) => {
   } catch (error) {
     console.error('Error starting merge validation:', error);
     res.status(500).json({ success: false, error: error.message });
+  }
+});
+
+// ─── Object Rename ───────────────────────────────────────────────────────────
+app.post('/api/rename-object', async (req, res) => {
+  try {
+    const { libraryPath, fromName, toName } = req.body;
+
+    if (!libraryPath || !fromName || !toName) {
+      return res.status(400).json({
+        success: false,
+        error: 'libraryPath, fromName and toName are required'
+      });
+    }
+
+    console.log(`Renaming object: "${fromName}" → "${toName}" in ${libraryPath}`);
+    const result = await FileRenamer.renameObject(libraryPath, fromName, toName);
+
+    if (result.success) {
+      console.log(`Rename complete: ${result.renamedFolders.length} folder(s), ${result.renamedFiles.length} file(s)`);
+    } else {
+      console.warn(`Rename failed: ${result.errors?.join('; ') || 'unknown error'}`);
+    }
+
+    res.json(result);
+  } catch (error) {
+    console.error('Error during object rename:', error);
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
+// ─── Catalog Aliases — SIMBAD TAP service ────────────────────────────────────
+// In-memory cache: normalized object name → resolved result (lives for process lifetime)
+const aliasCache = new Map();
+
+app.get('/api/catalog/aliases', async (req, res) => {
+  // This endpoint requires Online mode
+  if (!config.mode.online) {
+    return res.json({ success: false, offline: true, aliases: [], message: 'Online mode required' });
+  }
+
+  const { name } = req.query;
+  if (!name) {
+    return res.status(400).json({ success: false, error: 'name parameter required' });
+  }
+
+  // Normalize: strip local suffixes only — SIMBAD stores identifiers with spaces ("M 27", "NGC 6853")
+  const normalized = name
+    .replace(/_(mosaic|sub)\b.*/i, '')
+    .trim();
+
+  // Return cached result if available
+  if (aliasCache.has(normalized)) {
+    return res.json({ success: true, cached: true, ...aliasCache.get(normalized) });
+  }
+
+  try {
+    // SIMBAD TAP ADQL query: join ident to itself to get all aliases + coordinates
+    // Single-quote escaping for ADQL safety
+    const safeName = normalized.replace(/'/g, "''");
+    const adql = `SELECT b.main_id, id2.id, b.ra, b.dec `
+               + `FROM ident AS id1 JOIN ident AS id2 USING(oidref) `
+               + `JOIN basic AS b ON b.oid = id1.oidref `
+               + `WHERE id1.id = '${safeName}'`;
+
+    const simbadUrl = `https://simbad.cds.unistra.fr/simbad/sim-tap/sync`
+                    + `?request=doQuery&lang=adql&format=json`
+                    + `&query=${encodeURIComponent(adql)}`;
+
+    const response = await fetch(simbadUrl, { signal: AbortSignal.timeout(10000) });
+
+    if (!response.ok) {
+      return res.json({ success: false, error: `SIMBAD returned HTTP ${response.status}`, aliases: [] });
+    }
+
+    const text = await response.text();
+    let data;
+    try {
+      data = JSON.parse(text);
+    } catch {
+      console.warn(`SIMBAD TAP returned non-JSON for "${normalized}": ${text.substring(0, 120)}`);
+      return res.json({ success: false, error: 'Unexpected response format from SIMBAD', aliases: [] });
+    }
+
+    // SIMBAD TAP JSON format: { metadata: [{name, datatype, ...}], data: [[row values], ...] }
+    // Column order matches the SELECT: main_id(0), id(1), ra(2), dec(3)
+    const rows = data.data || [];
+
+    if (!rows.length) {
+      console.log(`SIMBAD: no result for "${normalized}"`);
+      const result = { aliases: [], mainId: null, ra: null, dec: null };
+      aliasCache.set(normalized, result);
+      return res.json({ success: true, cached: false, notFound: true, ...result });
+    }
+
+    const mainId = rows[0][0] || null;
+    const ra     = rows[0][2] ?? null;
+    const dec    = rows[0][3] ?? null;
+
+    // Collect all raw identifiers from column 1 (deduplicated)
+    const seen = new Set();
+    const allIds = [];
+    for (const row of rows) {
+      const id = row[1];
+      if (id && !seen.has(id)) { seen.add(id); allIds.push(id); }
+    }
+
+    // Curate: keep only the common name + major catalog identifiers
+    const aliases = [];
+
+    // Common names — SIMBAD stores these with a "NAME " prefix (there can be several)
+    for (const nameEntry of allIds.filter(a => /^NAME\s+/i.test(a))) {
+      aliases.push(nameEntry.replace(/^NAME\s+/i, '').trim());
+    }
+
+    // Major catalog identifiers in display-priority order
+    // Deep-sky: Messier, NGC, IC, Caldwell, Sharpless, Abell, Barnard
+    // Stars:    Henry Draper, Hipparcos
+    for (const prefix of ['M ', 'NGC ', 'IC ', 'C ', 'Sh ', 'Abell ', 'B ', 'HD ', 'HIP ']) {
+      const match = allIds.find(a => a.startsWith(prefix));
+      if (match) aliases.push(match);
+    }
+
+    const result = { aliases, mainId, ra, dec };
+    aliasCache.set(normalized, result);
+    console.log(`SIMBAD resolved "${normalized}" (mainId: ${mainId}): ${aliases.length} aliases`);
+    res.json({ success: true, cached: false, ...result });
+  } catch (error) {
+    console.error('SIMBAD TAP query failed:', error.message);
+    res.json({ success: false, error: error.message, aliases: [] });
   }
 });
 

@@ -9,6 +9,7 @@ class ModeSelection {
 
     init() {
         console.log('ModeSelection module loaded');
+        window.modeSelection = this;
 
         // Mode selection button event listeners
         const importModeBtn = document.getElementById('importModeBtn');
