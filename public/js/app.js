@@ -28,6 +28,13 @@ class App {
         // Initialize UI
         this.updateModeIndicator();
 
+        // Make the mode badge in the header a live toggle
+        const modeIndicator = document.getElementById('modeIndicator');
+        if (modeIndicator) {
+            modeIndicator.title = 'Click to toggle Online / Offline mode';
+            modeIndicator.addEventListener('click', () => this.toggleOnlineMode());
+        }
+
         console.log('Application ready!');
     }
 
@@ -399,6 +406,27 @@ class App {
             } else {
                 indicator.classList.remove('online');
                 text.textContent = 'Offline';
+            }
+        }
+    }
+
+    async toggleOnlineMode() {
+        this.config.mode.online = !this.config.mode.online;
+        this.updateModeIndicator();
+        await this.saveConfig({ mode: { online: this.config.mode.online } });
+
+        // Refresh the object detail screen if it is currently visible
+        if (this.currentScreen === 'objectDetail' && window.dashboard) {
+            const obj = window.dashboard._currentSessionObj;
+            const section = document.getElementById('object-aliases-section');
+            if (this.config.mode.online) {
+                // Went online — fetch aliases now
+                if (obj) window.dashboard._loadObjectAliases(obj.name);
+            } else {
+                // Went offline — hide the aliases section and Rebrand button (preserve content)
+                if (section) section.style.display = 'none';
+                const rebrandDiv = document.getElementById('rebrand-action');
+                if (rebrandDiv) rebrandDiv.style.display = 'none';
             }
         }
     }
