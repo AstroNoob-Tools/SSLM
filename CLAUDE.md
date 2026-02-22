@@ -29,7 +29,7 @@ SSLM (SeeStar Library Manager) is an application that manages astrophotography f
 
 ### Current Development Phase
 
-All four phases are complete. The application has been packaged and released as a self-contained Windows installer.
+Phases 1–4 are complete. The application has been packaged and released as a self-contained Windows installer. Phase 5 is now in progress.
 
 **Phase 1 - COMPLETE**: Initial setup workflow and dashboard implementation
 - ✅ User selection: Import from SeeStar or use existing local copy
@@ -70,6 +70,17 @@ All four phases are complete. The application has been packaged and released as 
 - ✅ Expurged mode: selectively skip non-.fit files from `_sub` directories during merge
 - ✅ Continuous merge progress feedback (immediate start event + per-chunk updates)
 - ✅ Step 4 footer button is "Start Merge →" — no more ambiguous dual-button confusion
+
+**Phase 5 - IN PROGRESS**: Multi-catalog astronomical object lookup
+- Query the CDS Sesame name resolver (cdsweb.u-strasbg.fr) to retrieve cross-catalog identifiers for each object
+- Display all known aliases on the object detail page (e.g., "M 16" → also NGC 6611, Eagle Nebula)
+- Include J2000 equatorial coordinates (RA/Dec) returned by Sesame as a bonus metadata field
+- Feature is gated behind the existing Online/Offline mode toggle — gracefully absent when offline
+- Use native `fetch` on both backend and frontend — no new npm dependencies
+- Backend proxy endpoint `GET /api/catalog/aliases?name=` to avoid CORS issues from the browser
+- In-memory cache (Map) on the server to avoid redundant Sesame queries within a session
+- Normalize local object names before querying (strip `_mosaic`, `_sub` suffixes, handle spaces)
+- Graceful degradation: if Sesame is unreachable or returns no result, object detail page is unaffected
 
 **Phase 4 - COMPLETE**: Windows installer & application branding
 - ✅ Self-contained `sslm.exe` built with `@yao-pkg/pkg` (Node.js runtime bundled)
