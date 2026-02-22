@@ -417,6 +417,8 @@ When **Online Mode** is active (see [Online Mode & Catalog Lookup](#online-mode-
 
 If the object is not recognised by SIMBAD, or if the network is unavailable, these items are silently omitted — the detail page is otherwise unaffected.
 
+When aliases are available, a **Re Classify** button also appears in the top-right corner of the header. See [Online Mode & Catalog Lookup — Re-Classification](#re-classification) for details.
+
 ### Summary Cards
 
 | Card | Description |
@@ -728,6 +730,41 @@ Lookups are cached in memory for the duration of the session. Revisiting the sam
 
 If the SIMBAD service is unreachable, or the object name is not found in the database, the "Also known as" and J2000 sections are simply not shown. No error message is displayed and the rest of the Object Detail page is unaffected.
 
+### Re-Classification
+
+When SIMBAD returns at least one alias for the current object, a **Re Classify** button appears in the top-right corner of the Object Detail header. This allows you to permanently rename the object across your entire library to any of its alternative catalog designations.
+
+#### How to Re-Classify an Object
+
+1. Open the **Object Detail View** for the object
+2. Enable **Online Mode** (click the badge in the header if not already online)
+3. Wait for the "Also known as" section to appear
+4. Click the **Re Classify** button (top-right of the header)
+5. A dialog shows all available alternative names — click the one you want
+6. A confirmation dialog appears, warning that all files and folders will be permanently renamed
+7. Click **Rename** to proceed
+
+#### What Gets Renamed
+
+SSLM renames every file and folder associated with the object in one operation:
+
+| Before | After (example: M 42 → NGC 1976) |
+|--------|----------------------------------|
+| `M 42/` | `NGC 1976/` |
+| `M 42_sub/` | `NGC 1976_sub/` |
+| `M 42_mosaic/` | `NGC 1976_mosaic/` |
+| `Stacked_210_M 42_30.0s_IRCUT_....fit` | `Stacked_210_NGC 1976_30.0s_IRCUT_....fit` |
+| All other files inside those folders | Renamed to match |
+
+#### Safety
+
+- Pre-flight validation confirms the target name does not already exist in the library before any changes are made
+- Files are renamed before folders to prevent mid-operation inconsistencies
+- Any individual errors are collected and reported at the end — the operation does not stop silently
+- The dashboard refreshes automatically on completion
+
+> **Warning**: Re-classification is a permanent file system operation. There is no automatic undo. Ensure you have selected the correct target name before confirming.
+
 ---
 
 ## Favourites
@@ -777,6 +814,10 @@ When the same file (same relative path) exists in multiple source libraries, SSL
 ### How is integration time calculated?
 
 Integration time is calculated from stacked image filenames. Each stacked image filename contains the number of stacked frames (e.g., `Stacked_210_...`) and the exposure per frame (e.g., `30.0s`). Integration time = frames × exposure time. For example, 210 frames × 30 seconds = 6,300 seconds = 1 hour 45 minutes.
+
+### Can I rename an object to a different catalog designation?
+
+Yes, using the **Re-Classification** feature. Enable Online Mode, open the Object Detail page for the object, and click the **Re Classify** button that appears when SIMBAD returns aliases. Select the new name and confirm — SSLM renames every file and folder in the library that belongs to that object. The operation is permanent and cannot be automatically undone, so review your selection carefully before confirming.
 
 ### What does Online Mode do?
 

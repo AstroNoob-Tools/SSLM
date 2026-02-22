@@ -368,3 +368,71 @@ The "Also known as" section is injected into the Object Detail header immediatel
 2. The API returns at least one alias
 
 J2000 coordinates are shown in a separate line below the aliases, only when valid RA/Dec values are returned.
+
+---
+
+## 10. Object Re-Classification (File Renamer)
+
+Re-Classification allows the user to rename an astronomical object to an alternative catalog designation, with SSLM automatically renaming every associated file and folder across the library.
+
+### Trigger Condition
+
+The **Re Classify** button is rendered in the Object Detail header only when:
+1. Online Mode is active (`app.isOnline === true`)
+2. The SIMBAD alias lookup returned at least one identifier different from the current object name
+
+### API Endpoint
+
+```
+POST /api/rename-object
+```
+
+Request body:
+```json
+{ "libraryPath": "H:/SeeStar Library", "fromName": "M 42", "toName": "NGC 1976" }
+```
+
+Response:
+```json
+{ "success": true, "renamedFolders": 3, "renamedFiles": 47, "errors": [], "newName": "NGC 1976" }
+```
+
+### Backend: `FileRenamer` (`src/utils/fileRenamer.js`)
+
+The rename is executed in two phases to avoid filesystem conflicts:
+
+**Phase A — Rename files inside folders**
+
+For each directory related to the object (main folder, `_sub`, `_mosaic`, and any numbered variants), all files whose name contains the old object name are renamed to use the new name:
+
+```
+Stacked_210_M 42_30.0s_IRCUT_20250822-231258.fit
+→ Stacked_210_NGC 1976_30.0s_IRCUT_20250822-231258.fit
+```
+
+**Phase B — Rename the directories themselves**
+
+After all files within them have been renamed:
+```
+M 42/       → NGC 1976/
+M 42_sub/   → NGC 1976_sub/
+M 42_mosaic → NGC 1976_mosaic/
+```
+
+### Safety Mechanisms
+
+| Check | Behaviour |
+|-------|-----------|
+| Pre-flight: source exists | Aborts if `fromName` directory not found |
+| Pre-flight: target conflict | Aborts if `toName` directory already exists |
+| File-before-folder ordering | Prevents mid-operation orphaned folders |
+| Per-file error collection | Errors reported at end; operation continues on non-fatal failures |
+| No silent failures | All errors returned in the response `errors` array |
+
+### Frontend Flow
+
+1. User clicks **Re Classify** button → modal opens showing alias options as selectable buttons
+2. User selects a name → second confirmation modal warns of permanent rename, shows `fromName → toName`
+3. User confirms → `POST /api/rename-object` called
+4. On success: success modal shown with renamed folder/file counts, closes automatically after 1.5 s
+5. Dashboard data refreshed; Object Detail re-rendered with the new name
