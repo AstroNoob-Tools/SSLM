@@ -21,8 +21,9 @@
 11. [Cleanup Operations](#cleanup-operations)
 12. [Image Viewer](#image-viewer)
 13. [Navigation & Tips](#navigation--tips)
-14. [Favorites](#favorites)
-15. [Frequently Asked Questions](#frequently-asked-questions)
+14. [Online Mode & Catalog Lookup](#online-mode--catalog-lookup)
+15. [Favorites](#favorites)
+16. [Frequently Asked Questions](#frequently-asked-questions)
 
 ---
 
@@ -409,6 +410,13 @@ Clicking an object name opens a detailed view with comprehensive information abo
 - Sub-frame presence indicator
 - Quick statistics (integration time, light frames, sessions, total size)
 
+When **Online Mode** is active (see [Online Mode & Catalog Lookup](#online-mode--catalog-lookup)), two additional items appear below the catalog line:
+
+- **Also known as**: A list of alternative catalog designations for the object, retrieved from the SIMBAD astronomical database (e.g., an object known as `NGC 1976` may also show `M 42`, `Orion Nebula`). Includes major catalogs: Messier (M), NGC, IC, Caldwell (C), Sharpless (Sh), Abell, Barnard (B), Henry Draper (HD), Hipparcos (HIP).
+- **J2000 Coordinates**: Right Ascension and Declination in standard sexagesimal notation (e.g., `RA 05h 35m 17s / Dec −05° 23′ 28″`).
+
+If the object is not recognised by SIMBAD, or if the network is unavailable, these items are silently omitted — the detail page is otherwise unaffected.
+
 ### Summary Cards
 
 | Card | Description |
@@ -671,6 +679,57 @@ The Dashboard button (📊) is context-aware:
 
 ---
 
+## Online Mode & Catalog Lookup
+
+SSLM has two operating modes:
+
+| Mode | Badge Colour | Behaviour |
+|------|-------------|-----------|
+| **Offline** (default) | Grey | All core features work with no internet. SIMBAD lookup is disabled. |
+| **Online** | Green | Core features plus live astronomical cross-reference lookup from the SIMBAD database. |
+
+### Toggling Online / Offline Mode
+
+Click the **Offline** or **Online** badge in the application header at any time to switch modes instantly. No restart is required. The badge changes colour to reflect the current state.
+
+### What Online Mode Adds
+
+When Online Mode is active, the **Object Detail View** gains two additional items in the header:
+
+#### Also Known As
+
+A list of alternative catalog designations for the object, sourced from the [SIMBAD Astronomical Database](https://simbad.cds.unistra.fr/simbad/). For example, `M 42` may also appear as `NGC 1976` and `Orion Nebula`.
+
+Catalogs included in the lookup:
+
+| Catalog | Prefix |
+|---------|--------|
+| Messier | M |
+| New General Catalogue | NGC |
+| Index Catalogue | IC |
+| Caldwell | C |
+| Sharpless | Sh |
+| Abell | Abell |
+| Barnard | B |
+| Henry Draper | HD |
+| Hipparcos | HIP |
+
+#### J2000 Coordinates
+
+The object's J2000 equatorial coordinates in sexagesimal format:
+- **RA**: Right Ascension, e.g., `05h 35m 17s`
+- **Dec**: Declination, e.g., `−05° 23′ 28″`
+
+### Caching
+
+Lookups are cached in memory for the duration of the session. Revisiting the same object's detail page does not trigger a new network request.
+
+### Graceful Degradation
+
+If the SIMBAD service is unreachable, or the object name is not found in the database, the "Also known as" and J2000 sections are simply not shown. No error message is displayed and the rest of the Object Detail page is unaffected.
+
+---
+
 ## Favourites
 
 Favourites allow you to quickly access folders you use frequently, without browsing every time.
@@ -718,6 +777,14 @@ When the same file (same relative path) exists in multiple source libraries, SSL
 ### How is integration time calculated?
 
 Integration time is calculated from stacked image filenames. Each stacked image filename contains the number of stacked frames (e.g., `Stacked_210_...`) and the exposure per frame (e.g., `30.0s`). Integration time = frames × exposure time. For example, 210 frames × 30 seconds = 6,300 seconds = 1 hour 45 minutes.
+
+### What does Online Mode do?
+
+When Online Mode is active, SSLM queries the [SIMBAD Astronomical Database](https://simbad.cds.unistra.fr/simbad/) each time you open an Object Detail page. It retrieves:
+- **Also known as**: alternative catalog identifiers for the object (Messier, NGC, IC, Caldwell, Sharpless, etc.)
+- **J2000 Coordinates**: Right Ascension and Declination in sexagesimal format
+
+Click the Online/Offline badge in the header to toggle this feature at any time. Offline Mode (the default) disables the lookup — useful when you have no internet access or simply don't need the extra data. All core library management features work in both modes.
 
 ### What is Expurged mode?
 

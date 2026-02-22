@@ -246,6 +246,19 @@ The About dialog is opened via the ℹ️ button in the application header. It i
 - Contact email as a `mailto:` link (`astronoob001@gmail.com`)
 - Purpose description
 
+### Online / Offline Mode Toggle
+
+SSLM operates in two modes:
+
+| Mode | Default | Effect |
+|------|---------|--------|
+| **Offline** | Yes | All core features active; SIMBAD lookup disabled |
+| **Online** | No | Core features + live SIMBAD catalog cross-reference |
+
+The current mode is shown as a badge in the application header. **Clicking the badge toggles the mode instantly** — no restart or reload required. The toggle state is held in memory (`app.isOnline`) and consulted by any feature gated behind it.
+
+---
+
 ### Quit Button
 
 The ⏻ Quit button provides a graceful in-browser shutdown mechanism:
@@ -275,3 +288,83 @@ The ⏻ Quit button provides a graceful in-browser shutdown mechanism:
 | `public/assets/sslm.png` | Welcome screen hero image (160×160 px with `drop-shadow`) |
 | `public/assets/astroNoobLogo.png` | About dialog (80×80 px) |
 | `public/assets/sslm.ico` | Windows exe icon (embedded) + installer icon |
+
+---
+
+## 9. Online Mode — SIMBAD Catalog Lookup
+
+When the user enables Online Mode, SSLM queries the [SIMBAD TAP service](https://simbad.cds.unistra.fr/simbad/) to enrich the Object Detail page with cross-catalog identifiers and J2000 coordinates.
+
+### Backend Proxy Endpoint
+
+```
+GET /api/catalog/aliases?name=<objectName>
+```
+
+The frontend never calls SIMBAD directly. All requests go through this server-side proxy, which:
+1. Strips local suffixes (`_mosaic`, `_sub`, and trailing numbers like ` 37`) from the object name before querying
+2. Issues an ADQL query to the SIMBAD TAP service via native `fetch` (no new npm dependencies)
+3. Curates and returns the results as JSON
+
+**No new npm packages** are introduced for this feature — native Node.js `fetch` (available from Node 18) is used throughout.
+
+### ADQL Query
+
+The query performs a self-join on the SIMBAD `ident` table to collect all cross-catalog identifiers for the object, and joins to the `basic` table for J2000 coordinates:
+
+```sql
+SELECT i2.id, b.ra, b.dec
+FROM ident i1
+JOIN ident i2 ON i1.oidref = i2.oidref
+JOIN basic b ON b.oid = i1.oidref
+WHERE i1.id = '<objectName>'
+```
+
+### Response Curation
+
+Raw SIMBAD identifiers are filtered to a curated set of major catalogs:
+
+| Catalog | Prefix kept |
+|---------|------------|
+| Messier | `M ` |
+| New General Catalogue | `NGC ` |
+| Index Catalogue | `IC ` |
+| Caldwell | `C ` |
+| Sharpless | `Sh ` |
+| Abell | `Abell ` |
+| Barnard | `B ` |
+| Henry Draper | `HD ` |
+| Hipparcos | `HIP ` |
+| Common name | `NAME ` prefix stripped |
+
+The object's own name is excluded from the "Also known as" list (only aliases are shown).
+
+### Coordinate Formatting
+
+Raw decimal RA/Dec values from SIMBAD are converted to standard sexagesimal notation:
+- **RA**: `HH MM SS` → displayed as `HHh MMm SSs`
+- **Dec**: `±DD.dddd°` → displayed as `±DD° MM′ SS″`
+
+### Server-Side In-Memory Cache
+
+Repeated visits to the same object's detail page cost zero network calls. Results are stored in a `Map` keyed by the normalised object name:
+
+```js
+const aliasCache = new Map();  // key: normalised name, value: { aliases, ra, dec }
+```
+
+The cache lives for the duration of the server process. It is not persisted to disk.
+
+### Gating & Graceful Degradation
+
+- The frontend only calls `/api/catalog/aliases` when `app.isOnline === true`
+- If the SIMBAD service returns no results, or the HTTP request fails, the endpoint returns `{ aliases: [], ra: null, dec: null }`
+- The frontend treats an empty response silently — no error is shown and the Object Detail page renders normally without the "Also known as" section
+
+### Frontend Integration
+
+The "Also known as" section is injected into the Object Detail header immediately below the catalog line. It is rendered only when:
+1. Online Mode is active (`app.isOnline === true`)
+2. The API returns at least one alias
+
+J2000 coordinates are shown in a separate line below the aliases, only when valid RA/Dec values are returned.
