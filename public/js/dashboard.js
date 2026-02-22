@@ -1253,7 +1253,7 @@ class Dashboard {
             if (pickable.length > 0 && rebrandDiv) {
                 const btn = document.createElement('button');
                 btn.className = 'btn rebrand-btn';
-                btn.textContent = '🔀 Re Classify';
+                btn.textContent = 'Re Classify';
                 btn.title = 'Rename this object to another catalog designation';
                 btn.addEventListener('click', () => this._showRebrandModal(obj));
                 rebrandDiv.appendChild(btn);
