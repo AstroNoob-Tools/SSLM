@@ -427,13 +427,94 @@ The frontend displays the version in the About dialog (`app.config.version`).
 3. Run `npm run build` then recompile the `.iss` script
 
 ### Publishing a Release to GitHub
-See `notes/HOW_TO_RELEASE.md` for the full step-by-step checklist. Summary:
-1. `npm run build` → produces `dist/sslm.exe`
-2. Compile `sslm.iss` in Inno Setup → produces `installer/output/SSLM-Setup-vX.X.X.exe`
-3. Commit and push source code
-4. `gh release create vX.X.X "installer/output/SSLM-Setup-vX.X.X.exe" --title "SSLM vX.X.X" --notes "..." --prerelease`
-- Requires `gh auth login` on first use
-- Run as a **single line** in CMD/PowerShell (no `\` line continuation)
+
+#### Prerequisites
+- `gh` CLI installed and authenticated (`gh auth login`)
+- Inno Setup 6.x installed at `D:\Program Files (x86)\Inno Setup 6\`
+
+#### Step 1 — Bump the version
+
+Update the version number in **two places**:
+1. `installer/sslm.iss` → `#define AppVersion "x.x.x"` ← **source of truth**
+2. `package.json` → `"version": "x.x.x"` ← keep in sync
+
+Also update the footer in `public/index.html`:
+```
+<span>SSLM - SeeStar Library Manager vx.x.x</span>
+```
+
+#### Step 2 — Build the exe
+
+Run from the project root:
+```
+npm run build
+```
+Produces: `dist/sslm.exe` (~46 MB, Node.js runtime bundled, icon embedded)
+
+#### Step 3 — Build the installer
+
+**Option A — GUI**: Open `installer/sslm.iss` in Inno Setup Compiler and press **F9**
+
+**Option B — Headless** (run from project root):
+```
+"D:\Program Files (x86)\Inno Setup 6\ISCC.exe" installer\sslm.iss
+```
+Produces: `installer/output/SSLM-Setup-vX.X.X.exe`
+
+#### Step 4 — Test the installer
+
+1. Run `installer/output/SSLM-Setup-vX.X.X.exe`
+2. Install to default location (`%LOCALAPPDATA%\SSLM\`)
+3. Verify the app launches and opens the browser automatically
+4. Confirm the version shown in the About dialog matches the new version
+5. Uninstall cleanly via Add/Remove Programs
+
+#### Step 5 — Commit & push source code
+
+```
+git add installer/sslm.iss package.json public/index.html
+git commit -m "vX.X.X — description of changes"
+git push origin main
+```
+> `dist/` and `installer/output/` are gitignored — only source code is committed.
+
+#### Step 6 — Authenticate gh (first time only)
+
+```
+gh auth login
+```
+Choose: GitHub.com → HTTPS → Login with a web browser
+
+#### Step 7 — Create the GitHub Release
+
+Run as a **single line** in CMD or PowerShell (no line breaks):
+
+**Pre-release (beta):**
+```
+gh release create vX.X.X "installer/output/SSLM-Setup-vX.X.X.exe" --title "SSLM vX.X.X" --notes "Release notes here." --prerelease
+```
+
+**Stable release:**
+```
+gh release create vX.X.X "installer/output/SSLM-Setup-vX.X.X.exe" --title "SSLM vX.X.X" --notes "Release notes here."
+```
+
+The installer will be publicly downloadable at `https://github.com/AstroNoob-Tools/SSLM/releases`.
+
+#### Notes
+- `dist/` and `installer/output/` are gitignored — only source is committed
+- The installer exe is attached directly to the GitHub Release as a downloadable asset
+- User settings in `%APPDATA%\SSLM\` survive uninstall/reinstall (intentional)
+- The canonical version is defined in `installer/sslm.iss` — `server.js` reads it at runtime via `readAppVersion()`
+
+## Git & Commit Convention
+
+**Never include `Co-Authored-By:` lines in commit messages.** Commit messages should be plain and concise — no authorship footers, no AI attribution lines.
+
+Example commit format:
+```
+vX.X.X — short description of what changed
+```
 
 ## Development Notes
 
