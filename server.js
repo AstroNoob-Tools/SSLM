@@ -473,15 +473,16 @@ app.get('/api/cleanup/subframe-info', async (req, res) => {
 // Delete Session Files
 app.post('/api/cleanup/session', async (req, res) => {
   try {
-    const { mainFolderPath, subFolderPath, mainFiles, subFiles } = req.body;
+    const { mainFolderPath, mainFiles, subFiles } = req.body;
 
     if (!mainFolderPath || !mainFiles) {
       return res.status(400).json({ success: false, error: 'mainFolderPath and mainFiles are required' });
     }
 
+    // subFiles is an array of { folder, file } objects — each entry carries its own
+    // folder path, supporting files from both _sub (Eq) and -sub (Alt/Az) directories.
     const result = await FileCleanup.deleteSessionFiles({
       mainFolderPath,
-      subFolderPath,
       mainFiles,
       subFiles: subFiles || []
     });

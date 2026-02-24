@@ -374,17 +374,35 @@ class Dashboard {
         `;
     }
 
-    hasSubFrameCleanup(objects) {
-        const objectsWithSubFrames = objects.filter(obj => obj.hasSubFrames);
-        if (objectsWithSubFrames.length === 0) return false;
+    // Returns all sub-folders for an object (Eq and/or Alt/Az), with legacy fallback.
+    _getSubFolders(obj) {
+        const sfs = [obj.subFolderEq, obj.subFolderAltAz].filter(Boolean);
+        if (sfs.length === 0 && obj.subFolder) sfs.push(obj.subFolder);
+        return sfs;
+    }
 
-        for (const obj of objectsWithSubFrames) {
-            if (obj.subFolder) {
-                const nonFitFiles = obj.subFolder.files.filter(f => !f.endsWith('.fit'));
-                if (nonFitFiles.length > 0) return true;
-            }
-        }
-        return false;
+    // Count non-.fit files across all sub-folders of an object.
+    _countNonFitSubFiles(obj) {
+        return this._getSubFolders(obj)
+            .reduce((sum, sf) => sum + sf.files.filter(f => !f.endsWith('.fit')).length, 0);
+    }
+
+    // Render a mount mode badge for the given mountMode value.
+    _mountModeBadge(mountMode) {
+        if (!mountMode) return '';
+        const cfg = {
+            eq:    { label: 'EQ',     color: 'var(--info-color,    #3498db)' },
+            altaz: { label: 'Alt/Az', color: 'var(--accent-color,  #9b59b6)' },
+            both:  { label: 'Both',   color: 'var(--success-color, #2ecc71)' }
+        };
+        const { label, color } = cfg[mountMode] || { label: mountMode, color: 'var(--text-secondary)' };
+        return `<span style="font-size:0.7rem; background:${color}; color:#fff;
+                             padding:0.1rem 0.4rem; border-radius:4px; margin-left:0.4rem;
+                             vertical-align:middle; font-weight:600;">${label}</span>`;
+    }
+
+    hasSubFrameCleanup(objects) {
+        return objects.some(obj => obj.hasSubFrames && this._countNonFitSubFiles(obj) > 0);
     }
 
     renderEmptyDirectories(emptyDirectories) {
@@ -431,20 +449,15 @@ class Dashboard {
             return ''; // No sub-frames, no cleanup needed
         }
 
-        // Calculate potential cleanup
+        // Calculate potential cleanup across both sub-folder types
         let totalNonFitFiles = 0;
         const objectsWithJpg = [];
 
         for (const obj of objectsWithSubFrames) {
-            if (obj.subFolder) {
-                const nonFitFiles = obj.subFolder.files.filter(f => !f.endsWith('.fit'));
-                if (nonFitFiles.length > 0) {
-                    totalNonFitFiles += nonFitFiles.length;
-                    objectsWithJpg.push({
-                        name: obj.displayName,
-                        count: nonFitFiles.length
-                    });
-                }
+            const count = this._countNonFitSubFiles(obj);
+            if (count > 0) {
+                totalNonFitFiles += count;
+                objectsWithJpg.push({ name: obj.displayName, count });
             }
         }
 
@@ -476,7 +489,7 @@ class Dashboard {
                 </div>
                 <div style="padding: 1rem; background: var(--bg-tertiary); border-radius: 8px; margin-top: 1rem;">
                     <p style="font-size: 0.875rem; color: var(--text-secondary); margin-bottom: 0.75rem;">
-                        <strong>What will be deleted:</strong> All files except .fit files in sub-frame directories (_sub folders).
+                        <strong>What will be deleted:</strong> All files except .fit files in sub-frame directories (<code>_sub</code> for EQ mode, <code>-sub</code> for Alt/Az mode).
                         This includes JPG previews and thumbnails which are not needed.
                     </p>
                     <p style="font-size: 0.875rem; color: var(--text-secondary);">
@@ -550,6 +563,7 @@ class Dashboard {
                 <thead>
                     <tr style="background: var(--bg-tertiary); border-bottom: 2px solid var(--border-color);">
                         <th style="padding: 1rem; text-align: left;">Object</th>
+                        <th style="padding: 1rem; text-align: center;">Mount</th>
                         <th style="padding: 1rem; text-align: left;">Catalog</th>
                         <th style="padding: 1rem; text-align: center;">Sub-Frames</th>
                         <th style="padding: 1rem; text-align: right;">Sub .fit</th>
@@ -568,18 +582,15 @@ class Dashboard {
     }
 
     renderObjectRow(obj, index) {
-        const totalFiles = obj.mainFolder.fileCount + (obj.subFolder ? obj.subFolder.fileCount : 0);
-        const totalSize = obj.mainFolder.size + (obj.subFolder ? obj.subFolder.size : 0);
+        const allSubs = this._getSubFolders(obj);
+        const totalFiles = obj.mainFolder.fileCount + allSubs.reduce((s, sf) => s + sf.fileCount, 0);
+        const totalSize  = obj.mainFolder.size     + allSubs.reduce((s, sf) => s + sf.size,      0);
         const bgColor = index % 2 === 0 ? 'transparent' : 'var(--bg-tertiary)';
         const hoverBgColor = index % 2 === 0 ? 'var(--bg-tertiary)' : 'var(--bg-secondary)';
 
-        // Count .fit and non-.fit files in sub-frame folder
-        let subFitCount = 0;
-        let subOtherCount = 0;
-        if (obj.subFolder) {
-            subFitCount = obj.subFolder.files.filter(f => f.endsWith('.fit')).length;
-            subOtherCount = obj.subFolder.files.filter(f => !f.endsWith('.fit')).length;
-        }
+        // Count .fit and non-.fit files across all sub-frame folders
+        const subFitCount   = allSubs.reduce((s, sf) => s + sf.files.filter(f =>  f.endsWith('.fit')).length, 0);
+        const subOtherCount = allSubs.reduce((s, sf) => s + sf.files.filter(f => !f.endsWith('.fit')).length, 0);
 
         const rowId = `object-row-${obj.name.replace(/\s+/g, '-')}`;
 
@@ -592,6 +603,9 @@ class Dashboard {
                 <td style="padding: 1rem;" class="object-cell">
                     <strong class="object-name" style="transition: all 0.2s;">${obj.displayName}</strong>
                     ${obj.isMosaic ? '<span style="font-size: 0.75rem; background: var(--accent-color); color: black; padding: 0.125rem 0.5rem; border-radius: 4px; margin-left: 0.5rem;">Mosaic</span>' : ''}
+                </td>
+                <td style="padding: 1rem; text-align: center;" class="object-cell">
+                    ${obj.hasSubFrames ? this._mountModeBadge(obj.mountMode) : '<span style="color: var(--text-muted);">—</span>'}
                 </td>
                 <td style="padding: 1rem; color: var(--text-secondary);" class="object-cell">${obj.catalog}</td>
                 <td style="padding: 1rem; text-align: center;" class="object-cell">
@@ -774,13 +788,10 @@ class Dashboard {
             return;
         }
 
-        // Calculate total files to delete
+        // Calculate total files to delete across both sub-folder types
         let totalFiles = 0;
         for (const obj of objectsWithSubFrames) {
-            if (obj.subFolder) {
-                const nonFitFiles = obj.subFolder.files.filter(f => !f.endsWith('.fit'));
-                totalFiles += nonFitFiles.length;
-            }
+            totalFiles += this._countNonFitSubFiles(obj);
         }
 
         const confirmMessage = `
@@ -790,7 +801,7 @@ class Dashboard {
                     This will delete approximately <strong>${totalFiles}</strong> files (JPG and thumbnail files) from <strong>${objectsWithSubFrames.length}</strong> sub-frame folders.
                 </p>
                 <p style="margin-top: 1rem; color: var(--text-secondary); font-size: 0.875rem;">
-                    <strong>What will be deleted:</strong> All files except .fit files in _sub directories.
+                    <strong>What will be deleted:</strong> All files except .fit files in sub-frame directories (<code>_sub</code> for EQ mode, <code>-sub</code> for Alt/Az mode).
                 </p>
                 <p style="margin-top: 0.5rem; color: var(--success-color); font-size: 0.875rem;">
                     <strong>Safe:</strong> Your .fit files will NOT be touched. This operation is safe.
@@ -879,22 +890,28 @@ class Dashboard {
             return;
         }
 
-        // Count non-.fit files
-        const nonFitFiles = object.subFolder.files.filter(f => !f.endsWith('.fit'));
+        // Count non-.fit files across all sub-folders (EQ _sub and/or Alt/Az -sub)
+        const totalNonFit = this._countNonFitSubFiles(object);
 
-        if (nonFitFiles.length === 0) {
+        if (totalNonFit === 0) {
             app.showModal('Nothing to Clean', '<p>This object has no non-.fit files to clean up.</p>', null, 'Close');
             return;
         }
 
+        const folderLabel = {
+            eq:    'the <code>_sub</code> directory (EQ mode)',
+            altaz: 'the <code>-sub</code> directory (Alt/Az mode)',
+            both:  'both the <code>_sub</code> (EQ) and <code>-sub</code> (Alt/Az) directories'
+        }[object.mountMode] || 'sub-frame directories';
+
         const confirmMessage = `
             <div style="text-align: left;">
-                <p>Clean up sub-frame directory for <strong>${object.displayName}</strong>?</p>
+                <p>Clean up sub-frame ${object.mountMode === 'both' ? 'directories' : 'directory'} for <strong>${object.displayName}</strong>?</p>
                 <p style="margin-top: 1rem;">
-                    This will delete <strong>${nonFitFiles.length}</strong> file${nonFitFiles.length === 1 ? '' : 's'} (JPG and thumbnail files).
+                    This will delete <strong>${totalNonFit}</strong> file${totalNonFit === 1 ? '' : 's'} (JPG and thumbnail files).
                 </p>
                 <p style="margin-top: 1rem; color: var(--text-secondary); font-size: 0.875rem;">
-                    <strong>What will be deleted:</strong> All files except .fit files in the _sub directory.
+                    <strong>What will be deleted:</strong> All files except .fit files in ${folderLabel}.
                 </p>
                 <p style="margin-top: 0.5rem; color: var(--success-color); font-size: 0.875rem;">
                     <strong>Safe:</strong> Your .fit files will NOT be touched.
@@ -1029,10 +1046,12 @@ class Dashboard {
         const withSubFrames = filteredObjects.filter(obj => obj.hasSubFrames).length;
         const withoutSubFrames = filteredObjects.filter(obj => !obj.hasSubFrames).length;
         const totalFiles = filteredObjects.reduce((sum, obj) => {
-            return sum + obj.mainFolder.fileCount + (obj.subFolder ? obj.subFolder.fileCount : 0);
+            const sfs = this._getSubFolders(obj);
+            return sum + obj.mainFolder.fileCount + sfs.reduce((s, sf) => s + sf.fileCount, 0);
         }, 0);
         const totalSize = filteredObjects.reduce((sum, obj) => {
-            return sum + obj.mainFolder.size + (obj.subFolder ? obj.subFolder.size : 0);
+            const sfs = this._getSubFolders(obj);
+            return sum + obj.mainFolder.size + sfs.reduce((s, sf) => s + sf.size, 0);
         }, 0);
         const totalIntegration = filteredObjects.reduce((sum, obj) => sum + obj.totalIntegrationTime, 0);
 
@@ -1372,8 +1391,9 @@ class Dashboard {
         const detailContent = document.querySelector('.object-detail-content');
         if (!detailContent) return;
 
-        const totalFiles = obj.mainFolder.fileCount + (obj.subFolder ? obj.subFolder.fileCount : 0);
-        const totalSize = obj.mainFolder.size + (obj.subFolder ? obj.subFolder.size : 0);
+        const allSubs    = this._getSubFolders(obj);
+        const totalFiles = obj.mainFolder.fileCount + allSubs.reduce((s, sf) => s + sf.fileCount, 0);
+        const totalSize  = obj.mainFolder.size      + allSubs.reduce((s, sf) => s + sf.size,      0);
 
         detailContent.innerHTML = `
             <div style="display: flex; gap: 2rem; position: relative;">
@@ -1402,11 +1422,12 @@ class Dashboard {
                             </h1>
                             <p style="color: var(--text-secondary); font-size: 1.125rem;">
                                 Catalog: <strong>${obj.catalog}</strong> ${obj.catalogNumber ? `· Number: <strong>${obj.catalogNumber}</strong>` : ''}
+                                ${obj.hasSubFrames ? `· Mount Mode: ${this._mountModeBadge(obj.mountMode)}` : ''}
                             </p>
                             <div id="object-aliases-section" class="alias-section" style="display:none;"></div>
                         </div>
                         <div style="text-align: right; display: flex; flex-direction: column; gap: 0.75rem; align-items: flex-end;">
-                            ${obj.hasSubFrames && obj.subFolder && obj.subFolder.files.filter(f => !f.endsWith('.fit')).length > 0 ? `
+                            ${obj.hasSubFrames && this._countNonFitSubFiles(obj) > 0 ? `
                                 <button class="cleanup-object-btn" data-object-name="${obj.name}"
                                         style="background: var(--warning-color); color: white; border: none;
                                                border-radius: 8px; padding: 0.75rem 1.5rem; cursor: pointer;
@@ -1453,35 +1474,39 @@ class Dashboard {
                     ${this.renderFileList(obj.mainFolder.files, 'Main Folder Files', obj.mainFolder.path)}
                 </div>
 
-                <!-- Sub-Frames Folder Details -->
-                ${obj.hasSubFrames && obj.subFolder ? `
+                <!-- Sub-Frames Folder Details (one card per sub-folder: Eq _sub and/or Alt/Az -sub) -->
+                ${allSubs.map(sf => {
+                    const modeLabel = sf === obj.subFolderEq ? 'Eq' : 'Alt/Az';
+                    const fitCount  = sf.files.filter(f =>  f.endsWith('.fit')).length;
+                    const otherCount= sf.files.filter(f => !f.endsWith('.fit')).length;
+                    return `
                     <div style="background: var(--bg-card); border-radius: 16px; padding: 1.5rem; margin-bottom: 2rem;">
-                        <h3 style="margin-bottom: 1rem;">📦 Sub-Frames Folder</h3>
+                        <h3 style="margin-bottom: 1rem;">📦 Sub-Frames Folder <span style="font-size:0.875rem; color:var(--text-secondary);">(${modeLabel} mount mode)</span></h3>
                         <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 1rem; margin-bottom: 1.5rem;">
                             <div>
                                 <p style="color: var(--text-secondary); font-size: 0.875rem; margin-bottom: 0.25rem;">Location</p>
-                                <p style="font-family: monospace; font-size: 0.875rem; word-break: break-all;">${obj.subFolder.path}</p>
+                                <p style="font-family: monospace; font-size: 0.875rem; word-break: break-all;">${sf.path}</p>
                             </div>
                             <div>
                                 <p style="color: var(--text-secondary); font-size: 0.875rem; margin-bottom: 0.25rem;">Files</p>
-                                <p style="font-weight: 600;">${obj.subFolder.fileCount}</p>
+                                <p style="font-weight: 600;">${sf.fileCount}</p>
                             </div>
                             <div>
                                 <p style="color: var(--text-secondary); font-size: 0.875rem; margin-bottom: 0.25rem;">Size</p>
-                                <p style="font-weight: 600;">${app.formatBytes(obj.subFolder.size)}</p>
+                                <p style="font-weight: 600;">${app.formatBytes(sf.size)}</p>
                             </div>
                             <div>
                                 <p style="color: var(--text-secondary); font-size: 0.875rem; margin-bottom: 0.25rem;">.fit Files</p>
-                                <p style="font-weight: 600;">${obj.subFolder.files.filter(f => f.endsWith('.fit')).length}</p>
+                                <p style="font-weight: 600;">${fitCount}</p>
                             </div>
                             <div>
                                 <p style="color: var(--text-secondary); font-size: 0.875rem; margin-bottom: 0.25rem;">Other Files</p>
-                                <p style="font-weight: 600;">${obj.subFolder.files.filter(f => !f.endsWith('.fit')).length}</p>
+                                <p style="font-weight: 600;">${otherCount}</p>
                             </div>
                         </div>
-                        ${this.renderFileList(obj.subFolder.files, 'Sub-Frame Files', obj.subFolder.path)}
-                    </div>
-                ` : ''}
+                        ${this.renderFileList(sf.files, 'Sub-Frame Files', sf.path)}
+                    </div>`;
+                }).join('')}
                 </div>
                 </div>
             </div>
@@ -1526,16 +1551,19 @@ class Dashboard {
             Array.from(session.rawTimestamps).some(ts => f.includes(ts))
         );
 
-        // Sub-folder light frames: same date + exposure + filter
-        let subFiles = [];
-        if (obj.subFolder && obj.subFolder.files) {
-            const exposureToken = `${session.exposure.toFixed(1)}s`;
-            subFiles = obj.subFolder.files.filter(f => {
-                if (!f.includes(session.rawDateStr)) return false;
-                if (!f.includes(exposureToken)) return false;
-                if (session.filter !== 'N/A' && !f.includes(session.filter)) return false;
-                return true;
-            });
+        // Sub-frame light frames: search all sub-folders (Eq and/or Alt/Az).
+        // Returns { folder, file } objects so each file carries its correct folder path.
+        const subFiles = [];
+        const exposureToken = `${session.exposure.toFixed(1)}s`;
+        for (const sf of this._getSubFolders(obj)) {
+            sf.files
+                .filter(f => {
+                    if (!f.includes(session.rawDateStr)) return false;
+                    if (!f.includes(exposureToken)) return false;
+                    if (session.filter !== 'N/A' && !f.includes(session.filter)) return false;
+                    return true;
+                })
+                .forEach(f => subFiles.push({ folder: sf.path, file: f }));
         }
 
         return { mainFiles, subFiles };
@@ -1589,6 +1617,7 @@ class Dashboard {
                         ${this.renderSummaryCard('🔭', 'Filter', session.filter, 'info')}
                         ${this.renderSummaryCard('🌟', 'Integration', this.formatIntegrationTime(totalIntegration), 'success')}
                         ${this.renderSummaryCard('📄', 'Total Files', mainFiles.length + subFiles.length, 'warning')}
+
                     </div>
                 </div>
 
@@ -1600,15 +1629,27 @@ class Dashboard {
                         : '<p style="color: var(--text-muted);">No main folder files found for this session.</p>'}
                 </div>
 
-                <!-- Sub-Frame Light Frames -->
-                ${obj.subFolder ? `
-                    <div style="background: var(--bg-card); border-radius: 16px; padding: 1.5rem; margin-bottom: 2rem;">
-                        <h3 style="margin-bottom: 1rem;">📦 Sub-Frame Light Frames (${subFiles.length})</h3>
-                        ${subFiles.length > 0
-                            ? this.renderFileList(subFiles, 'Session Light Frames', obj.subFolder.path, true)
-                            : '<p style="color: var(--text-muted);">No sub-frame files found for this session.</p>'}
-                    </div>
-                ` : ''}
+                <!-- Sub-Frame Light Frames (grouped per sub-folder) -->
+                ${this._getSubFolders(obj).length > 0 ? (() => {
+                    // Group subFiles by their folder path
+                    const byFolder = {};
+                    subFiles.forEach(({ folder, file }) => {
+                        if (!byFolder[folder]) byFolder[folder] = [];
+                        byFolder[folder].push(file);
+                    });
+                    const allSubFolders = this._getSubFolders(obj);
+                    return allSubFolders.map(sf => {
+                        const modeLabel  = sf === obj.subFolderEq ? 'Eq' : 'Alt/Az';
+                        const filesHere  = byFolder[sf.path] || [];
+                        return `
+                        <div style="background: var(--bg-card); border-radius: 16px; padding: 1.5rem; margin-bottom: 2rem;">
+                            <h3 style="margin-bottom: 1rem;">📦 Sub-Frame Light Frames — ${modeLabel} (${filesHere.length})</h3>
+                            ${filesHere.length > 0
+                                ? this.renderFileList(filesHere, 'Session Light Frames', sf.path, true)
+                                : '<p style="color: var(--text-muted);">No sub-frame files found for this session.</p>'}
+                        </div>`;
+                    }).join('');
+                })() : ''}
                 </div>
                 </div>
             </div>
@@ -1650,7 +1691,7 @@ class Dashboard {
                 <p>Delete all files from the session on <strong>${session.date} at ${session.time}</strong>?</p>
                 <ul style="list-style: none; padding: 0; margin-top: 1rem;">
                     <li style="margin-bottom: 0.5rem;">📁 Main folder: <strong>${mainFiles.length}</strong> file${mainFiles.length !== 1 ? 's' : ''}</li>
-                    ${subFiles.length > 0 ? `<li style="margin-bottom: 0.5rem;">📦 Sub-frames: <strong>${subFiles.length}</strong> file${subFiles.length !== 1 ? 's' : ''}</li>` : ''}
+                    ${subFiles.length > 0 ? `<li style="margin-bottom: 0.5rem;">📦 Sub-frames: <strong>${subFiles.length}</strong> file${subFiles.length !== 1 ? 's' : ''} (across ${[...new Set(subFiles.map(f => f.folder))].length} folder${[...new Set(subFiles.map(f => f.folder))].length !== 1 ? 's' : ''})</li>` : ''}
                     <li style="margin-top: 0.5rem; font-weight: 600;">Total: <strong>${totalFiles}</strong> files</li>
                 </ul>
                 <p style="margin-top: 1rem; color: #e74c3c; font-size: 0.875rem;">⚠️ This cannot be undone.</p>
@@ -1666,9 +1707,8 @@ class Dashboard {
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({
                         mainFolderPath: obj.mainFolder.path,
-                        subFolderPath: obj.subFolder ? obj.subFolder.path : null,
                         mainFiles,
-                        subFiles
+                        subFiles  // array of { folder, file } — already in the right format
                     })
                 });
 
