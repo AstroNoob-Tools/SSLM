@@ -292,7 +292,7 @@ class Dashboard {
         });
     }
 
-    renderSummaryCard(icon, label, value, colorClass) {
+    renderSummaryCard(icon, label, value, colorClass, compact = false) {
         const colors = {
             primary: 'var(--primary-color)',
             secondary: 'var(--secondary-color)',
@@ -301,6 +301,19 @@ class Dashboard {
             warning: 'var(--warning-color)',
             info: 'var(--primary-color)'
         };
+
+        if (compact) {
+            return `
+                <div class="summary-card" style="background: var(--bg-card); border-radius: 10px; padding: 0.65rem 0.75rem;
+                                                 border: 2px solid var(--border-color); transition: var(--transition); display: flex; align-items: center; gap: 0.6rem;">
+                    <div style="font-size: 1.25rem; line-height: 1;">${icon}</div>
+                    <div style="min-width: 0;">
+                        <div style="font-size: 0.7rem; color: var(--text-secondary); white-space: nowrap;">${label}</div>
+                        <div style="font-size: 1rem; font-weight: 600; color: ${colors[colorClass]}; white-space: nowrap;">${value}</div>
+                    </div>
+                </div>
+            `;
+        }
 
         return `
             <div class="summary-card" style="background: var(--bg-card); border-radius: 12px; padding: 1.5rem;
@@ -592,6 +605,10 @@ class Dashboard {
         const subFitCount   = allSubs.reduce((s, sf) => s + sf.files.filter(f =>  f.endsWith('.fit')).length, 0);
         const subOtherCount = allSubs.reduce((s, sf) => s + sf.files.filter(f => !f.endsWith('.fit')).length, 0);
 
+        const sessions = this.parseImagingSessions(obj);
+        const sessionIntegration = sessions.reduce((sum, s) => sum + s.stackCount * s.exposure, 0);
+        const integrationTime = obj.totalIntegrationTime > 0 ? obj.totalIntegrationTime : sessionIntegration;
+
         const rowId = `object-row-${obj.name.replace(/\s+/g, '-')}`;
 
         return `
@@ -618,7 +635,7 @@ class Dashboard {
                     ${obj.hasSubFrames ? subOtherCount : '-'}
                 </td>
                 <td style="padding: 1rem; text-align: right; font-family: monospace; color: var(--text-secondary);" class="object-cell">
-                    ${obj.totalIntegrationTime > 0 ? this.formatIntegrationTime(obj.totalIntegrationTime) : '-'}
+                    ${integrationTime > 0 ? this.formatIntegrationTime(integrationTime) : '-'}
                 </td>
                 <td style="padding: 1rem; text-align: right; font-family: monospace;" class="object-cell">${totalFiles}</td>
                 <td style="padding: 1rem; text-align: right; font-family: monospace;" class="object-cell">${app.formatBytes(totalSize)}</td>
@@ -1395,6 +1412,12 @@ class Dashboard {
         const totalFiles = obj.mainFolder.fileCount + allSubs.reduce((s, sf) => s + sf.fileCount, 0);
         const totalSize  = obj.mainFolder.size      + allSubs.reduce((s, sf) => s + sf.size,      0);
 
+        // Integration time: prefer sub-frame-derived value; fall back to sum(stackCount × exposure)
+        // across sessions so objects without sub-frames also show a meaningful figure.
+        const sessions = this.parseImagingSessions(obj);
+        const sessionIntegration = sessions.reduce((sum, s) => sum + s.stackCount * s.exposure, 0);
+        const integrationTime = obj.totalIntegrationTime > 0 ? obj.totalIntegrationTime : sessionIntegration;
+
         detailContent.innerHTML = `
             <div style="display: flex; gap: 2rem; position: relative;">
                 ${this.renderSidebarHTML()}
@@ -1443,12 +1466,12 @@ class Dashboard {
                 </div>
 
                 <!-- Summary Cards -->
-                <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 1.5rem; margin-bottom: 2rem;">
-                    ${this.renderSummaryCard('📄', 'Total Files', totalFiles, 'primary')}
-                    ${this.renderSummaryCard('💾', 'Total Size', app.formatBytes(totalSize), 'success')}
-                    ${this.renderSummaryCard('⏱️', 'Integration Time', obj.totalIntegrationTime > 0 ? this.formatIntegrationTime(obj.totalIntegrationTime) : '-', 'info')}
-                    ${this.renderSummaryCard('📦', 'Sub-Frames', obj.hasSubFrames ? 'Yes' : 'No', obj.hasSubFrames ? 'secondary' : 'accent')}
-                    ${obj.lightFrameCount > 0 ? this.renderSummaryCard('🌟', 'Light Frames', obj.lightFrameCount, 'warning') : ''}
+                <div style="display: grid; grid-template-columns: repeat(5, 1fr); gap: 0.75rem; margin-bottom: 2rem;">
+                    ${this.renderSummaryCard('📄', 'Total Files', totalFiles, 'primary', true)}
+                    ${this.renderSummaryCard('💾', 'Total Size', app.formatBytes(totalSize), 'success', true)}
+                    ${this.renderSummaryCard('⏱️', 'Integration Time', integrationTime > 0 ? this.formatIntegrationTime(integrationTime) : '-', 'info', true)}
+                    ${this.renderSummaryCard('📦', 'Sub-Frames', obj.hasSubFrames ? 'Yes' : 'No', obj.hasSubFrames ? 'secondary' : 'accent', true)}
+                    ${obj.lightFrameCount > 0 ? this.renderSummaryCard('🌟', 'Light Frames', obj.lightFrameCount, 'warning', true) : this.renderSummaryCard('🌟', 'Light Frames', '-', 'warning', true)}
                 </div>
 
                 <!-- Metadata -->
@@ -1482,7 +1505,7 @@ class Dashboard {
                     return `
                     <div style="background: var(--bg-card); border-radius: 16px; padding: 1.5rem; margin-bottom: 2rem;">
                         <h3 style="margin-bottom: 1rem;">📦 Sub-Frames Folder <span style="font-size:0.875rem; color:var(--text-secondary);">(${modeLabel} mount mode)</span></h3>
-                        <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 1rem; margin-bottom: 1.5rem;">
+                        <div style="display: grid; grid-template-columns: 2fr repeat(4, 1fr); gap: 1rem; margin-bottom: 1.5rem;">
                             <div>
                                 <p style="color: var(--text-secondary); font-size: 0.875rem; margin-bottom: 0.25rem;">Location</p>
                                 <p style="font-family: monospace; font-size: 0.875rem; word-break: break-all;">${sf.path}</p>
