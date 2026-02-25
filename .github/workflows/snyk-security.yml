@@ -35,14 +35,15 @@ jobs:
         env:
           SNYK_TOKEN: ${{ secrets.SNYK_TOKEN }}
 
-      # --- DEBUG STEP: This verifies if the secret is reaching the runner ---
+      # --- DEBUG STEP ---
       - name: Verify Secret Presence
         run: |
           if [ -z "$SNYK_TOKEN" ]; then
-            echo "❌ ERROR: SNYK_TOKEN is empty! Check GitHub Settings > Secrets > Actions."
+            echo "❌ ERROR: SNYK_TOKEN is empty in the runner!"
             exit 1
           else
-            echo "✅ SNYK_TOKEN is detected (Length: ${#SNYK_TOKEN} characters)."
+            echo "✅ SNYK_TOKEN detected. Length: ${#SNYK_TOKEN} characters."
+            echo "If length is not ~36, your copy/paste was incomplete."
           fi
         env:
           SNYK_TOKEN: ${{ secrets.SNYK_TOKEN }}
