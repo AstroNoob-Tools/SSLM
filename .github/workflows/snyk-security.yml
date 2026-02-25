@@ -48,7 +48,7 @@ jobs:
 
       # --- DEBUG STEP 2: Validate token resolves to a real identity ---
       - name: Validate Snyk Auth (whoami)
-        run: snyk whoami
+        run: snyk whoami --experimental
         env:
           SNYK_TOKEN: ${{ secrets.SNYK_TOKEN }}
 
