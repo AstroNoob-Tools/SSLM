@@ -32,10 +32,8 @@ jobs:
 
       - name: Set up Snyk CLI
         uses: snyk/actions/setup@master
-        env:
-          SNYK_TOKEN: ${{ secrets.SNYK_TOKEN }}
 
-      # --- DEBUG STEP ---
+      # --- DEBUG STEP 1: Verify token presence and length ---
       - name: Verify Secret Presence
         run: |
           if [ -z "$SNYK_TOKEN" ]; then
@@ -45,6 +43,12 @@ jobs:
             echo "✅ SNYK_TOKEN detected. Length: ${#SNYK_TOKEN} characters."
             echo "If length is not ~36, your copy/paste was incomplete."
           fi
+        env:
+          SNYK_TOKEN: ${{ secrets.SNYK_TOKEN }}
+
+      # --- DEBUG STEP 2: Validate token resolves to a real identity ---
+      - name: Validate Snyk Auth (whoami)
+        run: snyk whoami
         env:
           SNYK_TOKEN: ${{ secrets.SNYK_TOKEN }}
 
