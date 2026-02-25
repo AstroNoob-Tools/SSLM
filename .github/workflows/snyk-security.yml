@@ -35,7 +35,18 @@ jobs:
         env:
           SNYK_TOKEN: ${{ secrets.SNYK_TOKEN }}
 
-      # --- YOUR SPECIFIC LINES START HERE ---
+      # --- DEBUG STEP: This verifies if the secret is reaching the runner ---
+      - name: Verify Secret Presence
+        run: |
+          if [ -z "$SNYK_TOKEN" ]; then
+            echo "❌ ERROR: SNYK_TOKEN is empty! Check GitHub Settings > Secrets > Actions."
+            exit 1
+          else
+            echo "✅ SNYK_TOKEN is detected (Length: ${#SNYK_TOKEN} characters)."
+          fi
+        env:
+          SNYK_TOKEN: ${{ secrets.SNYK_TOKEN }}
+
       - name: Snyk Code test
         run: snyk code test --sarif --target-reference="${{ github.ref_name }}" > snyk-code.sarif || true
         env:
@@ -45,7 +56,6 @@ jobs:
         run: snyk monitor --all-projects --target-reference="${{ github.ref_name }}"
         env:
           SNYK_TOKEN: ${{ secrets.SNYK_TOKEN }}
-      # --- YOUR SPECIFIC LINES END HERE ---
 
       - name: Upload result to GitHub Code Scanning
         uses: github/codeql-action/upload-sarif@v3
