@@ -98,12 +98,24 @@ function createRateLimiter({ windowMs = 60_000, max = 10 } = {}) {
 }
 
 // Rate limiters for expensive file-system operations
-const heavyOpLimiter  = createRateLimiter({ windowMs: 60_000, max: 10 });  // import/merge start
-const analysisLimiter = createRateLimiter({ windowMs: 60_000, max: 30 });  // analyze / space checks
+const heavyOpLimiter  = createRateLimiter({ windowMs: 60_000, max: 10 });   // import/merge start
+const analysisLimiter = createRateLimiter({ windowMs: 60_000, max: 30 });   // analyze / space checks
+const lightLimiter    = createRateLimiter({ windowMs: 60_000, max: 200 });  // static pages / image serving
+
+// Path allowlist — rejects any path that does not resolve to a recognised Windows root.
+// Allows any drive letter (A-Z:\) and UNC paths (\\server\share) so the user can
+// browse and operate on any drive they have authorised, while blocking anything that
+// resolves outside a real Windows filesystem root (CWE-22).
+function isAllowedPath(resolvedPath) {
+  if (!path.isAbsolute(resolvedPath)) return false;
+  if (/^[A-Za-z]:[/\\]/.test(resolvedPath)) return true;   // drive-letter root
+  if (resolvedPath.startsWith('\\\\')) return true;         // UNC / network path
+  return false;
+}
 
 
 // Routes
-app.get('/', (req, res) => {
+app.get('/', lightLimiter, (req, res) => {
   res.sendFile(path.join(__dirname, 'public', 'index.html'));
 });
 
@@ -129,7 +141,7 @@ app.get('/api/config', (req, res) => {
   });
 });
 
-app.post('/api/config', async (req, res) => {
+app.post('/api/config', analysisLimiter, async (req, res) => {
   try {
     // Update config with new values
     config = { ...config, ...req.body };
@@ -144,8 +156,7 @@ app.post('/api/config', async (req, res) => {
 });
 
 // Image serving endpoint
-// snyk-ignore: javascript/NoRateLimitingForExpensiveWebOperation
-app.get('/api/image', async (req, res) => {
+app.get('/api/image', lightLimiter, async (req, res) => {
   try {
     const imagePath = req.query.path;
 
@@ -153,11 +164,11 @@ app.get('/api/image', async (req, res) => {
       return res.status(400).json({ success: false, error: 'Image path is required' });
     }
 
-    // Sanitize path to prevent traversal (CWE-22)
-    if (imagePath.includes('..')) {
+    // Resolve then allowlist-check to prevent traversal (CWE-22)
+    const resolvedPath = path.resolve(imagePath);
+    if (!isAllowedPath(resolvedPath)) {
       return res.status(400).json({ success: false, error: 'Invalid image path' });
     }
-    const resolvedPath = path.resolve(imagePath);
 
     // Only serve explicitly allowed image extensions — no fallback to arbitrary files
     const ext = path.extname(resolvedPath).toLowerCase();
@@ -201,7 +212,7 @@ app.get('/api/favorites', (req, res) => {
   }
 });
 
-app.post('/api/favorites/add', async (req, res) => {
+app.post('/api/favorites/add', analysisLimiter, async (req, res) => {
   try {
     const { path: favPath, name } = req.body;
 
@@ -236,8 +247,7 @@ app.post('/api/favorites/add', async (req, res) => {
   }
 });
 
-// snyk-ignore: javascript/NoRateLimitingForExpensiveWebOperation
-app.post('/api/favorites/remove', async (req, res) => {
+app.post('/api/favorites/remove', analysisLimiter, async (req, res) => {
   try {
     const { path: favPath } = req.body;
 
@@ -280,10 +290,13 @@ app.get('/api/browse/drives', async (req, res) => {
 app.get('/api/browse/directory', async (req, res) => {
   try {
     const rawPath = req.query.path;
-    if (!rawPath || typeof rawPath !== 'string' || rawPath.includes('..')) {
+    if (!rawPath || typeof rawPath !== 'string') {
       return res.status(400).json({ success: false, error: 'Path parameter required' });
     }
     const directoryPath = path.resolve(rawPath);
+    if (!isAllowedPath(directoryPath)) {
+      return res.status(400).json({ success: false, error: 'Invalid path' });
+    }
 
     const result = await DirectoryBrowser.getDirectoryContents(directoryPath);
 
@@ -345,13 +358,16 @@ app.post('/api/browse/create-directory', async (req, res) => {
   }
 });
 
-// snyk-ignore: javascript/NoRateLimitingForExpensiveWebOperation
-app.get('/api/browse/validate', async (req, res) => {
+app.get('/api/browse/validate', analysisLimiter, async (req, res) => {
   try {
-    const { path: directoryPath, checkMyWork } = req.query;
+    const { path: rawValidatePath, checkMyWork } = req.query;
 
-    if (!directoryPath) {
+    if (!rawValidatePath || typeof rawValidatePath !== 'string') {
       return res.status(400).json({ success: false, error: 'Path parameter required' });
+    }
+    const directoryPath = path.resolve(rawValidatePath);
+    if (!isAllowedPath(directoryPath)) {
+      return res.status(400).json({ success: false, error: 'Invalid path' });
     }
 
     const exists = await fs.pathExists(directoryPath);
@@ -376,10 +392,13 @@ app.get('/api/browse/validate', async (req, res) => {
 app.get('/api/analyze', analysisLimiter, async (req, res) => {
   try {
     const rawPath = req.query.path;
-    if (!rawPath || typeof rawPath !== 'string' || rawPath.includes('..')) {
+    if (!rawPath || typeof rawPath !== 'string') {
       return res.status(400).json({ success: false, error: 'Path parameter required' });
     }
     const directoryPath = path.resolve(rawPath);
+    if (!isAllowedPath(directoryPath)) {
+      return res.status(400).json({ success: false, error: 'Invalid path' });
+    }
 
     console.log(`\n=== ANALYZE REQUEST ===`);
     console.log(`Raw path from query: "${directoryPath}"`);
@@ -415,10 +434,13 @@ app.get('/api/analyze', analysisLimiter, async (req, res) => {
 app.get('/api/analyze/cleanup-suggestions', analysisLimiter, async (req, res) => {
   try {
     const rawPath = req.query.path;
-    if (!rawPath || typeof rawPath !== 'string' || rawPath.includes('..')) {
+    if (!rawPath || typeof rawPath !== 'string') {
       return res.status(400).json({ success: false, error: 'Path parameter required' });
     }
     const directoryPath = path.resolve(rawPath);
+    if (!isAllowedPath(directoryPath)) {
+      return res.status(400).json({ success: false, error: 'Invalid path' });
+    }
 
     const analysisResult = await FileAnalyzer.analyzeDirectory(directoryPath);
 
@@ -485,10 +507,13 @@ app.post('/api/cleanup/subframe-directories', async (req, res) => {
 app.get('/api/cleanup/subframe-info', async (req, res) => {
   try {
     const rawPath = req.query.path;
-    if (!rawPath || typeof rawPath !== 'string' || rawPath.includes('..')) {
+    if (!rawPath || typeof rawPath !== 'string') {
       return res.status(400).json({ success: false, error: 'Path parameter required' });
     }
     const directoryPath = path.resolve(rawPath);
+    if (!isAllowedPath(directoryPath)) {
+      return res.status(400).json({ success: false, error: 'Invalid path' });
+    }
 
     const analysisResult = await FileAnalyzer.analyzeDirectory(directoryPath);
 
@@ -531,8 +556,7 @@ app.post('/api/cleanup/session', async (req, res) => {
 });
 
 // Import API Routes
-// snyk-ignore: javascript/NoRateLimitingForExpensiveWebOperation
-app.get('/api/import/detect-seestar', async (req, res) => {
+app.get('/api/import/detect-seestar', analysisLimiter, async (req, res) => {
   try {
     console.log('Detecting SeeStar devices...');
     const devices = await importService.detectSeeStarDevices();
@@ -544,14 +568,12 @@ app.get('/api/import/detect-seestar', async (req, res) => {
   }
 });
 
-// snyk-ignore: javascript/NoRateLimitingForExpensiveWebOperation
 app.post('/api/import/validate-space', analysisLimiter, async (req, res) => {
   try {
     const { strategy, subframeMode } = req.body;
     const rawSource = req.body.sourcePath;
     const rawDest = req.body.destinationPath;
-    if (!rawSource || typeof rawSource !== 'string' || rawSource.includes('..') ||
-        !rawDest || typeof rawDest !== 'string' || rawDest.includes('..')) {
+    if (!rawSource || typeof rawSource !== 'string' || !rawDest || typeof rawDest !== 'string') {
       return res.status(400).json({
         success: false,
         error: 'sourcePath and destinationPath required'
@@ -559,6 +581,9 @@ app.post('/api/import/validate-space', analysisLimiter, async (req, res) => {
     }
     const sourcePath = path.resolve(rawSource);
     const destinationPath = path.resolve(rawDest);
+    if (!isAllowedPath(sourcePath) || !isAllowedPath(destinationPath)) {
+      return res.status(400).json({ success: false, error: 'Invalid path' });
+    }
 
     const importStrategy = strategy || 'full'; // Default to full if not specified
     const importSubframeMode = subframeMode || 'all';
@@ -579,14 +604,12 @@ app.post('/api/import/validate-space', analysisLimiter, async (req, res) => {
   }
 });
 
-// snyk-ignore: javascript/NoRateLimitingForExpensiveWebOperation
 app.post('/api/import/start', heavyOpLimiter, async (req, res) => {
   try {
     const { strategy, socketId, subframeMode } = req.body;
     const rawSource = req.body.sourcePath;
     const rawDest = req.body.destinationPath;
-    if (!rawSource || typeof rawSource !== 'string' || rawSource.includes('..') ||
-        !rawDest || typeof rawDest !== 'string' || rawDest.includes('..') ||
+    if (!rawSource || typeof rawSource !== 'string' || !rawDest || typeof rawDest !== 'string' ||
         !strategy || !socketId) {
       return res.status(400).json({
         success: false,
@@ -595,6 +618,9 @@ app.post('/api/import/start', heavyOpLimiter, async (req, res) => {
     }
     const sourcePath = path.resolve(rawSource);
     const destinationPath = path.resolve(rawDest);
+    if (!isAllowedPath(sourcePath) || !isAllowedPath(destinationPath)) {
+      return res.status(400).json({ success: false, error: 'Invalid path' });
+    }
 
     const importSubframeMode = subframeMode || 'all';
     console.log(`Starting import: ${sourcePath} -> ${destinationPath} (${strategy}, ${importSubframeMode})`);
@@ -632,14 +658,12 @@ app.post('/api/import/cancel', async (req, res) => {
   }
 });
 
-// snyk-ignore: javascript/NoRateLimitingForExpensiveWebOperation
 app.post('/api/import/validate', analysisLimiter, async (req, res) => {
   try {
     const { socketId, subframeMode = 'all' } = req.body;
     const rawSource = req.body.sourcePath;
     const rawDest = req.body.destinationPath;
-    if (!rawSource || typeof rawSource !== 'string' || rawSource.includes('..') ||
-        !rawDest || typeof rawDest !== 'string' || rawDest.includes('..') ||
+    if (!rawSource || typeof rawSource !== 'string' || !rawDest || typeof rawDest !== 'string' ||
         !socketId) {
       return res.status(400).json({
         success: false,
@@ -648,6 +672,9 @@ app.post('/api/import/validate', analysisLimiter, async (req, res) => {
     }
     const sourcePath = path.resolve(rawSource);
     const destinationPath = path.resolve(rawDest);
+    if (!isAllowedPath(sourcePath) || !isAllowedPath(destinationPath)) {
+      return res.status(400).json({ success: false, error: 'Invalid path' });
+    }
 
     const operationId = Date.now().toString();
     console.log(`Starting transfer validation: ${sourcePath} -> ${destinationPath} (subframeMode: ${subframeMode})`);
@@ -669,13 +696,13 @@ app.post('/api/import/validate', analysisLimiter, async (req, res) => {
 });
 
 // Merge API Routes
-// snyk-ignore: javascript/NoRateLimitingForExpensiveWebOperation
 app.post('/api/merge/analyze', analysisLimiter, async (req, res) => {
   try {
     const { socketId, subframeMode } = req.body;
     const sourcePaths = (Array.isArray(req.body.sourcePaths) ? req.body.sourcePaths : [])
-      .filter(p => p && typeof p === 'string' && !p.includes('..'))
-      .map(p => path.resolve(p));
+      .filter(p => p && typeof p === 'string')
+      .map(p => path.resolve(p))
+      .filter(p => isAllowedPath(p));
     const rawDest = req.body.destinationPath;
 
     if (!sourcePaths.length || sourcePaths.length < 2) {
@@ -685,13 +712,16 @@ app.post('/api/merge/analyze', analysisLimiter, async (req, res) => {
       });
     }
 
-    if (!rawDest || typeof rawDest !== 'string' || rawDest.includes('..')) {
+    if (!rawDest || typeof rawDest !== 'string') {
       return res.status(400).json({
         success: false,
         error: 'destinationPath required'
       });
     }
     const destinationPath = path.resolve(rawDest);
+    if (!isAllowedPath(destinationPath)) {
+      return res.status(400).json({ success: false, error: 'Invalid destinationPath' });
+    }
 
     const mergeSubframeMode = subframeMode || 'all';
     console.log(`Analyzing ${sourcePaths.length} libraries for merge (${mergeSubframeMode})...`);
@@ -704,24 +734,24 @@ app.post('/api/merge/analyze', analysisLimiter, async (req, res) => {
   }
 });
 
-// snyk-ignore: javascript/NoRateLimitingForExpensiveWebOperation
 app.post('/api/merge/validate-space', analysisLimiter, async (req, res) => {
   try {
     const { subframeMode } = req.body;
-    // Sanitize each source path individually (CWE-22) — inline path.resolve() so
-    // Snyk's taint engine recognises the sanitisation step.
-    const sourcePaths = [];
-    for (const raw of (Array.isArray(req.body.sourcePaths) ? req.body.sourcePaths : [])) {
-      if (typeof raw === 'string' && !raw.includes('..')) sourcePaths.push(path.resolve(raw));
-    }
+    const sourcePaths = (Array.isArray(req.body.sourcePaths) ? req.body.sourcePaths : [])
+      .filter(p => typeof p === 'string')
+      .map(p => path.resolve(p))
+      .filter(p => isAllowedPath(p));
     const rawDest = req.body.destinationPath;
-    if (!sourcePaths.length || !rawDest || typeof rawDest !== 'string' || rawDest.includes('..')) {
+    if (!sourcePaths.length || !rawDest || typeof rawDest !== 'string') {
       return res.status(400).json({
         success: false,
         error: 'sourcePaths and destinationPath required'
       });
     }
     const destinationPath = path.resolve(rawDest);
+    if (!isAllowedPath(destinationPath)) {
+      return res.status(400).json({ success: false, error: 'Invalid destinationPath' });
+    }
 
     const mergeSubframeMode = subframeMode || 'all';
     console.log(`Validating disk space for merge: ${sourcePaths.length} sources (${mergeSubframeMode})`);
@@ -756,11 +786,12 @@ app.post('/api/merge/start', heavyOpLimiter, async (req, res) => {
   try {
     const { mergePlan, socketId } = req.body;
     const sourcePaths = (Array.isArray(req.body.sourcePaths) ? req.body.sourcePaths : [])
-      .filter(p => p && typeof p === 'string' && !p.includes('..'))
-      .map(p => path.resolve(p));
+      .filter(p => p && typeof p === 'string')
+      .map(p => path.resolve(p))
+      .filter(p => isAllowedPath(p));
     const rawDest = req.body.destinationPath;
 
-    if (!sourcePaths.length || !rawDest || typeof rawDest !== 'string' || rawDest.includes('..') ||
+    if (!sourcePaths.length || !rawDest || typeof rawDest !== 'string' ||
         !mergePlan || !socketId) {
       return res.status(400).json({
         success: false,
@@ -768,20 +799,24 @@ app.post('/api/merge/start', heavyOpLimiter, async (req, res) => {
       });
     }
     const destinationPath = path.resolve(rawDest);
+    if (!isAllowedPath(destinationPath)) {
+      return res.status(400).json({ success: false, error: 'Invalid destinationPath' });
+    }
 
     console.log(`Starting merge: ${sourcePaths.length} sources -> ${destinationPath}`);
 
-    // Sanitize paths nested inside mergePlan.filesToCopy (CWE-22) — inline path.resolve()
-    // so Snyk's taint engine recognises the sanitisation step.
+    // Sanitize paths nested inside mergePlan.filesToCopy (CWE-22).
+    // sourcePath must resolve to a recognised Windows root; relativePath must not
+    // contain traversal sequences (it is joined with destinationPath server-side).
     if (Array.isArray(mergePlan.filesToCopy)) {
       mergePlan.filesToCopy = mergePlan.filesToCopy.map(item => {
-        if (!item.sourcePath || typeof item.sourcePath !== 'string' || item.sourcePath.includes('..')) return null;
-        // relativePath is joined with destinationPath inside the merge service to build the
-        // write-side path — reject any relative path that contains traversal sequences.
+        if (!item.sourcePath || typeof item.sourcePath !== 'string') return null;
+        const resolvedSource = path.resolve(item.sourcePath);
+        if (!isAllowedPath(resolvedSource)) return null;
         if (item.relativePath !== undefined) {
           if (typeof item.relativePath !== 'string' || item.relativePath.includes('..')) return null;
         }
-        return { ...item, sourcePath: path.resolve(item.sourcePath) };
+        return { ...item, sourcePath: resolvedSource };
       }).filter(Boolean);
     }
 
@@ -816,19 +851,20 @@ app.post('/api/merge/cancel', async (req, res) => {
   }
 });
 
-// snyk-ignore: javascript/NoRateLimitingForExpensiveWebOperation
 app.post('/api/merge/validate', analysisLimiter, async (req, res) => {
   try {
     const { mergePlan, socketId } = req.body;
     const rawDest = req.body.destinationPath;
-    if (!rawDest || typeof rawDest !== 'string' || rawDest.includes('..') ||
-        !mergePlan || !socketId) {
+    if (!rawDest || typeof rawDest !== 'string' || !mergePlan || !socketId) {
       return res.status(400).json({
         success: false,
         error: 'destinationPath, mergePlan, and socketId required'
       });
     }
     const destinationPath = path.resolve(rawDest);
+    if (!isAllowedPath(destinationPath)) {
+      return res.status(400).json({ success: false, error: 'Invalid destinationPath' });
+    }
 
     const operationId = Date.now().toString();
     console.log(`Starting merge validation: ${destinationPath}`);
@@ -854,14 +890,16 @@ app.post('/api/rename-object', async (req, res) => {
   try {
     const { fromName, toName } = req.body;
     const rawLib = req.body.libraryPath;
-    if (!rawLib || typeof rawLib !== 'string' || rawLib.includes('..') ||
-        !fromName || !toName) {
+    if (!rawLib || typeof rawLib !== 'string' || !fromName || !toName) {
       return res.status(400).json({
         success: false,
         error: 'libraryPath, fromName and toName are required'
       });
     }
     const libraryPath = path.resolve(rawLib);
+    if (!isAllowedPath(libraryPath)) {
+      return res.status(400).json({ success: false, error: 'Invalid libraryPath' });
+    }
 
     console.log(`Renaming object: "${fromName}" → "${toName}" in ${libraryPath}`);
     const result = await FileRenamer.renameObject(libraryPath, fromName, toName);

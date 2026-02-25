@@ -30,11 +30,15 @@ ignore:
         created: '2026-02-24T00:00:00.000Z'
 
   # CWE-770: Allocation of Resources Without Limits or Throttling
-  # Rate limiting is already implemented via the custom createRateLimiter() middleware
-  # applied to all expensive endpoints (import/merge start, analyze, space checks).
+  # Rate limiting is implemented via the custom createRateLimiter() middleware.
+  # Every endpoint uses one of: heavyOpLimiter (10/min), analysisLimiter (30/min),
+  # or lightLimiter (200/min). Snyk does not recognise custom middleware as a
+  # rate-limiting mechanism.
+  # NOTE: This entry applies to Snyk Open Source only. Snyk Code (SAST) ignores
+  # must be managed via the Snyk web platform — they are not read from this file.
   javascript/NoRateLimitingForExpensiveWebOperation:
     - 'server.js':
-        reason: 'Custom createRateLimiter() middleware is applied to all expensive endpoints (heavyOpLimiter + analysisLimiter).'
+        reason: 'Custom createRateLimiter() middleware applied to all endpoints (heavyOpLimiter / analysisLimiter / lightLimiter).'
         expires: '2027-02-25T00:00:00.000Z'
         created: '2026-02-25T00:00:00.000Z'
 
