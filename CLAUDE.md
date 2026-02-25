@@ -24,6 +24,7 @@ SSLM (SeeStar Library Manager) is an application that manages astrophotography f
 | Version | Status | Date | Notes |
 |---------|--------|------|-------|
 | **v1.0.0-beta.2** | 🟡 **Current — Public Beta** | February 2026 | First public release. Windows installer available on GitHub Releases. |
+| **post-beta.2** | 🔧 **In Development** | February 2026 | Mount Mode support + cosmetic improvements (not yet released). |
 
 **GitHub Releases**: https://github.com/AstroNoob-Tools/SSLM/releases
 
@@ -83,6 +84,24 @@ All five phases are complete. The application has been packaged and released as 
 - ✅ Local suffixes (`_mosaic`, `_sub`) stripped before querying; SIMBAD native spacing preserved
 - ✅ Native `fetch` used throughout — no new npm dependencies
 - ✅ Graceful degradation: network failure or unrecognised object leaves detail page unaffected
+
+**Mount Mode Support - COMPLETE**: Dual sub-frame folder support (EQ + Alt/Az)
+- ✅ SeeStar names sub-frame folders differently per mount mode: `_sub` (EQ) and `-sub` (Alt/Az)
+- ✅ `catalogParser.js`: detects both `_sub` and `-sub` suffixes; adds `mountMode: 'eq' | 'altaz' | null` to parsed result
+- ✅ `fileAnalyzer.js`: dual sub-folder fields `subFolderEq` + `subFolderAltAz` per object; `mountMode: 'eq' | 'altaz' | 'both'`; backward-compat `subFolder` alias (prefers Eq)
+- ✅ `importService.js`, `mergeService.js`, `diskSpaceValidator.js`: `isSubframeNonFit()` now matches both `-sub` and `_sub`
+- ✅ `fileCleanup.js`: `cleanupSubFrameDirectories()` and `getSubFrameCleanupInfo()` iterate over both sub-folders per object; `deleteSessionFiles()` accepts `subFiles` as `[{ folder, file }]` to support files from two sub-folder paths
+- ✅ `server.js`: `POST /api/cleanup/session` updated — `subFiles` carries per-file folder, `subFolderPath` removed
+- ✅ Dashboard: dedicated **Mount** column in objects table with EQ / Alt/Az / Both badges (colour-coded); mount mode badge in object detail header
+- ✅ Object detail sub-frames section renders one card per sub-folder, each clearly labelled with mount mode
+- ✅ Session file matching (`_getSessionFiles`) searches both sub-folders; returns `{ folder, file }` objects
+- ✅ Delete session sends `subFiles` as `[{ folder, file }]` covering both sub-folders
+- ✅ Sub-frame cleanup confirmation message is mode-aware (lists correct folder suffixes)
+
+**Cosmetic Improvements - COMPLETE**: Dashboard display refinements
+- ✅ Object detail summary cards rendered in compact single-row layout (5 columns, icon + label + value inline)
+- ✅ Sub-frames folder detail grid uses `2fr + 4×1fr` so Files / Size / .fit Files / Other Files stay on one row
+- ✅ Integration Time in object detail banner and objects table falls back to `sum(stackCount × exposure)` from parsed sessions when no sub-frames exist — consistent with the Imaging Sessions table
 
 **Phase 4 - COMPLETE**: Windows installer & application branding
 - ✅ Self-contained `sslm.exe` built with `@yao-pkg/pkg` (Node.js runtime bundled)
@@ -149,12 +168,21 @@ Contains stacked/processed final images:
 - `[filter]`: Filter used (e.g., IRCUT, LP - Light Pollution filter)
 - `[timestamp]`: Date and time in format YYYYMMDD-HHMMSS
 
-#### Sub-frames Directory (e.g., `NGC 6729_sub/`)
+#### Sub-frames Directory
+The sub-frame folder suffix depends on the mount mode used during capture:
+
+| Mount Mode | Suffix | Example |
+|------------|--------|---------|
+| **EQ** (equatorial) | `_sub` | `NGC 6729_sub/` |
+| **Alt/Az** (alt-azimuth) | `-sub` | `NGC 6729-sub/` |
+
+An object can have **both** sub-frame folders simultaneously if sessions were captured in different mount modes on different nights.
+
 Contains individual light frames (sub-exposures):
 - **Light frames**: `Light_[ObjectName]_[exposure]_[filter]_[timestamp].fit`
   - Example: `Light_NGC 6729_30.0s_IRCUT_20250822-203353.fit`
 - **Corresponding files**: Each .fit has matching .jpg and _thn.jpg versions
-- **Note**: JPG files in `_sub` directories are not needed and can be deleted to save space
+- **Note**: JPG files in sub-frame directories are not needed and can be deleted to save space
 
 ### Pattern 2: Captures Without Subframes
 
