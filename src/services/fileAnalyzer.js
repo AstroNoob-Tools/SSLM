@@ -83,6 +83,7 @@ class FileAnalyzer {
                                 catalogNumber: parsed.catalogNumber,
                                 variant: parsed.variant,
                                 hasSubFrames: false,
+                                mountMode: null,       // 'eq' | 'altaz' | 'both'
                                 isMosaic: CatalogParser.isMosaic(item),
                                 mainFolder: {
                                     path: itemPath,
@@ -90,7 +91,9 @@ class FileAnalyzer {
                                     fileCount: 0,
                                     size: 0
                                 },
-                                subFolder: null,
+                                subFolderEq: null,     // _sub  (Eq mount mode)
+                                subFolderAltAz: null,  // -sub  (Alt/Az mount mode)
+                                subFolder: null,       // backward-compat alias
                                 dates: [],
                                 stackingCounts: [],
                                 exposures: [],
@@ -126,14 +129,32 @@ class FileAnalyzer {
                     if (parsed.isSubFolder && objects.has(parsed.baseName)) {
                         const objectData = objects.get(parsed.baseName);
                         objectData.hasSubFrames = true;
-                        objectData.subFolder = {
+
+                        const subData = {
                             path: itemPath,
                             files: [],
                             fileCount: 0,
                             size: 0
                         };
 
-                        await this.scanFolderFiles(itemPath, objectData.subFolder, objectData);
+                        if (parsed.mountMode === 'eq') {
+                            objectData.subFolderEq = subData;
+                        } else {
+                            objectData.subFolderAltAz = subData;
+                        }
+
+                        // Keep mountMode on the object: first seen sets it, second of a
+                        // different type upgrades it to 'both'.
+                        if (objectData.mountMode === null) {
+                            objectData.mountMode = parsed.mountMode;
+                        } else if (objectData.mountMode !== parsed.mountMode) {
+                            objectData.mountMode = 'both';
+                        }
+
+                        // Backward-compat alias: prefer Eq folder when both exist.
+                        objectData.subFolder = objectData.subFolderEq || objectData.subFolderAltAz;
+
+                        await this.scanFolderFiles(itemPath, subData, objectData);
                     }
                 } catch (error) {
                     console.warn(`Error processing sub-folder ${item}:`, error.message);
@@ -155,22 +176,20 @@ class FileAnalyzer {
                 totalFiles += obj.mainFolder.fileCount;
                 totalSize += obj.mainFolder.size;
 
-                if (obj.subFolder) {
-                    totalFiles += obj.subFolder.fileCount;
-                    totalSize += obj.subFolder.size;
-                }
-
                 // File type counts
                 fitCount += obj.mainFolder.files.filter(f => f.endsWith('.fit')).length;
                 jpgCount += obj.mainFolder.files.filter(f => f.endsWith('.jpg')).length;
                 thnCount += obj.mainFolder.files.filter(f => f.endsWith('_thn.jpg')).length;
                 mp4Count += obj.mainFolder.files.filter(f => f.endsWith('.mp4')).length;
 
-                if (obj.subFolder) {
-                    fitCount += obj.subFolder.files.filter(f => f.endsWith('.fit')).length;
-                    jpgCount += obj.subFolder.files.filter(f => f.endsWith('.jpg')).length;
-                    thnCount += obj.subFolder.files.filter(f => f.endsWith('_thn.jpg')).length;
-                    mp4Count += obj.subFolder.files.filter(f => f.endsWith('.mp4')).length;
+                // Include both sub-folders (Eq and Alt/Az) in all totals
+                for (const sf of [obj.subFolderEq, obj.subFolderAltAz].filter(Boolean)) {
+                    totalFiles += sf.fileCount;
+                    totalSize  += sf.size;
+                    fitCount   += sf.files.filter(f => f.endsWith('.fit')).length;
+                    jpgCount   += sf.files.filter(f => f.endsWith('.jpg')).length;
+                    thnCount   += sf.files.filter(f => f.endsWith('_thn.jpg')).length;
+                    mp4Count   += sf.files.filter(f => f.endsWith('.mp4')).length;
                 }
 
                 // Date range

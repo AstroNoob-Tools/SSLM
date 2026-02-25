@@ -94,7 +94,8 @@ class ImportService {
 
         const parts = relativePath.replace(/\\/g, '/').split('/');
         for (let i = 0; i < parts.length - 1; i++) {
-            if (parts[i].toLowerCase().endsWith('_sub')) {
+            const d = parts[i].toLowerCase();
+            if (d.endsWith('_sub') || d.endsWith('-sub')) {
                 return true;
             }
         }

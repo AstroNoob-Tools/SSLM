@@ -31,7 +31,8 @@ class MergeService {
 
         const parts = relativePath.replace(/\\/g, '/').split('/');
         for (let i = 0; i < parts.length - 1; i++) {
-            if (parts[i].toLowerCase().endsWith('_sub')) {
+            const d = parts[i].toLowerCase();
+            if (d.endsWith('_sub') || d.endsWith('-sub')) {
                 return true;
             }
         }
@@ -499,7 +500,7 @@ class MergeService {
                     return { success: false, cancelled: true };
                 }
 
-                const destPath = path.join(destinationPath, file.relativePath);
+                const destPath = path.resolve(destinationPath, file.relativePath);
 
                 try {
                     // Ensure destination directory exists
@@ -676,7 +677,7 @@ class MergeService {
 
         try {
             for (const file of filesToValidate) {
-                const destPath = path.join(destinationPath, file.relativePath);
+                const destPath = path.resolve(destinationPath, file.relativePath);
 
                 try {
                     // Check if file exists

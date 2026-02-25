@@ -77,61 +77,67 @@ class FileCleanup {
         };
 
         for (const obj of objects) {
-            // Skip objects without sub-frames
-            if (!obj.subFolder) continue;
+            // Collect all sub-folders for this object (Eq and/or Alt/Az)
+            const subFolders = [obj.subFolderEq, obj.subFolderAltAz].filter(Boolean);
+            // Fallback for legacy data that only has subFolder set
+            if (subFolders.length === 0 && obj.subFolder) subFolders.push(obj.subFolder);
+
+            if (subFolders.length === 0) continue;
 
             results.totalObjects++;
 
-            const objectResult = {
-                name: obj.displayName,
-                path: obj.subFolder.path,
-                filesDeleted: 0,
-                spaceFreed: 0,
-                deletedFiles: []
-            };
+            for (const sf of subFolders) {
+                const objectResult = {
+                    name: obj.displayName,
+                    path: sf.path,
+                    filesDeleted: 0,
+                    spaceFreed: 0,
+                    deletedFiles: []
+                };
 
-            try {
-                const files = await fs.readdir(obj.subFolder.path);
+                try {
+                    const files = await fs.readdir(sf.path);
 
-                for (const file of files) {
-                    const filePath = path.join(obj.subFolder.path, file);
+                    for (const file of files) {
+                        const filePath = path.join(sf.path, file);
 
-                    try {
-                        // Only delete files that are NOT .fit files
-                        if (!file.endsWith('.fit')) {
-                            const stats = await fs.stat(filePath);
-                            const fileSize = stats.size;
+                        try {
+                            // Only delete files that are NOT .fit files
+                            if (!file.endsWith('.fit')) {
+                                const stats = await fs.stat(filePath);
+                                const fileSize = stats.size;
 
-                            await fs.remove(filePath);
+                                await fs.remove(filePath);
 
-                            objectResult.filesDeleted++;
-                            objectResult.spaceFreed += fileSize;
-                            objectResult.deletedFiles.push({
-                                name: file,
-                                size: fileSize
+                                objectResult.filesDeleted++;
+                                objectResult.spaceFreed += fileSize;
+                                objectResult.deletedFiles.push({
+                                    name: file,
+                                    size: fileSize
+                                });
+                            }
+                        } catch (error) {
+                            results.errors.push({
+                                object: obj.displayName,
+                                file: file,
+                                error: error.message
                             });
                         }
-                    } catch (error) {
-                        results.errors.push({
-                            object: obj.displayName,
-                            file: file,
-                            error: error.message
-                        });
                     }
-                }
 
-                if (objectResult.filesDeleted > 0) {
-                    results.cleaned.push(objectResult);
-                    results.totalFilesDeleted += objectResult.filesDeleted;
-                    results.totalSpaceFreed += objectResult.spaceFreed;
-                }
+                    if (objectResult.filesDeleted > 0) {
+                        results.cleaned.push(objectResult);
+                        results.totalFilesDeleted += objectResult.filesDeleted;
+                        results.totalSpaceFreed += objectResult.spaceFreed;
+                    }
 
-            } catch (error) {
-                results.failed.push({
-                    name: obj.displayName,
-                    path: obj.subFolder.path,
-                    reason: error.message
-                });
+                } catch (error) {
+                    results.failed.push({
+                        name: obj.displayName,
+                        path: sf.path,
+                        reason: error.message
+                    });
+                }
             }
         }
 
@@ -156,22 +162,25 @@ class FileCleanup {
         };
 
         for (const obj of objects) {
-            if (!obj.subFolder) continue;
+            const subFolders = [obj.subFolderEq, obj.subFolderAltAz].filter(Boolean);
+            if (subFolders.length === 0 && obj.subFolder) subFolders.push(obj.subFolder);
+
+            if (subFolders.length === 0) continue;
 
             info.objectsWithSubFrames++;
 
-            const nonFitFiles = obj.subFolder.files.filter(f => !f.endsWith('.fit'));
+            for (const sf of subFolders) {
+                const nonFitFiles = sf.files.filter(f => !f.endsWith('.fit'));
 
-            if (nonFitFiles.length > 0) {
-                const detail = {
-                    name: obj.displayName,
-                    path: obj.subFolder.path,
-                    nonFitFileCount: nonFitFiles.length,
-                    files: nonFitFiles
-                };
-
-                info.details.push(detail);
-                info.totalNonFitFiles += nonFitFiles.length;
+                if (nonFitFiles.length > 0) {
+                    info.details.push({
+                        name: obj.displayName,
+                        path: sf.path,
+                        nonFitFileCount: nonFitFiles.length,
+                        files: nonFitFiles
+                    });
+                    info.totalNonFitFiles += nonFitFiles.length;
+                }
             }
         }
 
@@ -182,12 +191,12 @@ class FileCleanup {
      * Delete all files belonging to a specific imaging session
      * @param {Object} params
      * @param {string} params.mainFolderPath - Full path to the main object folder
-     * @param {string} [params.subFolderPath] - Full path to the _sub folder (optional)
      * @param {string[]} params.mainFiles - Filenames (not paths) in main folder to delete
-     * @param {string[]} params.subFiles - Filenames (not paths) in sub folder to delete
+     * @param {Array<{folder:string,file:string}>} params.subFiles - Sub-frame files with their
+     *   own folder paths (supports files from multiple sub-folders: _sub and/or -sub)
      * @returns {Promise<Object>} Results of deletion
      */
-    static async deleteSessionFiles({ mainFolderPath, subFolderPath, mainFiles = [], subFiles = [] }) {
+    static async deleteSessionFiles({ mainFolderPath, mainFiles = [], subFiles = [] }) {
         const results = {
             success: true,
             filesDeleted: 0,
@@ -197,7 +206,7 @@ class FileCleanup {
 
         const deleteList = [
             ...mainFiles.map(f => ({ folder: mainFolderPath, file: f })),
-            ...subFiles.map(f => ({ folder: subFolderPath, file: f }))
+            ...subFiles   // already { folder, file } objects
         ];
 
         for (const { folder, file } of deleteList) {

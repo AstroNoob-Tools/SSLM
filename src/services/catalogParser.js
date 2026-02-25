@@ -10,21 +10,35 @@ class CatalogParser {
      * @returns {Object} Parsed object information
      */
     static parseObjectName(folderName) {
-        // Remove _sub suffix if present
-        const isSubFolder = folderName.endsWith('_sub');
-        const baseName = isSubFolder ? folderName.replace(/_sub$/, '') : folderName;
+        // Detect sub-frame folder by suffix:
+        //   _sub  →  Eq mount mode
+        //   -sub  →  Alt/Az mount mode
+        const isSubFolderEq    = folderName.endsWith('_sub');
+        const isSubFolderAltAz = !isSubFolderEq && folderName.endsWith('-sub');
+        const isSubFolder      = isSubFolderEq || isSubFolderAltAz;
+
+        let baseName  = folderName;
+        let mountMode = null;
+        if (isSubFolderEq) {
+            baseName  = folderName.slice(0, -4); // strip '_sub' (4 chars)
+            mountMode = 'eq';
+        } else if (isSubFolderAltAz) {
+            baseName  = folderName.slice(0, -4); // strip '-sub' (4 chars)
+            mountMode = 'altaz';
+        }
 
         // Extract catalog type and details
         const catalogInfo = this.identifyCatalog(baseName);
 
         return {
-            originalName: folderName,
-            baseName: baseName,
-            isSubFolder: isSubFolder,
-            catalog: catalogInfo.catalog,
+            originalName:  folderName,
+            baseName:      baseName,
+            isSubFolder:   isSubFolder,
+            mountMode:     mountMode, // 'eq' | 'altaz' | null
+            catalog:       catalogInfo.catalog,
             catalogNumber: catalogInfo.number,
-            displayName: catalogInfo.displayName,
-            variant: catalogInfo.variant
+            displayName:   catalogInfo.displayName,
+            variant:       catalogInfo.variant
         };
     }
 
@@ -104,7 +118,7 @@ class CatalogParser {
      * @returns {boolean}
      */
     static isSubFrameFolder(folderName) {
-        return folderName.endsWith('_sub');
+        return folderName.endsWith('_sub') || folderName.endsWith('-sub');
     }
 
     /**
@@ -113,7 +127,10 @@ class CatalogParser {
      * @returns {string}
      */
     static getBaseName(folderName) {
-        return folderName.replace(/_sub$/, '');
+        if (folderName.endsWith('_sub') || folderName.endsWith('-sub')) {
+            return folderName.slice(0, -4);
+        }
+        return folderName;
     }
 
     /**
