@@ -1,0 +1,32 @@
+# Snyk (https://snyk.io) policy file
+# https://docs.snyk.io/snyk-cli/test-for-vulnerabilities/the-.snyk-file
+version: v1.25.0
+
+ignore:
+  # CWE-79: DOM-based XSS
+  # SSLM is a local-only web application that runs on localhost and is never
+  # exposed to the internet. DOM XSS via server-returned data is not
+  # exploitable in this context.
+  javascript/DomBasedXss:
+    - 'public/js/importWizard.js':
+        reason: 'Local-only application running on localhost. No internet exposure.'
+        expires: '2027-02-24T00:00:00.000Z'
+        created: '2026-02-24T00:00:00.000Z'
+    - 'public/js/mergeWizard.js':
+        reason: 'Local-only application running on localhost. No internet exposure.'
+        expires: '2027-02-24T00:00:00.000Z'
+        created: '2026-02-24T00:00:00.000Z'
+    - 'public/js/modeSelection.js':
+        reason: 'Local-only application running on localhost. No internet exposure.'
+        expires: '2027-02-24T00:00:00.000Z'
+        created: '2026-02-24T00:00:00.000Z'
+    - 'public/js/app.js':
+        reason: 'Local-only application running on localhost. No internet exposure.'
+        expires: '2027-02-24T00:00:00.000Z'
+        created: '2026-02-24T00:00:00.000Z'
+    - 'public/js/dashboard.js':
+        reason: 'Local-only application running on localhost. No internet exposure.'
+        expires: '2027-02-24T00:00:00.000Z'
+        created: '2026-02-24T00:00:00.000Z'
+
+patch: {}
