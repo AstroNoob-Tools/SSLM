@@ -29,4 +29,13 @@ ignore:
         expires: '2027-02-24T00:00:00.000Z'
         created: '2026-02-24T00:00:00.000Z'
 
+  # CWE-770: Allocation of Resources Without Limits or Throttling
+  # Rate limiting is already implemented via the custom createRateLimiter() middleware
+  # applied to all expensive endpoints (import/merge start, analyze, space checks).
+  javascript/NoRateLimitingForExpensiveWebOperation:
+    - 'server.js':
+        reason: 'Custom createRateLimiter() middleware is applied to all expensive endpoints (heavyOpLimiter + analysisLimiter).'
+        expires: '2027-02-25T00:00:00.000Z'
+        created: '2026-02-25T00:00:00.000Z'
+
 patch: {}
