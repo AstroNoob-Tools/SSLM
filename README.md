@@ -1,5 +1,9 @@
-# SSLM — SeeStar Library Manager
+<div align="center">
+  <img src="https://raw.githubusercontent.com/AstroNoob-Tools/SSLM-Public/main/assets/sslm/sslm_test.png" width="128" alt="SSLM Logo" />
+  <h1>SSLM — SeeStar Library Manager</h1>
+</div>
 
+![SSLM Dashboard](https://raw.githubusercontent.com/AstroNoob-Tools/SSLM-Public/main/assets/sslm/Capture01.JPG)
 A local desktop web application for managing astrophotography files captured with a **SeeStar S50** telescope. SSLM runs entirely on your Windows PC — no internet connection required.
 
 ---
@@ -8,12 +12,15 @@ A local desktop web application for managing astrophotography files captured wit
 
 Download the latest installer from the **[Releases](https://github.com/AstroNoob-Tools/SSLM/releases)** page.
 
+> **Security Guarantee**: SSLM is unsigned freeware. When you run the installer, Windows Defender SmartScreen may show a blue warning saying "Windows protected your PC" because the publisher is unknown. You can safely install it by clicking **More info** -> **Run anyway**.
+> 🛡️ **[View the VirusTotal Security Scan (0/74 engines detected)](https://www.virustotal.com/gui/file/2817cf5a638a5003035d64a5c71330d8f3e369613926449c41fd0b0aa26e9f3b/detection)** proving the `.exe` is 100% clean. SSLM is strictly offline-only, open-source, and never modifies files on your SeeStar device.
+
 **Current release**: `v1.0.0-beta.2` — first public beta
 
 **No prerequisites** — Node.js is bundled inside the installer.
 
 1. Run `SSLM-Setup-v1.0.0-beta.2.exe`
-2. Follow the wizard (installs to `%LOCALAPPDATA%\SSLM\` — no admin rights needed)
+2. Follow the wizard to choose your preferred installation folder (no admin rights needed)
 3. Launch from the **Start Menu** or **Desktop shortcut**
 4. Your browser opens automatically at `http://localhost:3000`
 
@@ -43,24 +50,22 @@ Download the latest installer from the **[Releases](https://github.com/AstroNoob
 ## Features
 
 ### Dashboard
+![Dashboard View](https://raw.githubusercontent.com/AstroNoob-Tools/SSLM-Public/main/assets/sslm/Capture01.JPG)
 - Summary cards: total objects, sub-frame presence, total size, file counts
 - Catalog breakdown (Messier, NGC, IC, Sharpless, Named)
 - Objects table with search, integration time, and per-object cleanup
 - Empty directory detection and one-click cleanup
 
 ### Object Detail View
+![Detail View](https://raw.githubusercontent.com/AstroNoob-Tools/SSLM-Public/main/assets/sslm/Capture02.JPG)
 - Stacking counts: total frames + per-session breakdown
 - Exposure and filter metadata
 - Imaging sessions table with clickable dates and per-session delete
 - Expandable file lists (main folder and sub-frames folder)
 - Sub-frame cleanup button
 
-### Session Detail View
-- All stacked images and sub-frame light files for one specific session
-- Session summary cards (date, frames, exposure, filter, integration)
-- Delete Session button
-
 ### Import Wizard (5 steps)
+![Import Wizard](https://raw.githubusercontent.com/AstroNoob-Tools/SSLM-Public/main/assets/sslm/IncrementalImport.JPG)
 - Auto-detection of SeeStar on USB drives and network path (`\\seestar`)
 - Full copy or incremental (smart sync) strategies
 - Expurged mode: skip non-FITS files from `_sub` directories to save space
@@ -196,7 +201,10 @@ SSLM/
 
 ## Contact
 
-astronoob001@gmail.com
+<img src="https://raw.githubusercontent.com/AstroNoob-Tools/SSLM-Public/main/assets/Personal/astro_noob_final_edit_v5_1771351657214.png" width="60" alt="Astro Noob" style="border-radius: 50%" />
+
+**Astro Noob**  
+Contact: astronoob001@gmail.com
 
 ---
 
