@@ -34,3 +34,16 @@ notes/
 
 #Posts
 Posts/
+
+# Claude Code local config (agents, memory, settings)
+.claude/
+
+# Documentation — exclude everything except the three public docs
+# (SECURITY_POSTURE is a per-release snapshot, lives in documentation/release-vX.X.X/)
+documentation/*
+!documentation/InstallationManual.md
+!documentation/SSLM_Functionalities.md
+!documentation/UserManual.md
+
+# Future-version research — not ready for sharing
+documentation/fitsanalyser/

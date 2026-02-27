@@ -1,7 +1,7 @@
 # SSLM - SeeStar Library Manager
 ## Installation Manual
 
-**Version**: 1.0.0-beta.2
+**Version**: 1.0.0-beta.3
 **Date**: February 2026
 **Platform**: Windows 10 / 11
 
@@ -109,7 +109,7 @@ Git is only needed if you want to clone the repository directly or receive updat
 
 This is the easiest installation method. No Node.js or developer tools required.
 
-1. Download `SSLM-Setup-v1.0.0-beta.2.exe` (current release) from the [GitHub Releases page](https://github.com/AstroNoob-Tools/SSLM/releases)
+1. Download `SSLM-Setup-v1.0.0-beta.3.exe` (current release) from the [GitHub Releases page](https://github.com/AstroNoob-Tools/SSLM/releases)
 
 2. Run the installer — no administrator rights required
 
@@ -727,42 +727,60 @@ npm update
 ### Prerequisites
 - `gh` CLI installed: [cli.github.com](https://cli.github.com)
 - Authenticated: `gh auth login` (first time only — choose GitHub.com → HTTPS → browser)
-- Inno Setup 6.x installed
+- Inno Setup 6.x installed at `D:\Program Files (x86)\Inno Setup 6\`
 
 ### Release Checklist
 
-**1. Bump the version** (in two places):
+**1. Bump the version** (in four places):
 - `installer/sslm.iss` → `#define AppVersion "X.X.X"` ← source of truth
-- `package.json` → `"version": "X.X.X"` ← keep in sync
+- `package.json` → `"version": "X.X.X"`
+- `public/index.html` → footer span `SSLM - SeeStar Library Manager vX.X.X`
+- `README.md` → badge, installer filename references, footer
 
 **2. Build the exe:**
 ```
 npm run build
 ```
+Output: `dist/sslm.exe` (~46 MB)
 
 **3. Build the installer** (Inno Setup):
 ```
-"C:\Program Files (x86)\Inno Setup 6\ISCC.exe" installer\sslm.iss
+"D:\Program Files (x86)\Inno Setup 6\ISCC.exe" installer\sslm.iss
 ```
 Output: `installer/output/SSLM-Setup-vX.X.X.exe`
 
-**4. Commit and push source code:**
+**4. Run VirusTotal and write Security Note** — see `notes/HOW_TO_RELEASE.md` for details.
+
+**5. Commit and push source code:**
 ```
-git add .
+git add installer/sslm.iss package.json public/index.html README.md
+git add documentation/UserManual.md documentation/SSLM_Functionalities.md documentation/InstallationManual.md
 git commit -m "vX.X.X — description"
-git push origin <branch>
+git push origin main
 ```
 
-**5. Create the GitHub Release** (single line — no `\` in CMD/PowerShell):
+**6. Create a draft GitHub Release** (review before publishing):
 
-Pre-release (beta):
 ```
-gh release create vX.X.X "installer/output/SSLM-Setup-vX.X.X.exe" --title "SSLM vX.X.X" --notes "Release notes here." --prerelease
+gh release create vX.X.X \
+  "installer/output/SSLM-Setup-vX.X.X.exe" \
+  "documentation/release-vX.X.X/ReleaseNotes_vX.X.X.md" \
+  "documentation/release-vX.X.X/SecurityNote_vX.X.X.md" \
+  "documentation/release-vX.X.X/UserManual_vX.X.X.md" \
+  "documentation/release-vX.X.X/SSLM_Functionalities_vX.X.X.md" \
+  "documentation/release-vX.X.X/InstallationManual_vX.X.X.md" \
+  "documentation/release-vX.X.X/SecurityPosture_vX.X.X.md" \
+  --title "SSLM vX.X.X" \
+  --notes-file "documentation/release-vX.X.X/ReleaseNotes_vX.X.X.md" \
+  --prerelease \
+  --draft
 ```
 
-Stable release:
+Remove `--prerelease` for stable releases. Review the draft URL returned by `gh` on GitHub.
+
+**7. Publish the release** (once draft is confirmed):
 ```
-gh release create vX.X.X "installer/output/SSLM-Setup-vX.X.X.exe" --title "SSLM vX.X.X" --notes "Release notes here."
+gh release edit vX.X.X --draft=false
 ```
 
 The installer will be downloadable at: `https://github.com/AstroNoob-Tools/SSLM/releases`
@@ -771,5 +789,5 @@ The installer will be downloadable at: `https://github.com/AstroNoob-Tools/SSLM/
 
 ---
 
-*SSLM - SeeStar Library Manager v1.0.0-beta.2 — Installation Manual*
+*SSLM - SeeStar Library Manager v1.0.0-beta.3 — Installation Manual*
 *Last updated: February 2026*

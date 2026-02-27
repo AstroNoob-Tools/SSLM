@@ -411,7 +411,8 @@ class Dashboard {
         const { label, color } = cfg[mountMode] || { label: mountMode, color: 'var(--text-secondary)' };
         return `<span style="font-size:0.7rem; background:${color}; color:#fff;
                              padding:0.1rem 0.4rem; border-radius:4px; margin-left:0.4rem;
-                             vertical-align:middle; font-weight:600;">${label}</span>`;
+                             vertical-align:middle; font-weight:600; white-space:nowrap;
+                             display:inline-block;">${label}</span>`;
     }
 
     hasSubFrameCleanup(objects) {

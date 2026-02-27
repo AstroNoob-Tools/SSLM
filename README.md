@@ -13,13 +13,13 @@ A local desktop web application for managing astrophotography files captured wit
 Download the latest installer from the **[Releases](https://github.com/AstroNoob-Tools/SSLM/releases)** page.
 
 > **Security Guarantee**: SSLM is unsigned freeware. When you run the installer, Windows Defender SmartScreen may show a blue warning saying "Windows protected your PC" because the publisher is unknown. You can safely install it by clicking **More info** -> **Run anyway**.
-> 🛡️ **[View the VirusTotal Security Scan (0/74 engines detected)](https://www.virustotal.com/gui/file/2817cf5a638a5003035d64a5c71330d8f3e369613926449c41fd0b0aa26e9f3b/detection)** proving the `.exe` is 100% clean. SSLM is strictly offline-only, open-source, and never modifies files on your SeeStar device.
+> SHA-256: `fcaa5fb91c0ba511ecd3c1e25cb816214a7b94fc6027aa52d6445f977376131d` — **[View the VirusTotal Security Scan (0/76 engines detected, 27 Feb 2026)](https://www.virustotal.com/gui/file/fcaa5fb91c0ba511ecd3c1e25cb816214a7b94fc6027aa52d6445f977376131d/detection)** proving the `.exe` is 100% clean. SSLM is strictly offline-only, open-source, and never modifies files on your SeeStar device.
 
-**Current release**: `v1.0.0-beta.2` — first public beta
+**Current release**: `v1.0.0-beta.3` — public beta
 
 **No prerequisites** — Node.js is bundled inside the installer.
 
-1. Run `SSLM-Setup-v1.0.0-beta.2.exe`
+1. Run `SSLM-Setup-v1.0.0-beta.3.exe`
 2. Follow the wizard to choose your preferred installation folder (no admin rights needed)
 3. Launch from the **Start Menu** or **Desktop shortcut**
 4. Your browser opens automatically at `http://localhost:3000`
@@ -153,7 +153,7 @@ npm run build
 "C:\Program Files (x86)\Inno Setup 6\ISCC.exe" installer\sslm.iss
 ```
 
-Output: `installer/output/SSLM-Setup-v1.0.0-beta.2.exe`
+Output: `installer/output/SSLM-Setup-v1.0.0-beta.3.exe`
 
 See [documentation/InstallationManual.md](documentation/InstallationManual.md) for the full release checklist.
 
@@ -208,4 +208,4 @@ Contact: astronoob001@gmail.com
 
 ---
 
-*SSLM — SeeStar Library Manager v1.0.0-beta.2 | Last updated: February 2026*
+*SSLM — SeeStar Library Manager v1.0.0-beta.3 | Last updated: February 2026*

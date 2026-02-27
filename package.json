@@ -1,6 +1,6 @@
 {
   "name": "sslm-seastar-library-manager",
-  "version": "1.0.0-beta.2",
+  "version": "1.0.0-beta.3",
   "description": "SSLM - SeeStar Library Manager: Astrophotography library management application with local web interface",
   "main": "server.js",
   "bin": "server.js",

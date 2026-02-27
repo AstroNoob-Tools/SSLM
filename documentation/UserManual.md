@@ -1,7 +1,7 @@
 # SSLM - SeeStar Library Manager
 ## User Manual
 
-**Version**: 1.0.0-beta.2
+**Version**: 1.0.0-beta.3
 **Date**: February 2026
 
 ---
@@ -117,8 +117,8 @@ A checkbox labelled **Expurged** is also available on this step:
 
 | Mode | Behaviour |
 |------|-----------|
-| **Full** (unchecked, default) | All files copied, including JPG and thumbnail previews in `_sub` directories |
-| **Expurged** (checked) | Only `.fit` light frames are copied from `_sub` directories — JPG and thumbnail files are intentionally skipped |
+| **Full** (unchecked, default) | All files copied, including JPG and thumbnail previews in `_sub` and `-sub` directories |
+| **Expurged** (checked) | Only `.fit` light frames are copied from `_sub`/`-sub` directories — JPG and thumbnail files are intentionally skipped |
 
 > **When to use Expurged mode**: If you plan to process only the raw `.fit` data and don't need preview images in your sub-frame directories, Expurged mode can save several gigabytes of disk space.
 >
@@ -234,8 +234,8 @@ A checkbox labelled **Expurged** is also available on this step:
 
 | Mode | Behaviour |
 |------|-----------|
-| **Full** (unchecked, default) | All files merged, including JPG and thumbnail previews in `_sub` directories |
-| **Expurged** (checked) | Only `.fit` light frames are merged from `_sub` directories — JPG and thumbnail files are skipped |
+| **Full** (unchecked, default) | All files merged, including JPG and thumbnail previews in `_sub` and `-sub` directories |
+| **Expurged** (checked) | Only `.fit` light frames are merged from `_sub`/`-sub` directories — JPG and thumbnail files are skipped |
 
 The required disk space shown on this step reflects the selected mode.
 
@@ -371,7 +371,7 @@ If SSLM detects empty folders in your library:
 
 ### Sub-Frame Cleanup
 
-If your `_sub` directories contain JPG or thumbnail files (not needed for processing):
+If your `_sub` or `-sub` directories contain JPG or thumbnail files (not needed for processing):
 - Shows total space that can be freed
 - **Clean All**: Removes non-.fit files from all sub-frame directories
 - **Individual cleanup**: Shown per-object in the objects table
@@ -387,6 +387,7 @@ A comprehensive table of all celestial objects, with:
 | Object | Object name (clickable for details) |
 | Catalog | Catalog type (Messier, NGC, IC, etc.) |
 | Sub-Frames | Whether sub-frame exposures were saved |
+| Mount | Mount mode used during capture — `EQ`, `Alt/Az`, or `Both` (colour-coded badge) |
 | .fit / Other | File count breakdown in sub-frame directory |
 | Integration | Total integration time |
 | Files | Total file count for the object |
@@ -408,6 +409,7 @@ Clicking an object name opens a detailed view with comprehensive information abo
 - Object name
 - Catalog type
 - Sub-frame presence indicator
+- Mount mode badge (`EQ`, `Alt/Az`, or `Both`) — shown when the object has sub-frames
 - Quick statistics (integration time, light frames, sessions, total size)
 
 When **Online Mode** is active (see [Online Mode & Catalog Lookup](#online-mode--catalog-lookup)), two additional items appear below the catalog line:
@@ -597,8 +599,8 @@ The SeeStar device saves both `.fit` (scientific data) and `.jpg`/thumbnail prev
 
 | Deleted | Kept |
 |---------|------|
-| `.jpg` preview images in `_sub` folders | All `.fit` data files |
-| `_thn.jpg` thumbnails in `_sub` folders | All stacked images in main folder |
+| `.jpg` preview images in `_sub`/`-sub` folders | All `.fit` data files |
+| `_thn.jpg` thumbnails in `_sub`/`-sub` folders | All stacked images in main folder |
 | | All `.fit` light frames |
 
 ### Imaging Session Deletion
@@ -616,7 +618,7 @@ To permanently remove all files for a specific imaging session:
 | Deleted | Location |
 |---------|----------|
 | All stacked images for the session (`.fit`, `.jpg`, `_thn.jpg`) | Main object folder |
-| All light frames for the session (`.fit`, `.jpg`, `_thn.jpg`) | `_sub` folder |
+| All light frames for the session (`.fit`, `.jpg`, `_thn.jpg`) | `_sub` and/or `-sub` folder |
 
 > **Warning**: Session deletion is permanent and cannot be undone. There is no Recycle Bin recovery.
 
@@ -752,6 +754,7 @@ SSLM renames every file and folder associated with the object in one operation:
 |--------|----------------------------------|
 | `M 42/` | `NGC 1976/` |
 | `M 42_sub/` | `NGC 1976_sub/` |
+| `M 42-sub/` | `NGC 1976-sub/` |
 | `M 42_mosaic/` | `NGC 1976_mosaic/` |
 | `Stacked_210_M 42_30.0s_IRCUT_....fit` | `Stacked_210_NGC 1976_30.0s_IRCUT_....fit` |
 | All other files inside those folders | Renamed to match |
@@ -829,7 +832,7 @@ Click the Online/Offline badge in the header to toggle this feature at any time.
 
 ### What is Expurged mode?
 
-Expurged mode is an option available in both the Import and Merge wizards (Step 2). When enabled, SSLM skips all JPG and thumbnail preview files inside `_sub` directories and copies only `.fit` light frames. This can save several gigabytes of disk space since the SeeStar generates a JPG and thumbnail for every sub-frame captured.
+Expurged mode is an option available in both the Import and Merge wizards (Step 2). When enabled, SSLM skips all JPG and thumbnail preview files inside `_sub` and `-sub` directories and copies only `.fit` light frames. This can save several gigabytes of disk space since the SeeStar generates a JPG and thumbnail for every sub-frame captured.
 
 Use Expurged mode if you only intend to process the raw `.fit` data with stacking software and have no need for the preview images. The `.fit` files in your main object folders (stacked images) are always copied regardless of this setting.
 
@@ -894,7 +897,8 @@ Example: `Light_NGC 6729_30.0s_IRCUT_20250822-203353.fit`
 | Pattern | Example | Meaning |
 |---------|---------|---------|
 | `[Object]` | `NGC 6729` | Main stacked images |
-| `[Object]_sub` | `NGC 6729_sub` | Individual sub-frames |
+| `[Object]_sub` | `NGC 6729_sub` | Sub-frames (EQ mount mode) |
+| `[Object]-sub` | `NGC 6729-sub` | Sub-frames (Alt/Az mount mode) |
 | `[Object]_mosaic` | `M 45_mosaic` | Mosaic capture |
 
 ### Filter Codes
@@ -905,5 +909,5 @@ Example: `Light_NGC 6729_30.0s_IRCUT_20250822-203353.fit`
 
 ---
 
-*SSLM - SeeStar Library Manager v1.0.0-beta.2 — User Manual*
+*SSLM - SeeStar Library Manager v1.0.0-beta.3 — User Manual*
 *Last updated: February 2026*

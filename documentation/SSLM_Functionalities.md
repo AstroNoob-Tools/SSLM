@@ -54,11 +54,11 @@ Both the Import and Merge engines support an **Expurged** sub-frame mode, contro
 
 | Value | Behaviour |
 |-------|-----------|
-| `'all'` (default) | All files copied, including JPG and thumbnail previews in `_sub` directories |
-| `'fit_only'` | Only `.fit` light frames are copied from `_sub` directories; non-FITS files are skipped |
+| `'all'` (default) | All files copied, including JPG and thumbnail previews in `_sub` and `-sub` directories |
+| `'fit_only'` | Only `.fit` light frames are copied from `_sub`/`-sub` directories; non-FITS files are skipped |
 
 **Detection logic**: A file is classified as a "subframe non-fit" candidate when:
-1. Its relative path contains a parent directory whose name ends with `_sub`, **AND**
+1. Its relative path contains a parent directory whose name ends with `_sub` **or** `-sub`, **AND**
 2. Its file extension is not `.fit`
 
 This logic is implemented as `isSubframeNonFit(relativePath)` in `importService.js`, `mergeService.js`, and `diskSpaceValidator.js`. All three are kept in sync so that space calculations, file scanning, and transfer validation all honour the same exclusion rule.
@@ -109,6 +109,19 @@ The `catalogParser.js` module uses regex patterns to categorize objects into:
 - **Deep Sky**: Messier (`M`), NGC, IC, Sharpless (`SH`), Caldwell (`C`).
 - **Stars/Other**: Named stars (e.g., `Betelgeuse`) or custom object names.
 
+### Mount Mode Detection
+
+The catalog parser also detects the **mount mode** used during capture by inspecting the sub-frame folder suffix:
+
+| Sub-frame folder suffix | Mount mode | `mountMode` value |
+|------------------------|------------|------------------|
+| `_sub` (e.g., `NGC 6729_sub/`) | Equatorial (EQ) | `'eq'` |
+| `-sub` (e.g., `NGC 6729-sub/`) | Alt-Azimuth (Alt/Az) | `'altaz'` |
+| Both present | Mixed sessions | `'both'` |
+| Neither | No sub-frames saved | `null` |
+
+The `fileAnalyzer.js` service exposes two distinct sub-folder fields per object (`subFolderEq`, `subFolderAltAz`) alongside the combined `mountMode`. A backward-compatible `subFolder` alias (preferring EQ when both exist) is retained for internal compatibility.
+
 ---
 
 ## 5. Storage Optimization (Cleanup)
@@ -116,7 +129,7 @@ The `catalogParser.js` module uses regex patterns to categorize objects into:
 The Cleanup module is designed to reclaim disk space without touching scientific data.
 
 ### Targeted File Types
-Cleanup operations differ from standard "delete" commands. They strictly target **non-essential derivative files** within `_sub` directories:
+Cleanup operations differ from standard "delete" commands. They strictly target **non-essential derivative files** within `_sub` and `-sub` directories:
 - **Targets**: `*.jpg` (previews), `*_thn.jpg` (thumbnails).
 - **Protected**: `*.fit` (FITS data), `*.mp4` (videos), and any files in the main object directory (stacked results).
 
@@ -129,7 +142,7 @@ A targeted deletion operation removes all files belonging to a single imaging se
 - **Safety**: Requires explicit file list passed from the client (no wildcard deletion). Each file's size is read before deletion and reported in the response as `spaceFreed`.
 
 ### Safety Mechanisms
-- **Context Awareness**: Cleanup is only available for `_sub` directories. The main object directories (containing your final stacks) are never subjected to bulk cleanup.
+- **Context Awareness**: Cleanup is only available for `_sub` and `-sub` directories. The main object directories (containing your final stacks) are never subjected to bulk cleanup.
 - **Empty Directory Pruning**: Recursive removal of directories that contain 0 files (often left over from renaming objects on the mobile app).
 - **Session Deletion Confirmation**: Session deletion always requires user confirmation in a dialog showing the file count before any files are removed.
 
@@ -209,7 +222,7 @@ The installer wraps `sslm.exe` into a standard Windows setup wizard (`installer/
 
 The canonical application version is defined in `installer/sslm.iss`:
 ```
-#define AppVersion "1.0.0-beta.2"
+#define AppVersion "1.0.0-beta.3"
 ```
 
 `server.js` reads this at startup via `readAppVersion()`:
@@ -302,7 +315,7 @@ GET /api/catalog/aliases?name=<objectName>
 ```
 
 The frontend never calls SIMBAD directly. All requests go through this server-side proxy, which:
-1. Strips local suffixes (`_mosaic`, `_sub`, and trailing numbers like ` 37`) from the object name before querying
+1. Strips local suffixes (`_mosaic`, `_sub`, `-sub`, and trailing numbers like ` 37`) from the object name before querying
 2. Issues an ADQL query to the SIMBAD TAP service via native `fetch` (no new npm dependencies)
 3. Curates and returns the results as JSON
 
@@ -403,7 +416,7 @@ The rename is executed in two phases to avoid filesystem conflicts:
 
 **Phase A — Rename files inside folders**
 
-For each directory related to the object (main folder, `_sub`, `_mosaic`, and any numbered variants), all files whose name contains the old object name are renamed to use the new name:
+For each directory related to the object (main folder, `_sub`, `-sub`, `_mosaic`, and any numbered variants), all files whose name contains the old object name are renamed to use the new name:
 
 ```
 Stacked_210_M 42_30.0s_IRCUT_20250822-231258.fit
@@ -416,6 +429,7 @@ After all files within them have been renamed:
 ```
 M 42/       → NGC 1976/
 M 42_sub/   → NGC 1976_sub/
+M 42-sub/   → NGC 1976-sub/
 M 42_mosaic → NGC 1976_mosaic/
 ```
 
