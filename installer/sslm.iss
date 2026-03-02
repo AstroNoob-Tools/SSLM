@@ -53,6 +53,9 @@ WizardImageStretch=yes
 SetupIconFile=..\public\assets\sslm.ico
 UninstallDisplayIcon={app}\sslm.ico
 
+; License agreement page — shown before installation begins
+LicenseFile=LICENSE.txt
+
 ; Minimum Windows version: Windows 10
 MinVersion=10.0
 
