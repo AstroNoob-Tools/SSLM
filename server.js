@@ -8,6 +8,7 @@ const FileAnalyzer = require('./src/services/fileAnalyzer');
 const FileCleanup = require('./src/services/fileCleanup');
 const ImportService = require('./src/services/importService');
 const MergeService = require('./src/services/mergeService');
+const StackExportService = require('./src/services/stackExportService');
 const DiskSpaceValidator = require('./src/utils/diskSpaceValidator');
 const FileRenamer = require('./src/utils/fileRenamer');
 
@@ -67,9 +68,10 @@ try {
 // Always start in offline mode — user must explicitly enable online features each session
 config.mode.online = false;
 
-// Initialize ImportService and MergeService with Socket.IO and config
-const importService = new ImportService(io, config);
-const mergeService = new MergeService(io, config);
+// Initialize services with Socket.IO and config
+const importService      = new ImportService(io, config);
+const mergeService       = new MergeService(io, config);
+const stackExportService = new StackExportService(io, config);
 
 const PORT = process.env.PORT || config.server.port || 3000;
 const HOST = config.server.host || 'localhost';
@@ -897,6 +899,117 @@ app.post('/api/merge/validate', analysisLimiter, async (req, res) => {
   }
 });
 
+// ─── Stack Export API ─────────────────────────────────────────────────────────
+
+/** Scan sub-folders and return totals + space check, without copying anything. */
+app.post('/api/export/stack/scan', analysisLimiter, async (req, res) => {
+  try {
+    const { objectName } = req.body;
+    const rawDest = req.body.destinationPath;
+    const subFolderPaths = (Array.isArray(req.body.subFolderPaths) ? req.body.subFolderPaths : [])
+      .filter(p => p && typeof p === 'string')
+      .map(p => path.resolve(p))
+      .filter(p => isAllowedPath(p));
+
+    if (!objectName || !rawDest || typeof rawDest !== 'string' || !subFolderPaths.length) {
+      return res.status(400).json({
+        success: false,
+        error: 'objectName, subFolderPaths, and destinationPath are required'
+      });
+    }
+    const destinationPath = path.resolve(rawDest);
+    if (!isAllowedPath(destinationPath)) {
+      return res.status(400).json({ success: false, error: 'Invalid destinationPath' });
+    }
+
+    const result = await stackExportService.scanForExport(subFolderPaths, objectName, destinationPath);
+    res.json({ success: true, ...result });
+  } catch (error) {
+    console.error('Stack export scan error:', error);
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
+/** Start the stack export (async — progress via Socket.IO). */
+app.post('/api/export/stack', heavyOpLimiter, async (req, res) => {
+  try {
+    const { objectName, socketId } = req.body;
+    const rawDest = req.body.destinationPath;
+    const subFolderPaths = (Array.isArray(req.body.subFolderPaths) ? req.body.subFolderPaths : [])
+      .filter(p => p && typeof p === 'string')
+      .map(p => path.resolve(p))
+      .filter(p => isAllowedPath(p));
+
+    if (!objectName || !rawDest || typeof rawDest !== 'string' || !socketId || !subFolderPaths.length) {
+      return res.status(400).json({
+        success: false,
+        error: 'objectName, subFolderPaths, destinationPath, and socketId are required'
+      });
+    }
+    const destinationPath = path.resolve(rawDest);
+    if (!isAllowedPath(destinationPath)) {
+      return res.status(400).json({ success: false, error: 'Invalid destinationPath' });
+    }
+
+    const operationId = Date.now().toString();
+    console.log(`Starting stack export: "${objectName}" → ${destinationPath}`);
+
+    stackExportService.exportToStacking(objectName, subFolderPaths, destinationPath, socketId, operationId)
+      .catch(error => {
+        io.to(socketId).emit('stackexport:error', { error: error.message, operationId });
+      });
+
+    res.json({ success: true, operationId });
+  } catch (error) {
+    console.error('Stack export start error:', error);
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
+/** Cancel an in-progress stack export. */
+app.post('/api/export/stack/cancel', lightLimiter, async (req, res) => {
+  try {
+    const result = await stackExportService.cancelExport();
+    res.json(result);
+  } catch (error) {
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
+/** Validate the exported files against the manifest returned on completion. */
+app.post('/api/export/stack/validate', heavyOpLimiter, async (req, res) => {
+  try {
+    const { socketId } = req.body;
+    const manifest = Array.isArray(req.body.manifest) ? req.body.manifest : [];
+
+    if (!socketId || !manifest.length) {
+      return res.status(400).json({ success: false, error: 'socketId and manifest are required' });
+    }
+
+    // Validate each path in the manifest is on an allowed Windows root
+    const validatedManifest = manifest
+      .filter(e => e && typeof e.sourcePath === 'string' && typeof e.destPath === 'string')
+      .filter(e => isAllowedPath(path.resolve(e.sourcePath)) && isAllowedPath(path.resolve(e.destPath)))
+      .map(e => ({ sourcePath: path.resolve(e.sourcePath), destPath: path.resolve(e.destPath), size: e.size }));
+
+    if (!validatedManifest.length) {
+      return res.status(400).json({ success: false, error: 'No valid manifest entries' });
+    }
+
+    const operationId = Date.now().toString();
+
+    stackExportService.validateExport(validatedManifest, socketId, operationId)
+      .catch(error => {
+        io.to(socketId).emit('validate:error', { error: error.message, operationId });
+      });
+
+    res.json({ success: true, operationId });
+  } catch (error) {
+    console.error('Stack export validate error:', error);
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
 // ─── Object Rename ───────────────────────────────────────────────────────────
 app.post('/api/rename-object', heavyOpLimiter, async (req, res) => {
   try {
@@ -1079,6 +1192,7 @@ const gracefulShutdown = () => {
   // Cancel any ongoing operations
   importService.cancelImport().catch(() => { });
   mergeService.cancelMerge().catch(() => { });
+  stackExportService.cancelExport().catch(() => { });
 
   // Close all Socket.IO connections
   io.close(() => {

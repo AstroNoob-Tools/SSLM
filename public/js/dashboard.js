@@ -3,6 +3,14 @@
 class Dashboard {
     constructor() {
         this.data = null;
+        // Stack Export state
+        this._exportBrowsePath     = null;
+        this._exportBrowseResolve  = null;
+        this._exportManifest       = null;
+        this._exportCurrentObj     = null;
+        this._exportHandlersReady  = false;
+        this._exportTimerHandle    = null;
+        this._exportTimerStart     = null;
         this.init();
     }
 
@@ -44,6 +52,16 @@ class Dashboard {
             if (catalogCard) {
                 const catalog = catalogCard.dataset.catalog;
                 this.showCatalogDetail(catalog);
+            }
+        });
+
+        // Export to Stacking button (using event delegation)
+        document.addEventListener('click', (e) => {
+            const btn = e.target.closest('.export-stack-btn');
+            if (btn && this.data) {
+                const objectName = btn.dataset.objectName;
+                const obj = this.data.objects.find(o => o.name === objectName);
+                if (obj) this._startExportFlow(obj);
             }
         });
     }
@@ -88,12 +106,12 @@ class Dashboard {
                     <!-- Summary Cards -->
                     <section id="summary" style="scroll-margin-top: 100px;">
                         <div class="summary-cards" style="display: grid; grid-template-columns: repeat(6, 1fr); gap: 1rem; margin-bottom: 2rem;">
-                            ${this.renderSummaryCard('🎯', 'Total Objects', summary.totalObjects, 'primary')}
-                            ${this.renderSummaryCard('📦', 'With Sub-Frames', summary.withSubFrames, 'secondary')}
-                            ${this.renderSummaryCard('📁', 'Without Sub-Frames', summary.withoutSubFrames, 'accent')}
-                            ${this.renderSummaryCard('💾', 'Total Size', summary.totalSizeFormatted, 'success')}
-                            ${this.renderSummaryCard('📄', 'Total Files', summary.totalFiles, 'info')}
-                            ${summary.emptyDirectories > 0 ? this.renderSummaryCard('⚠️', 'Empty Folders', summary.emptyDirectories, 'warning') : ''}
+                            ${this.renderSummaryCard('🎯', 'Total Objects', summary.totalObjects, 'primary', true)}
+                            ${this.renderSummaryCard('📦', 'With Sub-Frames', summary.withSubFrames, 'secondary', true)}
+                            ${this.renderSummaryCard('📁', 'Without Sub-Frames', summary.withoutSubFrames, 'accent', true)}
+                            ${this.renderSummaryCard('💾', 'Total Size', summary.totalSizeFormatted, 'success', true)}
+                            ${this.renderSummaryCard('📄', 'Total Files', summary.totalFiles, 'info', true)}
+                            ${summary.emptyDirectories > 0 ? this.renderSummaryCard('⚠️', 'Empty Folders', summary.emptyDirectories, 'warning', true) : ''}
                         </div>
                     </section>
 
@@ -101,7 +119,7 @@ class Dashboard {
                     <section id="file-types" style="scroll-margin-top: 100px;">
                         <div class="file-breakdown" style="background: var(--bg-card); border-radius: 16px; padding: 1.5rem; margin-bottom: 2rem;">
                             <h3 style="margin-bottom: 1rem;">📊 File Types</h3>
-                            <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 1rem;">
+                            <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(160px, 1fr)); gap: 0.75rem;">
                                 ${this.renderFileStat('.FIT Files', summary.fitFiles)}
                                 ${this.renderFileStat('.JPG Files', summary.jpgFiles)}
                                 ${summary.mp4Files > 0 ? this.renderFileStat('🎥 Videos (.MP4)', summary.mp4Files) : ''}
@@ -304,13 +322,12 @@ class Dashboard {
 
         if (compact) {
             return `
-                <div class="summary-card" style="background: var(--bg-card); border-radius: 10px; padding: 0.65rem 0.75rem;
-                                                 border: 2px solid var(--border-color); transition: var(--transition); display: flex; align-items: center; gap: 0.6rem;">
-                    <div style="font-size: 1.25rem; line-height: 1;">${icon}</div>
-                    <div style="min-width: 0;">
-                        <div style="font-size: 0.7rem; color: var(--text-secondary); white-space: nowrap;">${label}</div>
-                        <div style="font-size: 1rem; font-weight: 600; color: ${colors[colorClass]}; white-space: nowrap;">${value}</div>
-                    </div>
+                <div class="summary-card" style="background: var(--bg-card); border-radius: 10px; padding: 0.5rem 0.75rem;
+                                                 border: 2px solid var(--border-color); transition: var(--transition);
+                                                 display: flex; align-items: center; gap: 0.5rem;">
+                    <span style="font-size: 1.1rem; line-height: 1; flex-shrink: 0;">${icon}</span>
+                    <span style="font-size: 0.75rem; color: var(--text-secondary); white-space: nowrap;">${label}</span>
+                    <span style="font-size: 0.95rem; font-weight: 600; color: ${colors[colorClass]}; margin-left: auto; white-space: nowrap;">${value}</span>
                 </div>
             `;
         }
@@ -327,9 +344,10 @@ class Dashboard {
 
     renderFileStat(label, count) {
         return `
-            <div style="text-align: center; padding: 1rem; background: var(--bg-tertiary); border-radius: 8px;">
-                <div style="font-size: 1.5rem; font-weight: 600; color: var(--primary-color);">${count}</div>
-                <div style="font-size: 0.875rem; color: var(--text-secondary); margin-top: 0.25rem;">${label}</div>
+            <div style="display: flex; align-items: center; gap: 0.5rem; padding: 0.5rem 0.75rem;
+                        background: var(--bg-tertiary); border-radius: 8px;">
+                <span style="font-size: 0.8rem; color: var(--text-secondary); flex: 1; white-space: nowrap;">${label}</span>
+                <span style="font-size: 0.95rem; font-weight: 600; color: var(--primary-color); white-space: nowrap;">${count}</span>
             </div>
         `;
     }
@@ -349,19 +367,17 @@ class Dashboard {
         return `
             <div class="catalog-breakdown" style="background: var(--bg-card); border-radius: 16px; padding: 1.5rem; margin-bottom: 2rem;">
                 <h3 style="margin-bottom: 1rem;">📚 Catalog Breakdown</h3>
-                <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 1rem;">
+                <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(160px, 1fr)); gap: 0.75rem;">
                     ${catalogs.map(([catalog, count]) => `
                         <div class="catalog-card" data-catalog="${catalog}"
-                             style="display: flex; align-items: center; gap: 1rem; padding: 1rem;
+                             style="display: flex; align-items: center; gap: 0.5rem; padding: 0.5rem 0.75rem;
                                     background: var(--bg-tertiary); border-radius: 8px; cursor: pointer;
                                     transition: all 0.2s; border: 2px solid transparent;"
                              onmouseover="this.style.background='var(--bg-secondary)'; this.style.borderColor='var(--primary-color)';"
                              onmouseout="this.style.background='var(--bg-tertiary)'; this.style.borderColor='transparent';">
-                            <span style="font-size: 2rem;">${catalogIcons[catalog] || '📁'}</span>
-                            <div>
-                                <div style="font-weight: 600; font-size: 1.25rem; color: var(--primary-color);">${count}</div>
-                                <div style="font-size: 0.875rem; color: var(--text-secondary);">${catalog}</div>
-                            </div>
+                            <span style="font-size: 1.1rem; flex-shrink: 0;">${catalogIcons[catalog] || '📁'}</span>
+                            <span style="font-size: 0.8rem; color: var(--text-secondary); flex: 1; white-space: nowrap;">${catalog}</span>
+                            <span style="font-size: 0.95rem; font-weight: 600; color: var(--primary-color); white-space: nowrap;">${count}</span>
                         </div>
                     `).join('')}
                 </div>
@@ -1129,12 +1145,12 @@ class Dashboard {
 
                 <!-- Summary Cards -->
                 <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 1.5rem; margin-bottom: 2rem;">
-                    ${this.renderSummaryCard('🎯', 'Total Objects', totalObjects, 'primary')}
-                    ${this.renderSummaryCard('📦', 'With Sub-Frames', withSubFrames, 'secondary')}
-                    ${this.renderSummaryCard('📁', 'Without Sub-Frames', withoutSubFrames, 'accent')}
-                    ${this.renderSummaryCard('💾', 'Total Size', app.formatBytes(totalSize), 'success')}
-                    ${this.renderSummaryCard('📄', 'Total Files', totalFiles, 'info')}
-                    ${this.renderSummaryCard('⏱️', 'Total Integration', this.formatIntegrationTime(totalIntegration), 'warning')}
+                    ${this.renderSummaryCard('🎯', 'Total Objects', totalObjects, 'primary', true)}
+                    ${this.renderSummaryCard('📦', 'With Sub-Frames', withSubFrames, 'secondary', true)}
+                    ${this.renderSummaryCard('📁', 'Without Sub-Frames', withoutSubFrames, 'accent', true)}
+                    ${this.renderSummaryCard('💾', 'Total Size', app.formatBytes(totalSize), 'success', true)}
+                    ${this.renderSummaryCard('📄', 'Total Files', totalFiles, 'info', true)}
+                    ${this.renderSummaryCard('⏱️', 'Total Integration', this.formatIntegrationTime(totalIntegration), 'warning', true)}
                 </div>
 
                 <!-- Objects List -->
@@ -1263,8 +1279,8 @@ class Dashboard {
             // Format RA/Dec as HH:MM:SS / ±DD:MM:SS
             let coordsHtml = '';
             if (hasCoords) {
-                const ra  = this._formatRA(data.ra);
-                const dec = this._formatDec(data.dec);
+                const ra  = escapeHtml(this._formatRA(parseFloat(data.ra)));
+                const dec = escapeHtml(this._formatDec(parseFloat(data.dec)));
                 coordsHtml = `<span class="alias-coords">📍 RA ${ra} / Dec ${dec}</span>`;
             }
 
@@ -1438,30 +1454,56 @@ class Dashboard {
 
                 <!-- Object Header -->
                 <div style="background: var(--bg-card); border-radius: 16px; padding: 2rem; margin-bottom: 2rem;">
-                    <div style="display: flex; justify-content: space-between; align-items: start; flex-wrap: wrap; gap: 2rem;">
-                        <div>
-                            <h1 style="font-size: 2.5rem; margin-bottom: 0.5rem;">
-                                ${obj.displayName}
-                                ${obj.isMosaic ? '<span style="font-size: 1rem; background: var(--accent-color); color: black; padding: 0.25rem 0.75rem; border-radius: 6px; margin-left: 1rem;">Mosaic</span>' : ''}
-                            </h1>
-                            <p style="color: var(--text-secondary); font-size: 1.125rem;">
-                                Catalog: <strong>${obj.catalog}</strong> ${obj.catalogNumber ? `· Number: <strong>${obj.catalogNumber}</strong>` : ''}
-                                ${obj.hasSubFrames ? `· Mount Mode: ${this._mountModeBadge(obj.mountMode)}` : ''}
-                            </p>
-                            <div id="object-aliases-section" class="alias-section" style="display:none;"></div>
-                        </div>
-                        <div style="text-align: right; display: flex; flex-direction: column; gap: 0.75rem; align-items: flex-end;">
-                            ${obj.hasSubFrames && this._countNonFitSubFiles(obj) > 0 ? `
-                                <button class="cleanup-object-btn" data-object-name="${obj.name}"
-                                        style="background: var(--warning-color); color: white; border: none;
-                                               border-radius: 8px; padding: 0.75rem 1.5rem; cursor: pointer;
-                                               font-size: 1rem; font-weight: 600; transition: opacity 0.2s;"
-                                        onmouseover="this.style.opacity='0.8'"
-                                        onmouseout="this.style.opacity='1'">
-                                    🧹 Clean Up Sub-Frames
-                                </button>
-                            ` : ''}
-                            <div id="rebrand-action"></div>
+                    <div style="display: flex; align-items: flex-start; gap: 1.5rem; flex-wrap: wrap;">
+                        ${(() => {
+                            const jpgFiles = (obj.mainFolder.files || [])
+                                .filter(f => f.endsWith('.jpg') && !f.endsWith('_thn.jpg'))
+                                .sort().reverse();
+                            if (!jpgFiles.length) return '';
+                            const sep = obj.mainFolder.path.includes('\\') ? '\\' : '/';
+                            const imgPath = encodeURIComponent(obj.mainFolder.path + sep + jpgFiles[0]);
+                            return `<img src="/api/image?path=${imgPath}"
+                                         alt="${escapeHtml(obj.displayName)}"
+                                         style="width: 130px; height: 130px; object-fit: cover; border-radius: 10px;
+                                                flex-shrink: 0; border: 2px solid var(--border-color);"
+                                         onerror="this.style.display='none'">`;
+                        })()}
+                        <div style="flex: 1; min-width: 0; display: flex; justify-content: space-between; align-items: flex-start; flex-wrap: wrap; gap: 1rem;">
+                            <div>
+                                <h1 style="font-size: 2.5rem; margin-bottom: 0.5rem;">
+                                    ${obj.displayName}
+                                    ${obj.isMosaic ? '<span style="font-size: 1rem; background: var(--accent-color); color: black; padding: 0.25rem 0.75rem; border-radius: 6px; margin-left: 1rem;">Mosaic</span>' : ''}
+                                </h1>
+                                <p style="color: var(--text-secondary); font-size: 1.125rem;">
+                                    Catalog: <strong>${obj.catalog}</strong> ${obj.catalogNumber ? `· Number: <strong>${obj.catalogNumber}</strong>` : ''}
+                                    ${obj.hasSubFrames ? `· Mount Mode: ${this._mountModeBadge(obj.mountMode)}` : ''}
+                                </p>
+                                <div id="object-aliases-section" class="alias-section" style="display:none;"></div>
+                            </div>
+                            <div style="text-align: right; display: flex; flex-direction: column; gap: 0.75rem; align-items: flex-end;">
+                                ${obj.hasSubFrames ? `
+                                    <button class="export-stack-btn" data-object-name="${obj.name}"
+                                            style="background: var(--primary-color); color: white; border: none;
+                                                   border-radius: 8px; padding: 0.75rem 1.5rem; cursor: pointer;
+                                                   font-size: 1rem; font-weight: 600; transition: opacity 0.2s;"
+                                            onmouseover="this.style.opacity='0.8'"
+                                            onmouseout="this.style.opacity='1'"
+                                            title="Copy light frames into a folder structure ready for Siril / PixInsight">
+                                        📤 Export to Stacking
+                                    </button>
+                                ` : ''}
+                                ${obj.hasSubFrames && this._countNonFitSubFiles(obj) > 0 ? `
+                                    <button class="cleanup-object-btn" data-object-name="${obj.name}"
+                                            style="background: var(--warning-color); color: white; border: none;
+                                                   border-radius: 8px; padding: 0.75rem 1.5rem; cursor: pointer;
+                                                   font-size: 1rem; font-weight: 600; transition: opacity 0.2s;"
+                                            onmouseover="this.style.opacity='0.8'"
+                                            onmouseout="this.style.opacity='1'">
+                                        🧹 Clean Up Sub-Frames
+                                    </button>
+                                ` : ''}
+                                <div id="rebrand-action"></div>
+                            </div>
                         </div>
                     </div>
                 </div>
@@ -1495,7 +1537,7 @@ class Dashboard {
                             <p style="font-weight: 600;">${app.formatBytes(obj.mainFolder.size)}</p>
                         </div>
                     </div>
-                    ${this.renderFileList(obj.mainFolder.files, 'Main Folder Files', obj.mainFolder.path)}
+                    ${this.renderFileList(obj.mainFolder.files, 'Main Folder Files', obj.mainFolder.path, true)}
                 </div>
 
                 <!-- Sub-Frames Folder Details (one card per sub-folder: Eq _sub and/or Alt/Az -sub) -->
@@ -1528,7 +1570,7 @@ class Dashboard {
                                 <p style="font-weight: 600;">${otherCount}</p>
                             </div>
                         </div>
-                        ${this.renderFileList(sf.files, 'Sub-Frame Files', sf.path)}
+                        ${this.renderFileList(sf.files, 'Sub-Frame Files', sf.path, true)}
                     </div>`;
                 }).join('')}
                 </div>
@@ -2072,11 +2114,18 @@ class Dashboard {
         const jpgFiles = files.filter(f => f.endsWith('.jpg') && !f.endsWith('_thn.jpg'));
         const thnFiles = files.filter(f => f.endsWith('_thn.jpg'));
         const mp4Files = files.filter(f => f.endsWith('.mp4'));
-        const otherFiles = files.filter(f =>
-            !f.endsWith('.fit') &&
-            !f.endsWith('.jpg') &&
-            !f.endsWith('.mp4')
-        );
+        const viewableImageExts = ['.png', '.jpeg', '.tif', '.tiff', '.gif', '.bmp', '.webp'];
+        const userImageFiles = files.filter(f => {
+            const lower = f.toLowerCase();
+            return viewableImageExts.some(ext => lower.endsWith(ext));
+        });
+        const otherFiles = files.filter(f => {
+            const lower = f.toLowerCase();
+            return !f.endsWith('.fit') &&
+                !f.endsWith('.jpg') &&
+                !f.endsWith('.mp4') &&
+                !viewableImageExts.some(ext => lower.endsWith(ext));
+        });
 
         return `
             <details ${defaultOpen ? 'open' : ''} style="cursor: pointer;">
@@ -2117,6 +2166,26 @@ class Dashboard {
                                                 justify-content: space-between; align-items: center; gap: 1rem;
                                                 cursor: pointer; transition: background-color 0.2s;">
                                         <span style="flex: 1; word-break: break-all;">${file}</span>
+                                        ${captureDate ? `<span style="color: var(--text-secondary); font-size: 0.75rem; white-space: nowrap;">${captureDate}</span>` : ''}
+                                    </div>
+                                `;
+        }).join('')}
+                        </div>
+                    ` : ''}
+                    ${userImageFiles.length > 0 ? `
+                        <div style="margin-bottom: 1rem;">
+                            <h4 style="font-size: 0.875rem; color: var(--text-secondary); margin-bottom: 0.5rem;">
+                                🖼️ Images (${userImageFiles.length})
+                            </h4>
+                            ${userImageFiles.map(file => {
+            const captureDate = this.extractCaptureDate(file);
+            return `
+                                    <div class="image-file-item" data-folder-path="${folderPath}" data-filename="${file}"
+                                         style="padding: 0.5rem; border-bottom: 1px solid var(--border-color);
+                                                font-family: monospace; font-size: 0.875rem; display: flex;
+                                                justify-content: space-between; align-items: center; gap: 1rem;
+                                                cursor: pointer; transition: background-color 0.2s;">
+                                        <span style="flex: 1; word-break: break-all;">🖼️ ${escapeHtml(file)}</span>
                                         ${captureDate ? `<span style="color: var(--text-secondary); font-size: 0.75rem; white-space: nowrap;">${captureDate}</span>` : ''}
                                     </div>
                                 `;
@@ -2257,6 +2326,624 @@ class Dashboard {
         img.onload = () => {
             filenameDisplay.style.color = 'var(--text-primary)';
         };
+    }
+
+    // ══════════════════════════════════════════════════════════════════════════
+    // Stack Export — folder picker, confirmation, progress, validation
+    // ══════════════════════════════════════════════════════════════════════════
+
+    /** Return an array of existing sub-folder paths for obj (EQ and/or Alt/Az). */
+    _getSubFolderPaths(obj) {
+        const paths = [];
+        if (obj.subFolderEq    && obj.subFolderEq.path)    paths.push(obj.subFolderEq.path);
+        if (obj.subFolderAltAz && obj.subFolderAltAz.path) paths.push(obj.subFolderAltAz.path);
+        return paths;
+    }
+
+    /** Register Socket.IO handlers for stack export events (once, lazily). */
+    _setupExportSocketHandlers() {
+        if (this._exportHandlersReady || !app.socket) return;
+        this._exportHandlersReady = true;
+
+        app.socket.on('stackexport:progress', (data) => {
+            if (app.currentScreen !== 'stackExport') return;
+            this._handleExportProgress(data);
+        });
+        app.socket.on('stackexport:complete', (data) => {
+            if (app.currentScreen !== 'stackExport') return;
+            this._handleExportComplete(data);
+        });
+        app.socket.on('stackexport:error', (data) => {
+            if (app.currentScreen !== 'stackExport') return;
+            this._handleExportError(data);
+        });
+        app.socket.on('stackexport:cancelled', () => {
+            if (app.currentScreen !== 'stackExport') return;
+            this._handleExportCancelled();
+        });
+        // Validation events (shared with import/merge)
+        app.socket.on('validate:progress', (data) => {
+            if (app.currentScreen !== 'stackExport') return;
+            this._handleExportValidateProgress(data);
+        });
+        app.socket.on('validate:complete', (data) => {
+            if (app.currentScreen !== 'stackExport') return;
+            this._handleExportValidateComplete(data);
+        });
+        app.socket.on('validate:error', (data) => {
+            if (app.currentScreen !== 'stackExport') return;
+            this._handleExportValidateError(data);
+        });
+    }
+
+    // ── Step 1: folder picker ─────────────────────────────────────────────────
+
+    /** Entry point — show folder browser modal, then scan + confirm. */
+    async _startExportFlow(obj) {
+        this._exportCurrentObj = obj;
+        this._setupExportSocketHandlers();
+
+        const destPath = await this._showExportFolderBrowserModal(
+            `Select Export Destination for ${obj.displayName}`
+        );
+        if (!destPath) return; // user cancelled
+
+        await this._confirmExport(obj, destPath);
+    }
+
+    /** Show a modal with a folder browser; resolves to the selected path or null. */
+    async _showExportFolderBrowserModal(title) {
+        return new Promise((resolve) => {
+            this._exportBrowsePath    = null;
+            this._exportBrowseResolve = resolve;
+
+            const body = `
+                <div class="folder-browser">
+                    <div id="exportBrowserPath" style="padding: 0.75rem; background: var(--bg-tertiary);
+                         border-radius: 4px; margin-bottom: 1rem; font-family: monospace; font-size: 0.9em;">
+                        Loading drives…
+                    </div>
+                    <div id="exportFolderList" style="max-height: 360px; overflow-y: auto;
+                         border: 1px solid var(--border-color); border-radius: 4px;">
+                        <div style="padding: 2rem; text-align: center; color: var(--text-secondary);">Loading…</div>
+                    </div>
+                </div>
+            `;
+
+            app.showModal(title, body, () => {
+                if (this._exportBrowsePath) {
+                    resolve(this._exportBrowsePath);
+                } else {
+                    app.showModal('Select Folder', 'Please navigate to and select a destination folder first.');
+                }
+            }, 'Select This Folder');
+
+            // Override Cancel so it resolves null instead of leaving the Promise hanging
+            setTimeout(() => {
+                const cancelBtn = document.getElementById('modalCancel');
+                if (cancelBtn) {
+                    const fresh = cancelBtn.cloneNode(true);
+                    cancelBtn.parentNode.replaceChild(fresh, cancelBtn);
+                    fresh.addEventListener('click', () => { resolve(null); app.hideModal(); });
+                }
+            }, 50);
+
+            this._loadExportDrives();
+        });
+    }
+
+    async _loadExportDrives() {
+        try {
+            const res  = await fetch('/api/browse/drives');
+            const data = await res.json();
+            if (data.success) this._renderExportDrives(data.drives);
+        } catch (err) {
+            console.error('Export browser: failed to load drives', err);
+        }
+    }
+
+    _renderExportDrives(drives) {
+        const pathDiv = document.getElementById('exportBrowserPath');
+        const listDiv = document.getElementById('exportFolderList');
+        if (pathDiv) pathDiv.textContent = 'Select a drive or location';
+        if (!listDiv) return;
+
+        listDiv.innerHTML = drives.map(d => `
+            <div class="folder-item" data-path="${d.path}"
+                 style="padding: 0.75rem; cursor: pointer; border-bottom: 1px solid var(--border-color); transition: background 0.2s;">
+                <div style="display: flex; align-items: center; gap: 0.5rem;">
+                    <span>💾</span><span>${escapeHtml(d.name)} (${escapeHtml(d.path)})</span>
+                </div>
+            </div>
+        `).join('');
+
+        listDiv.querySelectorAll('.folder-item').forEach(item => {
+            item.addEventListener('click', () => this._browseExportPath(item.getAttribute('data-path')));
+            item.addEventListener('mouseenter', function () { this.style.background = 'var(--bg-tertiary)'; });
+            item.addEventListener('mouseleave', function () { this.style.background = 'transparent'; });
+        });
+    }
+
+    async _browseExportPath(targetPath) {
+        this._exportBrowsePath = targetPath;
+        try {
+            const res  = await fetch(`/api/browse/directory?path=${encodeURIComponent(targetPath)}`);
+            const data = await res.json();
+            if (data.success) this._renderExportDirContents(data.directories || [], targetPath);
+        } catch (err) {
+            console.error('Export browser: failed to browse path', err);
+        }
+    }
+
+    _renderExportDirContents(dirs, currentPath) {
+        const pathDiv = document.getElementById('exportBrowserPath');
+        const listDiv = document.getElementById('exportFolderList');
+        if (pathDiv) pathDiv.textContent = currentPath;
+        if (!listDiv) return;
+
+        const sep        = currentPath.includes('\\') ? '\\' : '/';
+        const parentPath = currentPath.lastIndexOf(sep) > 0
+            ? currentPath.substring(0, currentPath.lastIndexOf(sep))
+            : '';
+
+        let html = '';
+        if (parentPath) {
+            html += `<div class="folder-item" data-path="${parentPath}"
+                style="padding: 0.75rem; cursor: pointer; border-bottom: 1px solid var(--border-color); transition: background 0.2s;">
+                <div style="display: flex; align-items: center; gap: 0.5rem;"><span>⬆️</span><span>..</span></div>
+            </div>`;
+        }
+        if (dirs.length) {
+            html += dirs.map(d => `
+                <div class="folder-item" data-path="${d.path}"
+                    style="padding: 0.75rem; cursor: pointer; border-bottom: 1px solid var(--border-color); transition: background 0.2s;">
+                    <div style="display: flex; align-items: center; gap: 0.5rem;">
+                        <span>📁</span><span>${escapeHtml(d.name)}</span>
+                    </div>
+                </div>`).join('');
+        } else {
+            html += '<div style="padding: 1rem; text-align: center; color: var(--text-secondary);">No sub-folders found</div>';
+        }
+        listDiv.innerHTML = html;
+
+        listDiv.querySelectorAll('.folder-item').forEach(item => {
+            item.addEventListener('click', () => this._browseExportPath(item.getAttribute('data-path')));
+            item.addEventListener('mouseenter', function () { this.style.background = 'var(--bg-tertiary)'; });
+            item.addEventListener('mouseleave', function () { this.style.background = 'transparent'; });
+        });
+    }
+
+    // ── Step 2: scan + confirm ────────────────────────────────────────────────
+
+    async _confirmExport(obj, destPath) {
+        app.showLoading('Scanning source files…');
+        let data;
+        try {
+            const res = await fetch('/api/export/stack/scan', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    objectName:    obj.name,
+                    subFolderPaths: this._getSubFolderPaths(obj),
+                    destinationPath: destPath
+                })
+            });
+            data = await res.json();
+            app.hideLoading();
+        } catch (err) {
+            app.hideLoading();
+            app.showModal('Export Error', `Could not scan source files: ${escapeHtml(err.message)}`);
+            return;
+        }
+
+        if (!data.success) {
+            app.showModal('Export Error', `Could not scan source files: ${escapeHtml(data.error)}`);
+            return;
+        }
+        if (data.totalFiles === 0) {
+            app.showModal('Nothing to Export',
+                `No .fit Light frames were found in the sub-frame folder(s) for <strong>${escapeHtml(obj.displayName)}</strong>.`);
+            return;
+        }
+
+        const spaceOk = data.hasEnoughSpace;
+        const body = `
+            <div style="line-height: 1.8;">
+                <p>Ready to export <strong>${escapeHtml(obj.displayName)}</strong> to a stacking-ready folder structure.</p>
+                <table style="width: 100%; border-collapse: collapse; margin: 1rem 0;">
+                    <tr>
+                        <td style="padding: 0.35rem 0; color: var(--text-secondary);">Files to copy</td>
+                        <td style="padding: 0.35rem 0; font-weight: 600;">${data.totalFiles.toLocaleString()} .fit files</td>
+                    </tr>
+                    <tr>
+                        <td style="padding: 0.35rem 0; color: var(--text-secondary);">Total size</td>
+                        <td style="padding: 0.35rem 0; font-weight: 600;">${escapeHtml(data.totalBytesFormatted)}</td>
+                    </tr>
+                    <tr>
+                        <td style="padding: 0.35rem 0; color: var(--text-secondary);">Available at destination</td>
+                        <td style="padding: 0.35rem 0; font-weight: 600;
+                            color: ${spaceOk ? 'var(--success-color)' : 'var(--danger-color)'};">
+                            ${escapeHtml(data.availableFormatted)} ${spaceOk ? '✔' : '✗ Insufficient'}
+                        </td>
+                    </tr>
+                    <tr>
+                        <td style="padding: 0.35rem 0; color: var(--text-secondary);">Destination folder</td>
+                        <td style="padding: 0.35rem 0; font-family: monospace; font-size: 0.875em; word-break: break-all;">
+                            ${escapeHtml(data.destinationRoot)}
+                        </td>
+                    </tr>
+                </table>
+                ${!spaceOk ? `<p style="color: var(--danger-color); font-weight: 600; margin: 0;">
+                    ⚠ Not enough disk space. Choose a different destination or free up space first.</p>` : ''}
+            </div>
+        `;
+
+        if (!spaceOk) {
+            app.showModal('Export to Stacking', body);
+            return;
+        }
+
+        // Store destination for use during the export
+        this._exportDestPath = destPath;
+
+        app.showModal('Export to Stacking', body, () => {
+            this._executeExport(obj, destPath);
+        }, '📤 Start Export');
+    }
+
+    // ── Step 3: execute & show progress screen ────────────────────────────────
+
+    async _executeExport(obj, destPath) {
+        if (!app.socket || !app.socket.id) {
+            app.showModal('Connection Error', 'Socket.IO is not connected. Please reload the app.');
+            return;
+        }
+
+        this._exportManifest   = null;
+        this._exportCurrentObj = obj;
+
+        app.showScreen('stackExportScreen');
+        this._renderExportProgressScreen(obj);
+
+        try {
+            const res = await fetch('/api/export/stack', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    objectName:      obj.name,
+                    subFolderPaths:  this._getSubFolderPaths(obj),
+                    destinationPath: destPath,
+                    socketId:        app.socket.id
+                })
+            });
+            const data = await res.json();
+            if (!data.success) {
+                app.showModal('Export Failed', `Could not start export: ${escapeHtml(data.error)}`);
+                app.showScreen('objectDetailScreen');
+            }
+        } catch (err) {
+            app.showModal('Export Failed', `Unexpected error: ${escapeHtml(err.message)}`);
+            app.showScreen('objectDetailScreen');
+        }
+    }
+
+    _renderExportProgressScreen(obj) {
+        const content = document.getElementById('stackExportContent');
+        if (!content) return;
+
+        content.innerHTML = `
+            <style>
+                @keyframes exportPulse {
+                    0%   { left: -40%; width: 40%; }
+                    100% { left: 100%; width: 40%; }
+                }
+                .export-pulse-bar {
+                    position: relative; overflow: hidden;
+                    background: var(--bg-tertiary); border-radius: 8px; height: 100%;
+                }
+                .export-pulse-bar::after {
+                    content: ''; position: absolute; top: 0; bottom: 0;
+                    background: var(--primary-color); border-radius: 8px;
+                    animation: exportPulse 1.4s ease-in-out infinite;
+                }
+            </style>
+            <div style="padding: 2rem; max-width: 900px; margin: 0 auto;">
+                <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 1.5rem; flex-wrap: wrap; gap: 1rem;">
+                    <div>
+                        <h2 style="margin: 0; font-size: 1.5rem;">📤 Export to Stacking</h2>
+                        <p style="margin: 0.25rem 0 0; color: var(--text-secondary);">${escapeHtml(obj.displayName)}</p>
+                    </div>
+                    <div style="display: flex; gap: 0.75rem;">
+                        <button id="exportCancelBtn" class="btn btn-secondary">Cancel</button>
+                        <button id="exportDoneBtn"    class="btn btn-primary"  style="display: none;">Done</button>
+                        <button id="exportValidateBtn" class="btn btn-success" style="display: none;">✔ Validate</button>
+                    </div>
+                </div>
+
+                <!-- Indeterminate bar during scan, determinate during copy -->
+                <div class="progress-bar-container" id="exportBarIndeterminate">
+                    <div class="export-pulse-bar"></div>
+                </div>
+                <div class="progress-bar-container" id="exportBarContainer" style="display: none;">
+                    <div class="progress-bar" id="exportBar" style="width: 0%;">0%</div>
+                </div>
+
+                <div id="exportCurrentFile" style="color: var(--text-secondary); font-style: italic; margin-top: 1rem;">
+                    Scanning source files…
+                </div>
+                <div class="stats-pills-row" style="margin-top: 0.75rem;">
+                    <div id="exportFileCount" style="display: none;">Files: 0 / 0</div>
+                    <div id="exportByteCount" style="display: none;">Data: 0 B / 0 B</div>
+                    <div id="exportSpeed"     style="display: none;">Speed: —</div>
+                    <div id="exportEta"       style="display: none; color: var(--warning-color);">ETA: …</div>
+                    <div id="exportElapsed"   style="color: var(--success-color);">Total Time: 0:00</div>
+                </div>
+
+                <!-- Completion / validation area -->
+                <div id="exportResultArea" style="display: none; margin-top: 2rem;"></div>
+            </div>
+        `;
+
+        document.getElementById('exportCancelBtn').addEventListener('click', async () => {
+            const btn = document.getElementById('exportCancelBtn');
+            btn.disabled = true;
+            btn.textContent = 'Cancelling…';
+            await fetch('/api/export/stack/cancel', { method: 'POST' });
+        });
+
+        document.getElementById('exportDoneBtn').addEventListener('click', () => {
+            this._stopExportTimer();
+            if (this._exportCurrentObj) this.renderObjectDetail(this._exportCurrentObj);
+            app.showScreen('objectDetailScreen');
+        });
+
+        document.getElementById('exportValidateBtn').addEventListener('click', () => {
+            this._startExportValidation();
+        });
+
+        this._startExportTimer();
+    }
+
+    // ── Progress / completion event handlers ──────────────────────────────────
+
+    _handleExportProgress(data) {
+        const currentFileEl = document.getElementById('exportCurrentFile');
+        if (currentFileEl) currentFileEl.textContent = data.currentFile || '';
+
+        if (data.status === 'copying' || (data.status === 'starting' && data.totalFiles > 0)) {
+            // Switch to determinate bar on first real progress
+            const indBar  = document.getElementById('exportBarIndeterminate');
+            const realBar = document.getElementById('exportBarContainer');
+            const barFill = document.getElementById('exportBar');
+            if (indBar && indBar.style.display !== 'none') {
+                indBar.style.display = 'none';
+                if (realBar) realBar.style.display = 'block';
+            }
+            const pct = data.bytesPercentage || 0;
+            if (barFill) { barFill.style.width = pct + '%'; barFill.textContent = pct + '%'; }
+
+            const fc = document.getElementById('exportFileCount');
+            const bc = document.getElementById('exportByteCount');
+            const sp = document.getElementById('exportSpeed');
+            const et = document.getElementById('exportEta');
+            if (fc) { fc.style.display = ''; fc.textContent = `Files: ${(data.filesCopied || 0).toLocaleString()} / ${(data.totalFiles || 0).toLocaleString()}`; }
+            if (bc) { bc.style.display = ''; bc.textContent = `Data: ${app.formatBytes(data.bytesCopied || 0)} / ${app.formatBytes(data.totalBytes || 0)}`; }
+            if (sp && data.speedFormatted) { sp.style.display = ''; sp.textContent = `Speed: ${data.speedFormatted}`; }
+            if (et && data.timeRemaining != null && data.timeRemainingFormatted) {
+                et.style.display = ''; et.textContent = `ETA: ${data.timeRemainingFormatted}`;
+            }
+        }
+    }
+
+    _handleExportComplete(data) {
+        this._stopExportTimer();
+
+        const indBar  = document.getElementById('exportBarIndeterminate');
+        const realBar = document.getElementById('exportBarContainer');
+        const barFill = document.getElementById('exportBar');
+        if (indBar)  indBar.style.display  = 'none';
+        if (realBar) realBar.style.display = 'block';
+        if (barFill) { barFill.style.width = '100%'; barFill.textContent = '100%'; }
+
+        const currentFileEl = document.getElementById('exportCurrentFile');
+        if (currentFileEl) currentFileEl.textContent = 'Export complete!';
+
+        const cancelBtn   = document.getElementById('exportCancelBtn');
+        const doneBtn     = document.getElementById('exportDoneBtn');
+        const validateBtn = document.getElementById('exportValidateBtn');
+        if (cancelBtn)   cancelBtn.style.display   = 'none';
+        if (doneBtn)     doneBtn.style.display     = '';
+        if (validateBtn) validateBtn.style.display = '';
+
+        this._exportManifest = data.manifest || [];
+
+        const resultArea = document.getElementById('exportResultArea');
+        if (resultArea) {
+            const errCount = (data.errors || []).length;
+            resultArea.style.display = '';
+            resultArea.innerHTML = `
+                <div style="background: var(--bg-card); border-radius: 12px; padding: 1.5rem;
+                            border: 1px solid ${errCount ? 'var(--warning-color)' : 'var(--success-color)'};">
+                    <h3 style="margin: 0 0 0.75rem; color: ${errCount ? 'var(--warning-color)' : 'var(--success-color)'};">
+                        ${errCount ? '⚠ Completed with errors' : '✔ Export Complete'}
+                    </h3>
+                    <div class="stats-pills-row" style="flex-wrap: wrap; gap: 0.5rem 1.5rem;">
+                        <span>Files copied: <strong>${(data.filesCopied || 0).toLocaleString()}</strong></span>
+                        <span>Total size: <strong>${escapeHtml(data.totalBytesFormatted || '—')}</strong></span>
+                        <span>Duration: <strong>${escapeHtml(data.durationFormatted || '—')}</strong></span>
+                        ${errCount ? `<span style="color: var(--danger-color);">Errors: <strong>${errCount}</strong></span>` : ''}
+                    </div>
+                    <p style="margin: 0.75rem 0 0; color: var(--text-secondary); font-size: 0.9rem;">
+                        Click <em>Validate</em> to verify all files were copied correctly, or <em>Done</em> to return.
+                    </p>
+                </div>
+            `;
+        }
+    }
+
+    _handleExportError(data) {
+        this._stopExportTimer();
+
+        const currentFileEl = document.getElementById('exportCurrentFile');
+        if (currentFileEl) currentFileEl.textContent = `Error: ${data.error || 'Unknown error'}`;
+
+        const cancelBtn = document.getElementById('exportCancelBtn');
+        const doneBtn   = document.getElementById('exportDoneBtn');
+        if (cancelBtn) cancelBtn.style.display = 'none';
+        if (doneBtn)   doneBtn.style.display   = '';
+
+        const resultArea = document.getElementById('exportResultArea');
+        if (resultArea) {
+            resultArea.style.display = '';
+            resultArea.innerHTML = `
+                <div style="background: var(--bg-card); border-radius: 12px; padding: 1.5rem;
+                            border: 1px solid var(--danger-color);">
+                    <h3 style="color: var(--danger-color);">✗ Export Failed</h3>
+                    <p>${escapeHtml(data.error || 'An unexpected error occurred.')}</p>
+                </div>`;
+        }
+    }
+
+    _handleExportCancelled() {
+        this._stopExportTimer();
+
+        const currentFileEl = document.getElementById('exportCurrentFile');
+        if (currentFileEl) currentFileEl.textContent = 'Export cancelled.';
+
+        const cancelBtn = document.getElementById('exportCancelBtn');
+        const doneBtn   = document.getElementById('exportDoneBtn');
+        if (cancelBtn) cancelBtn.style.display = 'none';
+        if (doneBtn)   doneBtn.style.display   = '';
+    }
+
+    // ── Validation ────────────────────────────────────────────────────────────
+
+    async _startExportValidation() {
+        if (!this._exportManifest || !this._exportManifest.length) {
+            app.showModal('Validation Error', 'No export manifest available. Please re-export.');
+            return;
+        }
+
+        const validateBtn = document.getElementById('exportValidateBtn');
+        if (validateBtn) { validateBtn.disabled = true; validateBtn.textContent = 'Validating…'; }
+
+        const resultArea = document.getElementById('exportResultArea');
+        if (resultArea) {
+            resultArea.style.display = '';
+            resultArea.innerHTML = `
+                <div style="background: var(--bg-card); border-radius: 12px; padding: 1.5rem;">
+                    <h3 style="margin: 0 0 1rem;">Validating…</h3>
+                    <div class="progress-bar-container">
+                        <div class="progress-bar" id="validationProgressBar" style="width: 0%;">0%</div>
+                    </div>
+                    <div style="margin-top: 0.5rem; color: var(--text-secondary);" id="validationStatusMsg">
+                        Checking files…
+                    </div>
+                </div>`;
+        }
+
+        try {
+            const res = await fetch('/api/export/stack/validate', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ manifest: this._exportManifest, socketId: app.socket.id })
+            });
+            const data = await res.json();
+            if (!data.success) {
+                app.showModal('Validation Error', `Could not start validation: ${escapeHtml(data.error)}`);
+                if (validateBtn) { validateBtn.disabled = false; validateBtn.textContent = '✔ Validate'; }
+            }
+        } catch (err) {
+            app.showModal('Validation Error', `Unexpected error: ${escapeHtml(err.message)}`);
+            if (validateBtn) { validateBtn.disabled = false; validateBtn.textContent = '✔ Validate'; }
+        }
+    }
+
+    _handleExportValidateProgress(data) {
+        const bar = document.getElementById('validationProgressBar');
+        const msg = document.getElementById('validationStatusMsg');
+        if (bar && data.percentage != null) {
+            bar.style.width = data.percentage + '%';
+            bar.textContent  = data.percentage + '%';
+        }
+        if (msg && data.filesValidated != null) {
+            const issues = data.mismatches ? ` — ${data.mismatches} issue(s) found` : '';
+            msg.textContent = `Checked ${(data.filesValidated || 0).toLocaleString()} / ${(data.totalFiles || 0).toLocaleString()} files${issues}`;
+        }
+    }
+
+    _handleExportValidateComplete(data) {
+        const validateBtn = document.getElementById('exportValidateBtn');
+        if (validateBtn) validateBtn.style.display = 'none';
+
+        const resultArea = document.getElementById('exportResultArea');
+        if (!resultArea) return;
+
+        const ok     = data.success;
+        const issues = data.mismatches || [];
+        let issueHtml = '';
+
+        if (issues.length) {
+            const shown = issues.slice(0, 50);
+            issueHtml = `
+                <div style="margin-top: 1rem; max-height: 200px; overflow-y: auto;">
+                    <table style="width: 100%; border-collapse: collapse; font-size: 0.85rem;">
+                        <thead><tr>
+                            <th style="text-align: left; padding: 0.25rem 0.5rem; border-bottom: 1px solid var(--border-color);">File</th>
+                            <th style="text-align: left; padding: 0.25rem 0.5rem; border-bottom: 1px solid var(--border-color);">Issue</th>
+                        </tr></thead>
+                        <tbody>${shown.map(m => `
+                            <tr>
+                                <td style="padding: 0.25rem 0.5rem;">${escapeHtml(m.file)}</td>
+                                <td style="padding: 0.25rem 0.5rem; color: var(--danger-color);">${escapeHtml(m.message)}</td>
+                            </tr>`).join('')}
+                        </tbody>
+                    </table>
+                    ${issues.length > 50 ? `<p style="color: var(--text-secondary); font-size: 0.85rem;">…and ${issues.length - 50} more</p>` : ''}
+                </div>`;
+        }
+
+        resultArea.innerHTML = `
+            <div style="background: var(--bg-card); border-radius: 12px; padding: 1.5rem;
+                        border: 1px solid ${ok ? 'var(--success-color)' : 'var(--warning-color)'};">
+                <h3 style="margin: 0 0 0.75rem; color: ${ok ? 'var(--success-color)' : 'var(--warning-color)'};">
+                    ${ok ? '✔ Validation Passed' : `⚠ Validation Found ${issues.length} Issue(s)`}
+                </h3>
+                <p>${(data.filesValidated || 0).toLocaleString()} files checked in ${escapeHtml(data.durationFormatted || '—')}.</p>
+                ${ok ? '' : issueHtml}
+            </div>`;
+    }
+
+    _handleExportValidateError(data) {
+        const resultArea = document.getElementById('exportResultArea');
+        if (resultArea) {
+            resultArea.innerHTML = `
+                <div style="background: var(--bg-card); border-radius: 12px; padding: 1.5rem;
+                            border: 1px solid var(--danger-color);">
+                    <h3 style="color: var(--danger-color);">✗ Validation Error</h3>
+                    <p>${escapeHtml(data.error || 'Unknown error')}</p>
+                </div>`;
+        }
+    }
+
+    // ── Elapsed timer ─────────────────────────────────────────────────────────
+
+    _startExportTimer() {
+        this._exportTimerStart = Date.now();
+        this._exportTimerHandle = setInterval(() => {
+            const el = document.getElementById('exportElapsed');
+            if (el) {
+                const s = Math.floor((Date.now() - this._exportTimerStart) / 1000);
+                el.textContent = `Total Time: ${Math.floor(s / 60)}:${String(s % 60).padStart(2, '0')}`;
+            }
+        }, 1000);
+    }
+
+    _stopExportTimer() {
+        if (this._exportTimerHandle) {
+            clearInterval(this._exportTimerHandle);
+            this._exportTimerHandle = null;
+        }
     }
 }
 
