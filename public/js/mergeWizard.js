@@ -910,7 +910,7 @@ class MergeWizard {
             }
         } catch (error) {
             console.error('[MergeWizard] Error starting merge:', error);
-            app.showModal('Error', `Failed to start merge: ${error.message}`);
+            app.showModal('Error', `Failed to start merge: ${escapeHtml(error.message)}`);
         }
     }
 
@@ -977,7 +977,7 @@ class MergeWizard {
 
     handleMergeError(data) {
         console.error('Merge error:', data);
-        app.showModal('Error', `Merge failed: ${data.error}`);
+        app.showModal('Error', `Merge failed: ${escapeHtml(data.error)}`);
     }
 
     handleMergeCancelled(data) {
@@ -1069,7 +1069,7 @@ class MergeWizard {
             }
         } catch (error) {
             console.error('Error starting validation:', error);
-            app.showModal('Error', `Failed to start validation: ${error.message}`);
+            app.showModal('Error', `Failed to start validation: ${escapeHtml(error.message)}`);
         }
     }
 
@@ -1096,7 +1096,7 @@ class MergeWizard {
             }
         } catch (error) {
             console.error('Error starting validation:', error);
-            app.showModal('Error', `Failed to start validation: ${error.message}`);
+            app.showModal('Error', `Failed to start validation: ${escapeHtml(error.message)}`);
         }
     }
 
@@ -1205,7 +1205,7 @@ class MergeWizard {
 
     handleValidationError(data) {
         console.error('Validation error:', data);
-        app.showModal('Error', `Validation failed: ${data.error}`);
+        app.showModal('Error', `Validation failed: ${escapeHtml(data.error)}`);
     }
 
     async skipToAnalysisDashboard() {
@@ -1244,7 +1244,7 @@ class MergeWizard {
         } catch (error) {
             console.error('Error analyzing merged library:', error);
             console.error('Destination path was:', this.destinationPath);
-            app.showModal('Error', `Failed to analyze merged library: ${error.message}\n\nPath: ${this.destinationPath || 'undefined'}`);
+            app.showModal('Error', `Failed to analyze merged library: ${escapeHtml(error.message)}\n\nPath: ${escapeHtml(this.destinationPath || 'undefined')}`);
         }
     }
 

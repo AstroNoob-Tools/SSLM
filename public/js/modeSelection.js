@@ -254,7 +254,7 @@ class ModeSelection {
             }
         } catch (error) {
             console.error('Error adding favorite:', error);
-            app.showModal('Error', `<p>Failed to add favorite: ${error.message}</p>`, null, 'Close');
+            app.showModal('Error', `<p>Failed to add favorite: ${escapeHtml(error.message)}</p>`, null, 'Close');
         }
     }
 
@@ -275,7 +275,7 @@ class ModeSelection {
             }
         } catch (error) {
             console.error('Error removing favorite:', error);
-            app.showModal('Error', `<p>Failed to remove favorite: ${error.message}</p>`, null, 'Close');
+            app.showModal('Error', `<p>Failed to remove favorite: ${escapeHtml(error.message)}</p>`, null, 'Close');
         }
     }
 
@@ -503,7 +503,7 @@ class ModeSelection {
             } else {
                 app.showModal(
                     'Analysis Error',
-                    `<p>Failed to analyze directory:</p><p style="color: var(--danger-color);">${result.error}</p>`,
+                    `<p>Failed to analyze directory:</p><p style="color: var(--danger-color);">${escapeHtml(result.error)}</p>`,
                     null
                 );
             }
@@ -511,7 +511,7 @@ class ModeSelection {
             app.hideLoading();
             app.showModal(
                 'Error',
-                `<p>An error occurred during analysis:</p><p style="color: var(--danger-color);">${error.message}</p>`,
+                `<p>An error occurred during analysis:</p><p style="color: var(--danger-color);">${escapeHtml(error.message)}</p>`,
                 null
             );
         }

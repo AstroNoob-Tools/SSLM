@@ -1,4 +1,18 @@
 // SSLM - SeeStar Library Manager - Main Application
+
+// Escape user-controlled strings before inserting into innerHTML (CWE-79)
+function escapeHtml(s) {
+    if (s == null) return '';
+    return String(s)
+        .replace(/&/g, '&amp;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;')
+        .replace(/"/g, '&quot;')
+        .replace(/'/g, '&#039;');
+}
+// Expose as global so other JS modules loaded in the same page can use it
+window.escapeHtml = escapeHtml;
+
 class App {
     constructor() {
         this.socket = null;
@@ -191,7 +205,13 @@ class App {
         modalTitle.textContent = title;
 
         if (typeof body === 'string') {
-            modalBody.innerHTML = body;
+            // Parse into a detached document — scripts never execute in DOMParser output.
+            // Strip any <script> elements as defence-in-depth, then import safe nodes
+            // into the live document. Never assigns untrusted content to live innerHTML.
+            const doc = new DOMParser().parseFromString(body, 'text/html');
+            doc.querySelectorAll('script').forEach(el => el.remove());
+            const imported = Array.from(doc.body.childNodes).map(n => document.importNode(n, true));
+            modalBody.replaceChildren(...imported);
         } else {
             modalBody.innerHTML = '';
             modalBody.appendChild(body);

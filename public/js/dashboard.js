@@ -785,13 +785,13 @@ class Dashboard {
                     this.refreshDashboard();
                 }, 1500);
             } else {
-                app.showModal('Error', `<p>Failed to delete directories: ${result.error || 'Unknown error'}</p>`, null, 'Close');
+                app.showModal('Error', `<p>Failed to delete directories: ${escapeHtml(result.error || 'Unknown error')}</p>`, null, 'Close');
             }
 
         } catch (error) {
             app.hideLoading();
             console.error('Error deleting empty directories:', error);
-            app.showModal('Error', `<p>An error occurred: ${error.message}</p>`, null, 'Close');
+            app.showModal('Error', `<p>An error occurred: ${escapeHtml(error.message)}</p>`, null, 'Close');
         }
     }
 
@@ -886,13 +886,13 @@ class Dashboard {
                     this.refreshDashboard();
                 }, 2000);
             } else {
-                app.showModal('Error', `<p>Failed to clean up sub-frames: ${result.error || 'Unknown error'}</p>`, null, 'Close');
+                app.showModal('Error', `<p>Failed to clean up sub-frames: ${escapeHtml(result.error || 'Unknown error')}</p>`, null, 'Close');
             }
 
         } catch (error) {
             app.hideLoading();
             console.error('Error cleaning up sub-frames:', error);
-            app.showModal('Error', `<p>An error occurred: ${error.message}</p>`, null, 'Close');
+            app.showModal('Error', `<p>An error occurred: ${escapeHtml(error.message)}</p>`, null, 'Close');
         }
     }
 
@@ -983,7 +983,7 @@ class Dashboard {
                         <p style="color: var(--success-color); font-weight: 600; margin-bottom: 1rem;">
                             ✓ Cleanup Complete!
                         </p>
-                        <p style="margin-bottom: 0.5rem;">Object: <strong>${object.displayName}</strong></p>
+                        <p style="margin-bottom: 0.5rem;">Object: <strong>${escapeHtml(object.displayName)}</strong></p>
                         <ul style="list-style: none; padding: 0;">
                             <li style="margin-bottom: 0.5rem;">🗑️ Files deleted: <strong>${cleanedObj ? cleanedObj.filesDeleted : result.totalFilesDeleted}</strong></li>
                             <li style="margin-bottom: 0.5rem;">💾 Space freed: <strong>${app.formatBytes(result.totalSpaceFreed)}</strong></li>
@@ -1001,13 +1001,13 @@ class Dashboard {
                     }
                 }, 2000);
             } else {
-                app.showModal('Error', `<p>Failed to clean up: ${result.error || 'Unknown error'}</p>`, null, 'Close');
+                app.showModal('Error', `<p>Failed to clean up: ${escapeHtml(result.error || 'Unknown error')}</p>`, null, 'Close');
             }
 
         } catch (error) {
             app.hideLoading();
             console.error('Error cleaning up object:', error);
-            app.showModal('Error', `<p>An error occurred: ${error.message}</p>`, null, 'Close');
+            app.showModal('Error', `<p>An error occurred: ${escapeHtml(error.message)}</p>`, null, 'Close');
         }
     }
 
@@ -1270,7 +1270,7 @@ class Dashboard {
 
             let aliasesHtml = '';
             if (aliases.length) {
-                const badges = aliases.map(a => `<span class="alias-badge">${a}</span>`).join('');
+                const badges = aliases.map(a => `<span class="alias-badge">${escapeHtml(a)}</span>`).join('');
                 aliasesHtml = `<div class="alias-badges-row">${badges}</div>`;
             }
 
@@ -1332,7 +1332,7 @@ class Dashboard {
 
         const html = `
             <p style="margin-bottom: 1rem; color: var(--text-secondary);">
-                Select a new catalog name for <strong>${obj.displayName}</strong>:
+                Select a new catalog name for <strong>${escapeHtml(obj.displayName)}</strong>:
             </p>
             <div class="rebrand-options-grid">${optionsHtml}</div>
             <p style="margin-top: 1.25rem; font-size: 0.8rem; color: var(--text-muted);">
@@ -1356,7 +1356,7 @@ class Dashboard {
 
     _confirmRebrand(obj, toName) {
         const html = `
-            <p>Rename <strong>${obj.displayName}</strong> → <strong>${toName}</strong>?</p>
+            <p>Rename <strong>${escapeHtml(obj.displayName)}</strong> → <strong>${escapeHtml(toName)}</strong>?</p>
             <p style="color: var(--warning-color); margin-top: 0.75rem; font-size: 0.875rem;">
                 ⚠️ All matching files and folders will be permanently renamed. This cannot be automatically undone.
             </p>
@@ -1379,14 +1379,14 @@ class Dashboard {
 
             if (!result.success) {
                 app.showModal('Rename Failed',
-                    `<p style="color: var(--warning-color);">❌ ${result.error || result.errors?.join('<br>')}</p>`
+                    `<p style="color: var(--warning-color);">❌ ${escapeHtml(result.error) || result.errors?.map(e => escapeHtml(e)).join('<br>')}</p>`
                 );
                 return;
             }
 
             // Show brief success, then refresh dashboard and open the renamed object
             app.showModal('Rename Complete', `
-                <p>✅ <strong>${obj.displayName}</strong> has been renamed to <strong>${toName}</strong>.</p>
+                <p>✅ <strong>${escapeHtml(obj.displayName)}</strong> has been renamed to <strong>${escapeHtml(toName)}</strong>.</p>
                 <p style="color: var(--text-secondary); margin-top: 0.5rem; font-size: 0.875rem;">
                     ${result.renamedFolders.length} folder(s) · ${result.renamedFiles.length} file(s) renamed.
                 </p>
@@ -1400,7 +1400,7 @@ class Dashboard {
 
         } catch (err) {
             app.showModal('Rename Failed',
-                `<p style="color: var(--warning-color);">❌ ${err.message}</p>`
+                `<p style="color: var(--warning-color);">❌ ${escapeHtml(err.message)}</p>`
             );
         }
     }
@@ -1763,11 +1763,11 @@ class Dashboard {
                         window.scrollTo(0, 0);
                     }, 2000);
                 } else {
-                    app.showModal('Error', `<p>Failed to delete session: ${result.errors && result.errors[0] ? result.errors[0].error : 'Unknown error'}</p>`, null, 'Close');
+                    app.showModal('Error', `<p>Failed to delete session: ${escapeHtml(result.errors && result.errors[0] ? result.errors[0].error : 'Unknown error')}</p>`, null, 'Close');
                 }
             } catch (error) {
                 app.hideLoading();
-                app.showModal('Error', `<p>An error occurred: ${error.message}</p>`, null, 'Close');
+                app.showModal('Error', `<p>An error occurred: ${escapeHtml(error.message)}</p>`, null, 'Close');
             }
         }, 'Delete');
     }

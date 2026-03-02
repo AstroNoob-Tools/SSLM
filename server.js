@@ -84,6 +84,18 @@ app.disable('x-powered-by'); // Do not advertise the framework in response heade
 // windowMs: rolling window length; max: max requests per window per IP
 function createRateLimiter({ windowMs = 60_000, max = 10 } = {}) {
   const hits = new Map(); // ip -> [timestamps]
+
+  // Periodically evict entries whose timestamps have all expired, bounding Map growth (CWE-770)
+  const cleanupTimer = setInterval(() => {
+    const now = Date.now();
+    for (const [ip, timestamps] of hits.entries()) {
+      if (timestamps.every(t => now - t >= windowMs)) {
+        hits.delete(ip);
+      }
+    }
+  }, windowMs * 2);
+  cleanupTimer.unref(); // Don't prevent process exit
+
   return (req, res, next) => {
     const ip = req.ip || req.connection.remoteAddress || 'unknown';
     const now = Date.now();
@@ -119,7 +131,7 @@ app.get('/', lightLimiter, (req, res) => {
   res.sendFile(path.join(__dirname, 'public', 'index.html'));
 });
 
-app.get('/api/status', (req, res) => {
+app.get('/api/status', lightLimiter, (req, res) => {
   res.json({
     status: 'running',
     version: '1.0.0',
@@ -128,7 +140,7 @@ app.get('/api/status', (req, res) => {
   });
 });
 
-app.get('/api/config', (req, res) => {
+app.get('/api/config', lightLimiter, (req, res) => {
   res.json({
     version: APP_VERSION,
     mode: config.mode,
@@ -203,7 +215,7 @@ app.get('/api/image', lightLimiter, async (req, res) => {
 });
 
 // Favorites API Routes
-app.get('/api/favorites', (req, res) => {
+app.get('/api/favorites', lightLimiter, (req, res) => {
   try {
     const favorites = config.favorites || [];
     res.json({ success: true, favorites });
@@ -272,7 +284,7 @@ app.post('/api/favorites/remove', analysisLimiter, async (req, res) => {
 });
 
 // Directory Browser API Routes
-app.get('/api/browse/drives', async (req, res) => {
+app.get('/api/browse/drives', lightLimiter, async (req, res) => {
   try {
     const drives = await DirectoryBrowser.getWindowsDrives();
     const common = DirectoryBrowser.getCommonDirectories();
@@ -287,7 +299,7 @@ app.get('/api/browse/drives', async (req, res) => {
   }
 });
 
-app.get('/api/browse/directory', async (req, res) => {
+app.get('/api/browse/directory', analysisLimiter, async (req, res) => {
   try {
     const rawPath = req.query.path;
     if (!rawPath || typeof rawPath !== 'string') {
@@ -312,7 +324,7 @@ app.get('/api/browse/directory', async (req, res) => {
   }
 });
 
-app.post('/api/browse/create-directory', async (req, res) => {
+app.post('/api/browse/create-directory', analysisLimiter, async (req, res) => {
   try {
     const { parentPath, folderName } = req.body;
 
@@ -460,7 +472,7 @@ app.get('/api/analyze/cleanup-suggestions', analysisLimiter, async (req, res) =>
 });
 
 // Cleanup API Routes
-app.post('/api/cleanup/empty-directories', async (req, res) => {
+app.post('/api/cleanup/empty-directories', heavyOpLimiter, async (req, res) => {
   try {
     console.log('Empty directories cleanup request received');
     const { directories } = req.body;
@@ -482,7 +494,7 @@ app.post('/api/cleanup/empty-directories', async (req, res) => {
   }
 });
 
-app.post('/api/cleanup/subframe-directories', async (req, res) => {
+app.post('/api/cleanup/subframe-directories', heavyOpLimiter, async (req, res) => {
   try {
     console.log('Sub-frame cleanup request received');
     const { objects } = req.body;
@@ -504,7 +516,7 @@ app.post('/api/cleanup/subframe-directories', async (req, res) => {
   }
 });
 
-app.get('/api/cleanup/subframe-info', async (req, res) => {
+app.get('/api/cleanup/subframe-info', analysisLimiter, async (req, res) => {
   try {
     const rawPath = req.query.path;
     if (!rawPath || typeof rawPath !== 'string') {
@@ -533,7 +545,7 @@ app.get('/api/cleanup/subframe-info', async (req, res) => {
 });
 
 // Delete Session Files
-app.post('/api/cleanup/session', async (req, res) => {
+app.post('/api/cleanup/session', heavyOpLimiter, async (req, res) => {
   try {
     const { mainFolderPath, mainFiles, subFiles } = req.body;
 
@@ -646,7 +658,7 @@ app.post('/api/import/start', heavyOpLimiter, async (req, res) => {
   }
 });
 
-app.post('/api/import/cancel', async (req, res) => {
+app.post('/api/import/cancel', lightLimiter, async (req, res) => {
   try {
     console.log('Cancelling import...');
     const result = await importService.cancelImport();
@@ -840,7 +852,7 @@ app.post('/api/merge/start', heavyOpLimiter, async (req, res) => {
   }
 });
 
-app.post('/api/merge/cancel', async (req, res) => {
+app.post('/api/merge/cancel', lightLimiter, async (req, res) => {
   try {
     console.log('Cancelling merge...');
     const result = await mergeService.cancelMerge();
@@ -886,7 +898,7 @@ app.post('/api/merge/validate', analysisLimiter, async (req, res) => {
 });
 
 // ─── Object Rename ───────────────────────────────────────────────────────────
-app.post('/api/rename-object', async (req, res) => {
+app.post('/api/rename-object', heavyOpLimiter, async (req, res) => {
   try {
     const { fromName, toName } = req.body;
     const rawLib = req.body.libraryPath;
@@ -921,7 +933,7 @@ app.post('/api/rename-object', async (req, res) => {
 // In-memory cache: normalized object name → resolved result (lives for process lifetime)
 const aliasCache = new Map();
 
-app.get('/api/catalog/aliases', async (req, res) => {
+app.get('/api/catalog/aliases', analysisLimiter, async (req, res) => {
   // This endpoint requires Online mode
   if (!config.mode.online) {
     return res.json({ success: false, offline: true, aliases: [], message: 'Online mode required' });
@@ -1055,7 +1067,7 @@ server.listen(PORT, HOST, () => {
 });
 
 // Quit endpoint — lets the browser trigger a graceful shutdown
-app.post('/api/quit', (req, res) => {
+app.post('/api/quit', lightLimiter, (req, res) => {
   res.json({ message: 'Shutting down...' });
   setTimeout(gracefulShutdown, 200);
 });

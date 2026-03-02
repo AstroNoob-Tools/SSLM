@@ -1207,7 +1207,7 @@ class ImportWizard {
                 <div style="text-align: center; padding: 1rem;">
                     <div style="font-size: 4rem; margin-bottom: 1rem; color: var(--danger-color);">✗</div>
                     <h3 style="margin-bottom: 1rem;">Import Failed</h3>
-                    <p style="color: var(--danger-color);">${data.error || 'An unknown error occurred'}</p>
+                    <p style="color: var(--danger-color);">${escapeHtml(data.error || 'An unknown error occurred')}</p>
                 </div>
             `,
             () => {
@@ -1359,8 +1359,8 @@ class ImportWizard {
                     <ul style="margin: 0; padding-left: 1.5rem; font-size: 0.9rem;">
                         ${data.mismatches.slice(0, 50).map(m => `
                             <li style="margin-bottom: 0.5rem;">
-                                <strong>${m.file}</strong><br>
-                                <span style="color: var(--danger-color);">${m.message}</span>
+                                <strong>${escapeHtml(m.file)}</strong><br>
+                                <span style="color: var(--danger-color);">${escapeHtml(m.message)}</span>
                             </li>
                         `).join('')}
                         ${data.mismatches.length > 50 ? `<li><em>...and ${data.mismatches.length - 50} more</em></li>` : ''}
@@ -1415,7 +1415,7 @@ class ImportWizard {
                     <h3 style="margin-bottom: 1rem;">Validation Error</h3>
                     <p>An error occurred while validating the transfer:</p>
                     <div style="background: var(--bg-tertiary); padding: 1rem; border-radius: 8px; margin-top: 1rem;">
-                        <code style="color: var(--danger-color);">${data.error}</code>
+                        <code style="color: var(--danger-color);">${escapeHtml(data.error)}</code>
                     </div>
                 </div>
             `,

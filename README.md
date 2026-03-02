@@ -13,7 +13,7 @@ A local desktop web application for managing astrophotography files captured wit
 Download the latest installer from the **[Releases](https://github.com/AstroNoob-Tools/SSLM/releases)** page.
 
 > **Security Guarantee**: SSLM is unsigned freeware. When you run the installer, Windows Defender SmartScreen may show a blue warning saying "Windows protected your PC" because the publisher is unknown. You can safely install it by clicking **More info** -> **Run anyway**.
-> SHA-256: `fcaa5fb91c0ba511ecd3c1e25cb816214a7b94fc6027aa52d6445f977376131d` — **[View the VirusTotal Security Scan (0/76 engines detected, 27 Feb 2026)](https://www.virustotal.com/gui/file/fcaa5fb91c0ba511ecd3c1e25cb816214a7b94fc6027aa52d6445f977376131d/detection)** proving the `.exe` is 100% clean. SSLM is strictly offline-only, open-source, and never modifies files on your SeeStar device.
+> SHA-256: `b52053fa50005e94da02b41ba519f64799fa1453f5ed9264fa398d4645704b3b` — **[View the VirusTotal Security Scan (71/72 clean — 1 false positive, 27 Feb 2026)](https://www.virustotal.com/gui/file/b52053fa50005e94da02b41ba519f64799fa1453f5ed9264fa398d4645704b3b)** — all major engines (Defender, Kaspersky, ESET, Sophos, CrowdStrike…) are clean. SSLM is strictly offline-only, open-source, and never modifies files on your SeeStar device.
 
 **Current release**: `v1.0.0-beta.3` — public beta
 

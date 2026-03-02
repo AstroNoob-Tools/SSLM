@@ -1,5 +1,28 @@
 # SSLM - SeeStar Library Manager
 
+## Branch Development Plans
+
+When working on any branch other than `main`, always look for a corresponding plan file
+in the `notes/` folder before starting work. The file is named after the branch:
+
+| Branch | Plan file |
+|--------|-----------|
+| `beta4` | `notes/beta4-plan.md` |
+| `betaN` | `notes/betaN-plan.md` |
+| `my-feature` | `notes/my-feature-plan.md` |
+
+**At the start of every session on a feature branch:**
+1. Run `git branch --show-current` to confirm the active branch.
+2. Check if `notes/{branch-name}-plan.md` exists.
+3. If it exists, read it before doing anything else — it defines the goals, planned work,
+   and decisions already made for this branch.
+4. If it does not exist, ask the user whether to create one before proceeding.
+
+Update the plan file as work progresses: tick off completed items and add new ones as
+they are discovered.
+
+---
+
 ## Security Policy
 
 ### CRITICAL: npm Package Security
