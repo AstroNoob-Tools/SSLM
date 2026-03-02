@@ -18,8 +18,8 @@
     "sslm",
     "astronomy"
   ],
-  "author": "",
-  "license": "ISC",
+  "author": "AstroNoob Tools",
+  "license": "PolyForm-Noncommercial-1.0.0",
   "dependencies": {
     "check-disk-space": "^3.4.0",
     "express": "^4.22.1",
