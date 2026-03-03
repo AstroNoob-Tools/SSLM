@@ -442,7 +442,7 @@ The top header bar contains the following controls (left to right):
 - **📊 Dashboard** button — scroll to dashboard (visible only when on dashboard)
 - **🏠 Home** button — return to welcome screen
 - **⚙️ Settings** button — open settings dialog
-- **ℹ️ About** button — opens About modal (version from `sslm.iss`, contact email)
+- **ℹ️ About** button — opens About modal (version from `sslm.iss`, contact email, Buy Me a Coffee link: https://buymeacoffee.com/astro_noob)
 - **⏻ Quit** button — confirmation dialog → `POST /api/quit` → graceful server shutdown
 
 ### Version Reading (`readAppVersion()` in server.js)

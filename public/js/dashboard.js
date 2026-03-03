@@ -1284,17 +1284,33 @@ class Dashboard {
                 coordsHtml = `<span class="alias-coords">📍 RA ${ra} / Dec ${dec}</span>`;
             }
 
-            let aliasesHtml = '';
+            // Build DOM directly — no innerHTML sink
+            section.innerHTML = '';
+
+            const label = document.createElement('p');
+            label.className = 'alias-label';
+            label.textContent = 'Also known as';
+            section.appendChild(label);
+
             if (aliases.length) {
-                const badges = aliases.map(a => `<span class="alias-badge">${escapeHtml(a)}</span>`).join('');
-                aliasesHtml = `<div class="alias-badges-row">${badges}</div>`;
+                const row = document.createElement('div');
+                row.className = 'alias-badges-row';
+                aliases.forEach(a => {
+                    const badge = document.createElement('span');
+                    badge.className = 'alias-badge';
+                    badge.textContent = a;
+                    row.appendChild(badge);
+                });
+                section.appendChild(row);
             }
 
-            section.innerHTML = `
-                <p class="alias-label">Also known as</p>
-                ${aliasesHtml}
-                ${coordsHtml}
-            `;
+            if (hasCoords) {
+                const coords = document.createElement('span');
+                coords.className = 'alias-coords';
+                coords.textContent = `📍 RA ${this._formatRA(parseFloat(data.ra))} / Dec ${this._formatDec(parseFloat(data.dec))}`;
+                section.appendChild(coords);
+            }
+
             section.style.display = 'block';
 
             // Inject Rebrand button if there are alternative catalog names to pick from

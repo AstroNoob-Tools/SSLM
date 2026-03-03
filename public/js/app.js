@@ -123,6 +123,12 @@ class App {
             settingsBtn.addEventListener('click', () => this.showSettings());
         }
 
+        // Buy Me a Coffee button
+        const coffeeBtn = document.getElementById('coffeeBtn');
+        if (coffeeBtn) {
+            coffeeBtn.addEventListener('click', () => window.open('https://buymeacoffee.com/astro_noob', '_blank'));
+        }
+
         // About button
         const aboutBtn = document.getElementById('aboutBtn');
         if (aboutBtn) {
@@ -390,6 +396,15 @@ class App {
                         </td>
                     </tr>
                     <tr>
+                        <td style="padding: 0.5rem 1rem; color: var(--text-secondary);">Support</td>
+                        <td style="padding: 0.5rem 1rem;">
+                            <a href="https://buymeacoffee.com/astro_noob" target="_blank"
+                               style="color: var(--text-secondary); text-decoration: none; font-size: 0.85rem;">
+                                ☕ Buy me a coffee
+                            </a>
+                        </td>
+                    </tr>
+                    <tr style="background: rgba(255,255,255,0.03);">
                         <td style="padding: 0.5rem 1rem; color: var(--text-secondary);">Purpose</td>
                         <td style="padding: 0.5rem 1rem;">Astrophotography library management for SeeStar devices</td>
                     </tr>

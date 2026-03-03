@@ -1,8 +1,8 @@
 # SSLM - SeeStar Library Manager
 ## User Manual
 
-**Version**: 1.0.0-beta.3
-**Date**: February 2026
+**Version**: 1.0.0-beta.4
+**Date**: March 2026
 
 ---
 
@@ -19,11 +19,12 @@
 9. [Session Detail View](#session-detail-view)
 10. [Catalog Detail View](#catalog-detail-view)
 11. [Cleanup Operations](#cleanup-operations)
-12. [Image Viewer](#image-viewer)
-13. [Navigation & Tips](#navigation--tips)
-14. [Online Mode & Catalog Lookup](#online-mode--catalog-lookup)
-15. [Favorites](#favorites)
-16. [Frequently Asked Questions](#frequently-asked-questions)
+12. [Export to Stacking](#export-to-stacking)
+13. [Image Viewer](#image-viewer)
+14. [Navigation & Tips](#navigation--tips)
+15. [Online Mode & Catalog Lookup](#online-mode--catalog-lookup)
+16. [Favourites](#favourites)
+17. [Frequently Asked Questions](#frequently-asked-questions)
 
 ---
 
@@ -37,6 +38,7 @@
 - **Organises** astronomical images by celestial objects
 - **Analyses** your collection with detailed statistics
 - **Merges** multiple library copies into one consolidated library
+- **Exports** raw light frames to a folder structure ready for stacking in Siril or PixInsight
 - **Cleans up** unnecessary files (thumbnails, preview images) to save space
 - **Expurged mode** — optionally skips JPG/thumbnail files from sub-frame directories during import or merge, saving significant disk space
 - **Displays** imaging sessions, integration times, and exposure details
@@ -63,6 +65,7 @@ The application header contains buttons available at all times:
 
 | Button | Icon | Action |
 |--------|------|--------|
+| Support | ☕ | Opens the Buy Me a Coffee support page |
 | Dashboard | 📊 | Return to the dashboard (visible once a library is loaded) |
 | Home | 🏠 | Return to the Welcome Screen |
 | Settings | ⚙️ | Open settings (online/offline mode) |
@@ -332,7 +335,7 @@ The sidebar contains two sections:
 
 ### Summary Cards
 
-Six summary statistics:
+Six summary statistics displayed in a compact single-row layout:
 
 | Card | Description |
 |------|-------------|
@@ -410,6 +413,7 @@ Clicking an object name opens a detailed view with comprehensive information abo
 - Catalog type
 - Sub-frame presence indicator
 - Mount mode badge (`EQ`, `Alt/Az`, or `Both`) — shown when the object has sub-frames
+- Preview thumbnail (130×130 px) — the most recent JPG from the main folder, shown on the left of the header; silently hidden if no JPG exists
 - Quick statistics (integration time, light frames, sessions, total size)
 
 When **Online Mode** is active (see [Online Mode & Catalog Lookup](#online-mode--catalog-lookup)), two additional items appear below the catalog line:
@@ -420,6 +424,10 @@ When **Online Mode** is active (see [Online Mode & Catalog Lookup](#online-mode-
 If the object is not recognised by SIMBAD, or if the network is unavailable, these items are silently omitted — the detail page is otherwise unaffected.
 
 When aliases are available, a **Re Classify** button also appears in the top-right corner of the header. See [Online Mode & Catalog Lookup — Re-Classification](#re-classification) for details.
+
+### Export to Stacking Button
+
+If the object has sub-frames, an **Export to Stacking** button appears at the top right of the header. See [Export to Stacking](#export-to-stacking) for details.
 
 ### Summary Cards
 
@@ -624,13 +632,85 @@ To permanently remove all files for a specific imaging session:
 
 ---
 
+## Export to Stacking
+
+The Export to Stacking feature copies all raw `.fit` light frames for an object into a folder structure ready for direct use with stacking software such as Siril or PixInsight.
+
+### When It Is Available
+
+The **Export to Stacking** button appears at the top right of the Object Detail View whenever the object has at least one sub-frames folder (`_sub` or `-sub`).
+
+### How to Export
+
+1. Open the **Object Detail View** for the object
+2. Click **Export to Stacking**
+3. A folder picker opens — select or create the destination folder where you want the exported frames placed
+4. SSLM shows a confirmation summary:
+   - Number of light frames to copy
+   - Disk space required vs. available
+5. Click **Start Export** to begin
+
+### Progress Screen
+
+A dedicated progress screen shows:
+- Overall progress bar
+- Current file being copied
+- Files copied / total
+- Data transferred
+- Transfer speed and ETA
+- Elapsed time
+
+You can cancel the export at any time.
+
+### Output Folder Structure
+
+SSLM creates the following structure in your chosen destination:
+
+```
+[destination]/
+  [Object_Name]/
+    Lights/
+      Session_YYYYMMDD/
+        [exposure]s_[FILTER]/
+          Light_*.fit
+```
+
+For example, for M 42 with 30-second IRCUT frames across two nights:
+```
+[destination]/
+  M 42/
+    Lights/
+      Session_20250822/
+        30.0s_IRCUT/
+          Light_M 42_30.0s_IRCUT_20250822-203353.fit
+          ...
+      Session_20250910/
+        30.0s_IRCUT/
+          Light_M 42_30.0s_IRCUT_20250910-220515.fit
+          ...
+```
+
+### Deduplication
+
+If the object has both an EQ (`_sub`) and Alt/Az (`-sub`) sub-frame folder, frames from both are merged. When the same file exists in both folders, the newer version (by modification date) is kept.
+
+### Post-Export Validation
+
+After the export completes, SSLM verifies that all expected files are present in the destination with the correct sizes. Any discrepancies are reported.
+
+### Safety
+
+The export is a copy operation — your library files are never modified or deleted. You can run the export multiple times safely.
+
+---
+
 ## Image Viewer
 
-When viewing an Object Detail page, JPG and thumbnail files can be viewed directly in SSLM.
+When viewing an Object Detail page, image files can be viewed directly in SSLM.
 
 ### Opening an Image
 
-- Hover over any `.jpg` or `_thn.jpg` filename — it highlights
+- Hover over any image filename — it highlights
 - Click on the filename to open the Image Viewer
 
 ### Image Viewer Controls
@@ -645,7 +725,9 @@ The filename is displayed below the image.
 
 ### Supported Formats
 
-The image viewer supports: **JPG, JPEG, PNG, GIF, BMP, TIF, TIFF**
+The image viewer supports: **JPG, JPEG, PNG, GIF, BMP, TIF, TIFF, WebP**
+
+An **Images** section appears in the file list for any of these formats found in an object's folders.
 
 ---
 
@@ -655,10 +737,11 @@ The image viewer supports: **JPG, JPEG, PNG, GIF, BMP, TIF, TIFF**
 
 | Button | Visible When | Action |
 |--------|-------------|--------|
+| ☕ Support | Always | Opens Buy Me a Coffee support page |
 | 📊 Dashboard | A library is loaded | Returns to main dashboard from any page |
 | 🏠 Home | Always | Returns to the Welcome Screen |
 | ⚙️ Settings | Always | Opens settings dialog |
-| ℹ️ About | Always | Shows version number and contact email |
+| ℹ️ About | Always | Shows version number, contact email, and support link |
 | ⏻ Quit | Always | Shows confirmation dialog, then shuts down the server |
 
 ### Dashboard Button Behaviour
@@ -838,6 +921,10 @@ Use Expurged mode if you only intend to process the raw `.fit` data with stackin
 
 After an Expurged import, the transfer validation correctly ignores the intentionally skipped files — no false errors are reported.
 
+### What does Export to Stacking do?
+
+Export to Stacking copies all raw `.fit` light frames for a selected object into a structured folder that stacking software can use directly. The output is organised by session date and capture parameters (`[exp]s_[FILTER]`), which matches the input conventions of Siril's preprocessing scripts and PixInsight's WBPP process. Only `.fit` light frames are copied; stacked images and preview files are not included. Your library files are never modified.
+
 ### My import shows a large number of "skipped" files. Is that normal?
 
 Yes, for incremental imports. Files are skipped when they already exist in the destination with the same size and modification date. A high skip count means your local library is already up to date with the device.
@@ -909,5 +996,5 @@ Example: `Light_NGC 6729_30.0s_IRCUT_20250822-203353.fit`
 
 ---
 
-*SSLM - SeeStar Library Manager v1.0.0-beta.3 — User Manual*
-*Last updated: February 2026*
+*SSLM - SeeStar Library Manager v1.0.0-beta.4 — User Manual*
+*Last updated: March 2026*

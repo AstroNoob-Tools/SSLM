@@ -13,13 +13,13 @@ A local desktop web application for managing astrophotography files captured wit
 Download the latest installer from the **[Releases](https://github.com/AstroNoob-Tools/SSLM/releases)** page.
 
 > **Security Guarantee**: SSLM is unsigned freeware. When you run the installer, Windows Defender SmartScreen may show a blue warning saying "Windows protected your PC" because the publisher is unknown. You can safely install it by clicking **More info** -> **Run anyway**.
-> SHA-256: `b52053fa50005e94da02b41ba519f64799fa1453f5ed9264fa398d4645704b3b` — **[View the VirusTotal Security Scan (71/72 clean — 1 false positive, 27 Feb 2026)](https://www.virustotal.com/gui/file/b52053fa50005e94da02b41ba519f64799fa1453f5ed9264fa398d4645704b3b)** — all major engines (Defender, Kaspersky, ESET, Sophos, CrowdStrike…) are clean. SSLM is strictly offline-only, open-source, and never modifies files on your SeeStar device.
+> SHA-256: `2dab40b285b0de647259a69dd31b67b91dafc72af5aae9434f8d4c88d79e7d14` — **[View the VirusTotal Security Scan (75/76 clean — 1 false positive, 3 Mar 2026)](https://www.virustotal.com/gui/file/2dab40b285b0de647259a69dd31b67b91dafc72af5aae9434f8d4c88d79e7d14)** — all major engines (Defender, Kaspersky, ESET, Sophos, CrowdStrike…) are clean. SSLM is strictly offline-only, open-source, and never modifies files on your SeeStar device.
 
-**Current release**: `v1.0.0-beta.3` — public beta
+**Current release**: `v1.0.0-beta.4` — public beta
 
 **No prerequisites** — Node.js is bundled inside the installer.
 
-1. Run `SSLM-Setup-v1.0.0-beta.3.exe`
+1. Run `SSLM-Setup-v1.0.0-beta.4.exe`
 2. Follow the wizard to choose your preferred installation folder (no admin rights needed)
 3. Launch from the **Start Menu** or **Desktop shortcut**
 4. Your browser opens automatically at `http://localhost:3000`
@@ -153,7 +153,7 @@ npm run build
 "C:\Program Files (x86)\Inno Setup 6\ISCC.exe" installer\sslm.iss
 ```
 
-Output: `installer/output/SSLM-Setup-v1.0.0-beta.3.exe`
+Output: `installer/output/SSLM-Setup-v1.0.0-beta.4.exe`
 
 See [documentation/InstallationManual.md](documentation/InstallationManual.md) for the full release checklist.
 
@@ -208,4 +208,4 @@ Contact: astronoob001@gmail.com
 
 ---
 
-*SSLM — SeeStar Library Manager v1.0.0-beta.3 | Last updated: February 2026*
+*SSLM — SeeStar Library Manager v1.0.0-beta.4 | Last updated: March 2026*
