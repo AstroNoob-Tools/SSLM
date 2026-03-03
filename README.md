@@ -35,6 +35,7 @@ Download the latest installer from the **[Releases](https://github.com/AstroNoob
 - **Browse** sessions and files with a rich detail view per celestial object
 - **Delete** specific imaging sessions to reclaim space
 - **Merge** multiple library copies into a single consolidated library
+- **Export to Stacking** — export deduplicated light frames (`.fit`) for a single object into a clean folder structure ready for your stacking software
 - **Clean up** unnecessary preview files from sub-frame directories to save disk space
 - **Look up** cross-catalog identifiers and J2000 coordinates via the SIMBAD database (optional, Online Mode)
 - **Re-classify** objects by renaming all files and folders to a different catalog designation in one operation (Online Mode)
@@ -79,6 +80,26 @@ Download the latest installer from the **[Releases](https://github.com/AstroNoob
 - Expurged mode support
 - Real-time analysis progress and per-source breakdown
 - Post-merge validation
+
+### Export to Stacking
+![Export to stacking](https://raw.githubusercontent.com/AstroNoob-Tools/SSLM-Public/main/assets/sslm/Beta4/Stacking1.JPG)
+- Available on any object detail page that has sub-frames (EQ `_sub` or Alt/Az `-sub`)
+- Folder picker lets you choose any destination on your PC
+- Both EQ and Alt/Az sub-frame folders are merged; duplicates resolved by keeping the newer file (same dedup logic as Merge)
+- Exported structure is ready to load straight into your stacking software:
+  ```
+  [destination]/Object_Name/
+    Lights/
+      Session_YYYYMMDD/
+        [exposure]s_[FILTER]/
+          Light_*.fit
+  ```
+- Pre-export summary shows file count and total size before copying begins
+- Real-time progress display with speed, ETA, and bytes transferred
+![Export to stacking](https://raw.githubusercontent.com/AstroNoob-Tools/SSLM-Public/main/assets/sslm/Beta4/Stacking2.JPG)
+- Post-export validation confirms every file was copied correctly
+- Only `.fit` light frames are exported — no stacked images, no JPGs, no thumbnails
+![View in PixInsight](https://raw.githubusercontent.com/AstroNoob-Tools/SSLM-Public/main/assets/sslm/Beta4/Stacking3.JPG)
 
 ### Cleanup Operations
 - Delete empty directories
@@ -171,14 +192,16 @@ SSLM/
 │       ├── dashboard.js   # Dashboard, object/session detail views
 │       ├── modeSelection.js
 │       ├── importWizard.js
-│       └── mergeWizard.js
+│       ├── mergeWizard.js
+│       └── stackExportWizard.js
 ├── src/
 │   └── services/
 │       ├── catalogParser.js
 │       ├── fileAnalyzer.js
 │       ├── fileCleanup.js
 │       ├── importService.js
-│       └── mergeService.js
+│       ├── mergeService.js
+│       └── stackExportService.js
 ├── installer/
 │   └── sslm.iss           # Inno Setup script (source of truth for version)
 ├── documentation/         # User and installation manuals
@@ -195,7 +218,6 @@ SSLM/
 |----------|-------------|
 | [documentation/UserManual.md](documentation/UserManual.md) | Full user guide |
 | [documentation/InstallationManual.md](documentation/InstallationManual.md) | Installation & release instructions |
-| [documentation/SSLM_Functionalities.md](documentation/SSLM_Functionalities.md) | Technical internals reference |
 
 ---
 
