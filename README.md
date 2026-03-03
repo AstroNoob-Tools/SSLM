@@ -99,7 +99,7 @@ Download the latest installer from the **[Releases](https://github.com/AstroNoob
 ![Export to stacking](https://raw.githubusercontent.com/AstroNoob-Tools/SSLM-Public/main/assets/sslm/Beta4/Stacking2.JPG)
 - Post-export validation confirms every file was copied correctly
 - Only `.fit` light frames are exported — no stacked images, no JPGs, no thumbnails
-![View in PixInsight](https://raw.githubusercontent.com/AstroNoob-Tools/SSLM-Public/main/assets/sslm/Beta4/Stacking3.JPG)
+![View in PixInsight](https://raw.githubusercontent.com/AstroNoob-Tools/SSLM-Public/main/assets/sslm/Beta4/Stacking3A.JPG)
 
 ### Cleanup Operations
 - Delete empty directories
