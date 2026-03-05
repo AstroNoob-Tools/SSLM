@@ -31,29 +31,39 @@ class DiskSpaceValidator {
      * @returns {Promise<number>} Available space in bytes
      */
     static async getAvailableSpace(targetPath) {
+        const parsedPath = path.parse(targetPath);
+        // e.g. "E:\" → "E:"
+        const driveLetter = (parsedPath.root || targetPath).replace(/[/\\]+$/, '');
+
+        // Strategy 1: PowerShell DriveInfo — works on Windows 10 and Windows 11
+        // (wmic was deprecated and removed in Windows 11 24H2)
         try {
-            // Get the drive letter/root from the path
-            const parsedPath = path.parse(targetPath);
-            const drive = parsedPath.root || targetPath;
+            const psCmd = `powershell -NoProfile -Command "[System.IO.DriveInfo]::new('${driveLetter}').AvailableFreeSpace"`;
+            const { stdout } = await execAsync(psCmd);
+            const freeSpace = parseInt(stdout.trim(), 10);
+            if (!isNaN(freeSpace) && freeSpace >= 0) {
+                return freeSpace;
+            }
+        } catch (err) {
+            console.warn('PowerShell DriveInfo failed, falling back to wmic:', err.message);
+        }
 
-            // Use wmic on Windows to get free space
-            const command = `wmic logicaldisk where "DeviceID='${drive.replace('\\', '')}'" get FreeSpace`;
+        // Strategy 2: wmic fallback — Windows 10 only (removed in Win 11 24H2)
+        try {
+            const command = `wmic logicaldisk where "DeviceID='${driveLetter}'" get FreeSpace`;
             const { stdout } = await execAsync(command);
-
-            // Parse the output
             const lines = stdout.trim().split('\n');
             if (lines.length >= 2) {
-                const freeSpace = parseInt(lines[1].trim());
+                const freeSpace = parseInt(lines[1].trim(), 10);
                 if (!isNaN(freeSpace)) {
                     return freeSpace;
                 }
             }
-
-            throw new Error('Unable to parse free space');
-        } catch (error) {
-            console.error('Error getting available space:', error);
-            throw new Error(`Cannot determine available disk space: ${error.message}`);
+        } catch (err) {
+            console.warn('wmic fallback also failed:', err.message);
         }
+
+        throw new Error('Cannot determine available disk space: all methods failed');
     }
 
     /**
