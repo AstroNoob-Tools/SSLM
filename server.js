@@ -2,6 +2,7 @@ const express = require('express');
 const http = require('http');
 const socketIO = require('socket.io');
 const path = require('path');
+const os = require('os');
 const fs = require('fs-extra');
 const DirectoryBrowser = require('./src/utils/directoryBrowser');
 const FileAnalyzer = require('./src/services/fileAnalyzer');
@@ -27,6 +28,28 @@ function readAppVersion() {
 }
 const APP_VERSION = readAppVersion();
 
+// Compare two version strings (e.g. "1.0.0-beta.4").
+// Returns 1 if a > b, -1 if a < b, 0 if equal.
+function compareVersions(a, b) {
+  const parse = v => v.replace(/^v/, '').split(/[.\-]/).map(s => isNaN(s) ? s : Number(s));
+  const pa = parse(a), pb = parse(b);
+  for (let i = 0; i < Math.max(pa.length, pb.length); i++) {
+    const x = pa[i], y = pb[i];
+    if (x === undefined) return -1;
+    if (y === undefined) return 1;
+    if (typeof x === 'number' && typeof y === 'number') {
+      if (x !== y) return x > y ? 1 : -1;
+    } else {
+      const xs = String(x), ys = String(y);
+      if (xs !== ys) return xs > ys ? 1 : -1;
+    }
+  }
+  return 0;
+}
+
+// Session-level cache for update check result (one GitHub API call per server run)
+let updateCheckCache = null;
+
 // Create Express app
 const app = express();
 // HTTP is intentional — this server listens on localhost only and is never exposed
@@ -41,7 +64,26 @@ const configDir = isPackaged
   ? path.join(process.env.APPDATA || process.env.HOME || '.', 'SSLM')
   : path.join(__dirname, 'config');
 const configPath = path.join(configDir, 'settings.json');
+const operationStatePath = path.join(configDir, 'last-operation.json');
 let config = {};
+
+// Write/clear/read a small JSON file that tracks the currently-running operation.
+// On the next startup the presence of this file indicates the previous run was
+// interrupted (crash, power loss) before the operation could finish cleanly.
+function writeOperationState(state) {
+  try {
+    fs.ensureDirSync(configDir);
+    fs.writeJSONSync(operationStatePath, { ...state, startedAt: new Date().toISOString() }, { spaces: 2 });
+  } catch (err) {
+    console.warn('Could not write operation state:', err.message);
+  }
+}
+function clearOperationState() {
+  try { fs.removeSync(operationStatePath); } catch (_) { }
+}
+function readOperationState() {
+  try { return fs.readJSONSync(operationStatePath); } catch (_) { return null; }
+}
 
 try {
   config = fs.readJSONSync(configPath);
@@ -68,9 +110,16 @@ try {
 // Always start in offline mode — user must explicitly enable online features each session
 config.mode.online = false;
 
+// Check for an operation that was interrupted by a crash or unexpected shutdown.
+// If last-operation.json exists at startup it was never cleared by a clean finish.
+const interruptedOperation = readOperationState();
+if (interruptedOperation) {
+  console.warn(`[STARTUP] Interrupted operation detected: ${interruptedOperation.type} started at ${interruptedOperation.startedAt}`);
+}
+
 // Initialize services with Socket.IO and config
-const importService      = new ImportService(io, config);
-const mergeService       = new MergeService(io, config);
+const importService = new ImportService(io, config);
+const mergeService = new MergeService(io, config);
 const stackExportService = new StackExportService(io, config);
 
 const PORT = process.env.PORT || config.server.port || 3000;
@@ -112,9 +161,9 @@ function createRateLimiter({ windowMs = 60_000, max = 10 } = {}) {
 }
 
 // Rate limiters for expensive file-system operations
-const heavyOpLimiter  = createRateLimiter({ windowMs: 60_000, max: 10 });   // import/merge start
+const heavyOpLimiter = createRateLimiter({ windowMs: 60_000, max: 10 });   // import/merge start
 const analysisLimiter = createRateLimiter({ windowMs: 60_000, max: 30 });   // analyze / space checks
-const lightLimiter    = createRateLimiter({ windowMs: 60_000, max: 200 });  // static pages / image serving
+const lightLimiter = createRateLimiter({ windowMs: 60_000, max: 200 });  // static pages / image serving
 
 // Path allowlist — rejects any path that does not resolve to a recognised Windows root.
 // Allows any drive letter (A-Z:\) and UNC paths (\\server\share) so the user can
@@ -148,6 +197,7 @@ app.get('/api/config', lightLimiter, (req, res) => {
     mode: config.mode,
     preferences: config.preferences,
     seestar: config.seestar,
+    interruptedOperation: interruptedOperation || null,
     paths: {
       hasLastSource: !!config.paths.lastSourcePath,
       hasLastDestination: !!config.paths.lastDestinationPath
@@ -624,7 +674,7 @@ app.post('/api/import/start', heavyOpLimiter, async (req, res) => {
     const rawSource = req.body.sourcePath;
     const rawDest = req.body.destinationPath;
     if (!rawSource || typeof rawSource !== 'string' || !rawDest || typeof rawDest !== 'string' ||
-        !strategy || !socketId) {
+      !strategy || !socketId) {
       return res.status(400).json({
         success: false,
         error: 'sourcePath, destinationPath, strategy, and socketId required'
@@ -641,11 +691,14 @@ app.post('/api/import/start', heavyOpLimiter, async (req, res) => {
 
     // Start import asynchronously (don't await - it's long-running)
     const operationId = Date.now().toString();
+    writeOperationState({ type: 'import', sourcePath, destinationPath, strategy, operationId });
     importService.startImport(sourcePath, destinationPath, strategy, socketId, operationId, importSubframeMode)
       .then(() => {
+        clearOperationState();
         console.log(`Import completed successfully`);
       })
       .catch(error => {
+        clearOperationState();
         console.error(`Import failed:`, error);
         io.to(socketId).emit('import:error', {
           error: error.message,
@@ -664,6 +717,7 @@ app.post('/api/import/cancel', lightLimiter, async (req, res) => {
   try {
     console.log('Cancelling import...');
     const result = await importService.cancelImport();
+    clearOperationState();
     console.log(`Import ${result.cancelled ? 'cancelled' : 'not active'}`);
     res.json(result);
   } catch (error) {
@@ -678,7 +732,7 @@ app.post('/api/import/validate', analysisLimiter, async (req, res) => {
     const rawSource = req.body.sourcePath;
     const rawDest = req.body.destinationPath;
     if (!rawSource || typeof rawSource !== 'string' || !rawDest || typeof rawDest !== 'string' ||
-        !socketId) {
+      !socketId) {
       return res.status(400).json({
         success: false,
         error: 'sourcePath, destinationPath, and socketId required'
@@ -806,7 +860,7 @@ app.post('/api/merge/start', heavyOpLimiter, async (req, res) => {
     const rawDest = req.body.destinationPath;
 
     if (!sourcePaths.length || !rawDest || typeof rawDest !== 'string' ||
-        !mergePlan || !socketId) {
+      !mergePlan || !socketId) {
       return res.status(400).json({
         success: false,
         error: 'sourcePaths, destinationPath, mergePlan, and socketId required'
@@ -835,11 +889,14 @@ app.post('/api/merge/start', heavyOpLimiter, async (req, res) => {
     }
 
     const operationId = Date.now().toString();
+    writeOperationState({ type: 'merge', sourcePaths, destinationPath, operationId });
     mergeService.executeMerge(sourcePaths, destinationPath, mergePlan, socketId, operationId)
       .then(() => {
+        clearOperationState();
         console.log(`Merge completed successfully`);
       })
       .catch(error => {
+        clearOperationState();
         console.error(`Merge failed:`, error);
         io.to(socketId).emit('merge:error', {
           error: error.message,
@@ -858,6 +915,7 @@ app.post('/api/merge/cancel', lightLimiter, async (req, res) => {
   try {
     console.log('Cancelling merge...');
     const result = await mergeService.cancelMerge();
+    clearOperationState();
     res.json(result);
   } catch (error) {
     console.error('Error cancelling merge:', error);
@@ -953,9 +1011,12 @@ app.post('/api/export/stack', heavyOpLimiter, async (req, res) => {
 
     const operationId = Date.now().toString();
     console.log(`Starting stack export: "${objectName}" → ${destinationPath}`);
+    writeOperationState({ type: 'stackexport', objectName, destinationPath, operationId });
 
     stackExportService.exportToStacking(objectName, subFolderPaths, destinationPath, socketId, operationId)
+      .then(() => { clearOperationState(); })
       .catch(error => {
+        clearOperationState();
         io.to(socketId).emit('stackexport:error', { error: error.message, operationId });
       });
 
@@ -970,6 +1031,7 @@ app.post('/api/export/stack', heavyOpLimiter, async (req, res) => {
 app.post('/api/export/stack/cancel', lightLimiter, async (req, res) => {
   try {
     const result = await stackExportService.cancelExport();
+    clearOperationState();
     res.json(result);
   } catch (error) {
     res.status(500).json({ success: false, error: error.message });
@@ -1072,13 +1134,13 @@ app.get('/api/catalog/aliases', analysisLimiter, async (req, res) => {
     // Single-quote escaping for ADQL safety
     const safeName = normalized.replace(/'/g, "''");
     const adql = `SELECT b.main_id, id2.id, b.ra, b.dec `
-               + `FROM ident AS id1 JOIN ident AS id2 USING(oidref) `
-               + `JOIN basic AS b ON b.oid = id1.oidref `
-               + `WHERE id1.id = '${safeName}'`;
+      + `FROM ident AS id1 JOIN ident AS id2 USING(oidref) `
+      + `JOIN basic AS b ON b.oid = id1.oidref `
+      + `WHERE id1.id = '${safeName}'`;
 
     const simbadUrl = `https://simbad.cds.unistra.fr/simbad/sim-tap/sync`
-                    + `?request=doQuery&lang=adql&format=json`
-                    + `&query=${encodeURIComponent(adql)}`;
+      + `?request=doQuery&lang=adql&format=json`
+      + `&query=${encodeURIComponent(adql)}`;
 
     const response = await fetch(simbadUrl, { signal: AbortSignal.timeout(10000) });
 
@@ -1107,8 +1169,8 @@ app.get('/api/catalog/aliases', analysisLimiter, async (req, res) => {
     }
 
     const mainId = rows[0][0] || null;
-    const ra     = rows[0][2] ?? null;
-    const dec    = rows[0][3] ?? null;
+    const ra = rows[0][2] ?? null;
+    const dec = rows[0][3] ?? null;
 
     // Collect all raw identifiers from column 1 (deduplicated)
     const seen = new Set();
@@ -1179,6 +1241,142 @@ server.listen(PORT, HOST, () => {
   }
 });
 
+// POST /api/open-url — open a whitelisted URL in the system browser (Windows only)
+app.post('/api/open-url', lightLimiter, (req, res) => {
+  const { url } = req.body || {};
+  const allowed = /^https:\/\/(github\.com|buymeacoffee\.com)\//;
+  if (!url || !allowed.test(url)) {
+    return res.status(400).json({ error: 'URL not allowed' });
+  }
+  const { exec } = require('child_process');
+  exec(`start "" "${url.replace(/"/g, '')}"`);
+  res.json({ success: true });
+});
+
+// ── Update endpoints ──────────────────────────────────────────────────────────
+
+// GET /api/update/check — check GitHub Releases for a newer version
+app.get('/api/update/check', lightLimiter, async (req, res) => {
+  if (updateCheckCache) return res.json(updateCheckCache);
+
+  try {
+    const response = await fetch(
+      'https://api.github.com/repos/AstroNoob-Tools/SSLM/releases',
+      {
+        headers: { 'User-Agent': 'SSLM-App' },
+        signal: AbortSignal.timeout(8000)
+      }
+    );
+    if (!response.ok) {
+      return res.json({ hasUpdate: false, error: `GitHub API returned ${response.status}` });
+    }
+    const releases = await response.json();
+    if (!Array.isArray(releases) || releases.length === 0) {
+      return res.json({ hasUpdate: false, error: 'No releases found' });
+    }
+    const latest = releases[0];
+    const latestVersion = latest.tag_name.replace(/^v/, '');
+    const asset = (latest.assets || []).find(
+      a => a.name.startsWith('SSLM-Setup-') && a.name.endsWith('.exe')
+    );
+    const hasUpdate = compareVersions(latestVersion, APP_VERSION) > 0;
+    updateCheckCache = {
+      hasUpdate,
+      currentVersion: APP_VERSION,
+      latestVersion,
+      downloadUrl: asset ? asset.browser_download_url : null,
+      fileName: asset ? asset.name : null,
+      releaseUrl: latest.html_url
+    };
+    res.json(updateCheckCache);
+  } catch (err) {
+    console.warn('Update check failed:', err.message);
+    res.json({ hasUpdate: false, error: err.message });
+  }
+});
+
+// POST /api/update/download — stream installer to %TEMP%, emit Socket.IO progress
+app.post('/api/update/download', heavyOpLimiter, async (req, res) => {
+  const { downloadUrl, fileName, socketId } = req.body || {};
+
+  // Security: validate inputs
+  const validUrl = /^https:\/\/(github\.com|objects\.githubusercontent\.com)\//;
+  const validName = /^SSLM-Setup-[\w.\-]+\.exe$/;
+  if (!downloadUrl || !validUrl.test(downloadUrl)) {
+    return res.status(400).json({ error: 'Invalid download URL' });
+  }
+  if (!fileName || !validName.test(fileName)) {
+    return res.status(400).json({ error: 'Invalid file name' });
+  }
+
+  const destPath = path.join(os.tmpdir(), fileName);
+  const socket = socketId ? io.sockets.sockets.get(socketId) : null;
+  let lastEmit = 0;
+
+  try {
+    const response = await fetch(downloadUrl, { signal: AbortSignal.timeout(120000) });
+    if (!response.ok) {
+      return res.status(502).json({ error: `Download failed: HTTP ${response.status}` });
+    }
+    const totalBytes = parseInt(response.headers.get('content-length') || '0', 10);
+    let bytesDownloaded = 0;
+
+    const fileStream = fs.createWriteStream(destPath);
+    const reader = response.body.getReader();
+
+    const pump = async () => {
+      while (true) {
+        const { done, value } = await reader.read();
+        if (done) break;
+        fileStream.write(Buffer.from(value));
+        bytesDownloaded += value.length;
+        const now = Date.now();
+        if (socket && now - lastEmit > 500) {
+          lastEmit = now;
+          socket.emit('update:progress', {
+            bytesDownloaded,
+            totalBytes,
+            percent: totalBytes ? Math.round((bytesDownloaded / totalBytes) * 100) : 0
+          });
+        }
+      }
+    };
+
+    await pump();
+    await new Promise((resolve, reject) => fileStream.end(err => err ? reject(err) : resolve()));
+
+    if (socket) socket.emit('update:complete', { filePath: destPath });
+    res.json({ success: true, filePath: destPath });
+  } catch (err) {
+    console.error('Update download failed:', err.message);
+    if (socket) socket.emit('update:error', { error: err.message });
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// POST /api/update/install — launch the downloaded installer then quit
+app.post('/api/update/install', lightLimiter, (req, res) => {
+  const { filePath } = req.body || {};
+
+  // Security: must be inside %TEMP% and match installer name pattern
+  const tmpDir = os.tmpdir();
+  const validName = /^SSLM-Setup-[\w.\-]+\.exe$/;
+  if (
+    !filePath ||
+    !path.resolve(filePath).startsWith(path.resolve(tmpDir)) ||
+    !validName.test(path.basename(filePath))
+  ) {
+    return res.status(400).json({ error: 'Invalid installer path' });
+  }
+
+  res.json({ message: 'Launching installer and shutting down...' });
+  const { exec } = require('child_process');
+  setTimeout(() => {
+    exec(`start "" "${filePath}"`);
+    setTimeout(gracefulShutdown, 500);
+  }, 300);
+});
+
 // Quit endpoint — lets the browser trigger a graceful shutdown
 app.post('/api/quit', lightLimiter, (req, res) => {
   res.json({ message: 'Shutting down...' });
@@ -1214,5 +1412,14 @@ const gracefulShutdown = () => {
 
 process.on('SIGTERM', gracefulShutdown);
 process.on('SIGINT', gracefulShutdown);
+
+// Global error handlers — prevent silent crashes on unhandled async errors
+process.on('unhandledRejection', (reason) => {
+  console.error(`[${new Date().toISOString()}] Unhandled Promise Rejection:`, reason);
+});
+process.on('uncaughtException', (err) => {
+  console.error(`[${new Date().toISOString()}] Uncaught Exception:`, err);
+  gracefulShutdown();
+});
 
 module.exports = { app, io };
