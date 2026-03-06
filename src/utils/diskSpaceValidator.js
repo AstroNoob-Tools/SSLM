@@ -1,9 +1,9 @@
 const fs = require('fs-extra');
 const path = require('path');
-const { exec } = require('child_process');
+const { execFile } = require('child_process');
 const { promisify } = require('util');
 
-const execAsync = promisify(exec);
+const execFileAsync = promisify(execFile);
 
 class DiskSpaceValidator {
     /**
@@ -31,39 +31,37 @@ class DiskSpaceValidator {
      * @returns {Promise<number>} Available space in bytes
      */
     static async getAvailableSpace(targetPath) {
-        const parsedPath = path.parse(targetPath);
-        // e.g. "E:\" → "E:"
-        const driveLetter = (parsedPath.root || targetPath).replace(/[/\\]+$/, '');
+        // Extract the single drive letter from the path root (e.g. "C:\\" → "C").
+        // Stripping all slashes and the trailing colon leaves exactly one character.
+        const rootChar = (path.parse(targetPath).root || '').replace(/[/\\]/g, '').replace(/:$/, '');
 
-        // Strategy 1: PowerShell DriveInfo — works on Windows 10 and Windows 11
-        // (wmic was deprecated and removed in Windows 11 24H2)
+        // Validate: must be exactly one ASCII letter. UNC paths (\\server\share) produce
+        // an empty string after stripping and are rejected here with a clear error.
+        if (!/^[A-Za-z]$/.test(rootChar)) {
+            throw new Error(
+                `Cannot determine available disk space: path is not a local Windows drive: ${targetPath}`
+            );
+        }
+
+        // Guaranteed exactly two safe characters — no metacharacters possible.
+        const driveLetter = rootChar.toUpperCase() + ':';
+
+        // Use execFile (not exec) so PowerShell receives its -Command as a process
+        // argument, not as shell input — belt-and-suspenders on top of the validation above.
         try {
-            const psCmd = `powershell -NoProfile -Command "[System.IO.DriveInfo]::new('${driveLetter}').AvailableFreeSpace"`;
-            const { stdout } = await execAsync(psCmd);
+            const { stdout } = await execFileAsync(
+                'powershell',
+                ['-NoProfile', '-Command', `[System.IO.DriveInfo]::new('${driveLetter}').AvailableFreeSpace`]
+            );
             const freeSpace = parseInt(stdout.trim(), 10);
             if (!isNaN(freeSpace) && freeSpace >= 0) {
                 return freeSpace;
             }
         } catch (err) {
-            console.warn('PowerShell DriveInfo failed, falling back to wmic:', err.message);
+            console.warn('PowerShell DriveInfo failed:', err.message);
         }
 
-        // Strategy 2: wmic fallback — Windows 10 only (removed in Win 11 24H2)
-        try {
-            const command = `wmic logicaldisk where "DeviceID='${driveLetter}'" get FreeSpace`;
-            const { stdout } = await execAsync(command);
-            const lines = stdout.trim().split('\n');
-            if (lines.length >= 2) {
-                const freeSpace = parseInt(lines[1].trim(), 10);
-                if (!isNaN(freeSpace)) {
-                    return freeSpace;
-                }
-            }
-        } catch (err) {
-            console.warn('wmic fallback also failed:', err.message);
-        }
-
-        throw new Error('Cannot determine available disk space: all methods failed');
+        throw new Error('Cannot determine available disk space: PowerShell DriveInfo failed');
     }
 
     /**
