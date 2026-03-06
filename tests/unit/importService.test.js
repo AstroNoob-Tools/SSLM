@@ -21,9 +21,9 @@ function makeIo() {
 
 const mockConfig = { seestar: { directoryName: 'MyWorks' } };
 
-/** Stat object with callable isDirectory/isFile — the service invokes these as functions */
+/** Stat object with callable isDirectory/isFile/isSymbolicLink — the service invokes these as functions */
 function makeStat({ size = 100, mtime = new Date('2025-01-01'), isDir = false } = {}) {
-    return { size, mtime, isDirectory: () => isDir, isFile: () => !isDir };
+    return { size, mtime, isDirectory: () => isDir, isFile: () => !isDir, isSymbolicLink: () => false };
 }
 
 beforeEach(() => {
@@ -31,6 +31,7 @@ beforeEach(() => {
     // Setup generic spies
     vi.spyOn(fs, 'readdir').mockResolvedValue([]);
     vi.spyOn(fs, 'stat').mockResolvedValue(makeStat());
+    vi.spyOn(fs, 'lstat').mockResolvedValue(makeStat()); // scanDirectory now uses lstat
     vi.spyOn(fs, 'pathExists').mockResolvedValue(true);
     vi.spyOn(fs, 'ensureDir').mockResolvedValue(undefined);
     vi.spyOn(fs, 'createReadStream').mockReturnValue({});
@@ -187,7 +188,8 @@ describe('ImportService.startImport', () => {
 
         // scanDirectory: one file 'frame.fit'
         fs.readdir.mockResolvedValue(['frame.fit']);
-        // stat is called: once in scanDirectory (isDirectory check + size), once again in startImport build-phase
+        // scanDirectory now uses lstat; startImport build-phase uses stat
+        fs.lstat = vi.fn().mockResolvedValue(makeStat({ size: 100 }));
         fs.stat.mockResolvedValue(makeStat({ size: 100 }));
         fs.pathExists.mockResolvedValue(false);
         fs.ensureDir.mockResolvedValue(undefined);
@@ -248,6 +250,8 @@ describe('ImportService.validateTransfer', () => {
     beforeEach(() => {
         io = makeIo();
         svc = new ImportService(io, mockConfig);
+        // scanDirectory uses lstat; validateTransfer uses stat for size checks
+        fs.lstat = vi.fn().mockResolvedValue(makeStat());
     });
 
     it('emits validate:complete with isValid=true when source and dest sizes match', async () => {
@@ -265,8 +269,8 @@ describe('ImportService.validateTransfer', () => {
 
     it('emits validate:complete with isValid=false when dest size differs', async () => {
         fs.readdir.mockResolvedValue(['frame.fit']);
+        // scanDirectory now uses lstat (mocked in beforeEach); stat is only called by validateTransfer
         fs.stat
-            .mockResolvedValueOnce(makeStat({ size: 100 }))  // scanDirectory
             .mockResolvedValueOnce(makeStat({ size: 100 }))  // validateTransfer: source
             .mockResolvedValueOnce(makeStat({ size: 50 }));  // validateTransfer: dest (mismatch)
         fs.pathExists.mockResolvedValue(true);

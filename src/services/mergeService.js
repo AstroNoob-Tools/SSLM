@@ -11,6 +11,7 @@ class MergeService {
         this.progressEmitInterval = 500; // Emit progress every 500ms (match ImportService)
         this.progressSamples = []; // For speed calculation
         this.sampleWindow = 5000; // 5 seconds window for speed calculation
+        this._abortCurrentFile = null; // Set by copyFileWithProgress; called by cancelMerge
     }
 
     /**
@@ -192,10 +193,14 @@ class MergeService {
 
                 for (const item of items) {
                     const itemPath = path.join(currentPath, item);
-                    const stats = await fs.stat(itemPath);
+
+                    // Use lstat so symlinks are never followed — prevents
+                    // infinite recursion from circular symlinks.
+                    const stats = await fs.lstat(itemPath);
+
+                    if (stats.isSymbolicLink()) continue;
 
                     if (stats.isDirectory()) {
-                        // Recursively scan subdirectory
                         await scan(itemPath);
                     } else if (stats.isFile()) {
                         const relativePath = path.relative(basePath, itemPath);
@@ -600,35 +605,58 @@ class MergeService {
      * @param {string} destPath - Destination file path
      * @param {Function} onProgress - Progress callback
      */
-    async copyFileWithProgress(sourcePath, destPath, onProgress) {
+    async copyFileWithProgress(sourcePath, destPath, onProgress, timeoutMs = 30000) {
         return new Promise((resolve, reject) => {
             const readStream = fs.createReadStream(sourcePath);
             const writeStream = fs.createWriteStream(destPath);
 
-            const stats = fs.statSync(sourcePath);
-            const totalBytes = stats.size;
             let copiedBytes = 0;
+            let totalBytes = 0;
+            let timer = null;
+            let settled = false;
 
-            readStream.on('data', (chunk) => {
-                copiedBytes += chunk.length;
-                if (onProgress) {
-                    onProgress(copiedBytes, totalBytes);
-                }
-            });
-
-            readStream.on('error', (err) => {
-                writeStream.destroy();
-                reject(err);
-            });
-
-            writeStream.on('error', (err) => {
+            const cleanup = (err) => {
+                if (settled) return;
+                settled = true;
+                clearTimeout(timer);
+                this._abortCurrentFile = null;
                 readStream.destroy();
-                reject(err);
+                writeStream.destroy();
+                if (err) {
+                    fs.unlink(destPath).catch(() => {});
+                    reject(err);
+                } else {
+                    resolve();
+                }
+            };
+
+            const resetTimer = () => {
+                clearTimeout(timer);
+                timer = setTimeout(() => {
+                    cleanup(new Error(
+                        `Network timeout: no data received for ${timeoutMs / 1000}s while copying ${path.basename(sourcePath)}`
+                    ));
+                }, timeoutMs);
+            };
+
+            // Allow cancelMerge() to abort immediately
+            this._abortCurrentFile = () => cleanup(new Error('Cancelled'));
+
+            try {
+                totalBytes = fs.statSync(sourcePath).size;
+            } catch (_) { /* non-fatal */ }
+
+            resetTimer();
+
+            readStream.on('data', chunk => {
+                copiedBytes += chunk.length;
+                resetTimer(); // Data received — reset inactivity clock
+                if (onProgress) onProgress(copiedBytes, totalBytes);
             });
 
-            writeStream.on('finish', () => {
-                resolve();
-            });
+            readStream.on('error', err => cleanup(err));
+            writeStream.on('error', err => cleanup(err));
+            writeStream.on('finish', () => cleanup(null));
 
             readStream.pipe(writeStream);
         });
@@ -757,6 +785,7 @@ class MergeService {
     async cancelMerge() {
         console.log('Cancelling merge operation...');
         this.cancelled = true;
+        if (this._abortCurrentFile) this._abortCurrentFile();
         return { success: true, message: 'Merge cancelled' };
     }
 

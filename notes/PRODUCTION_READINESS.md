@@ -43,10 +43,10 @@
 | # | Issue | Location | Status | Notes |
 |---|-------|----------|--------|-------|
 | 5 | **Socket.IO disconnect during long operation** — browser loses connection; server keeps copying; user never sees completion | `importWizard.js`, `mergeWizard.js` | **DONE** — `operationStore` Map in `server.js` snapshots every `*:progress` / `*:complete` / `*:error` / `*:cancelled` emit via a transparent `io.to()` wrapper. `GET /api/operations/:id/status` exposes the snapshot. On reconnect, `app.js` calls `wizard.pollStatus()` which fetches the endpoint and replays the terminal event if the operation finished while disconnected. Auto-expires after 10 min. | — |
-| 6 | **No timeout on network operations** — import from `\\seestar\MyWorks` can hang forever if device goes offline mid-copy | `importService.js` | Open | Add 30-second per-file timeout with cancellation |
-| 7 | **Symlink recursion** — no symlink detection; circular symlinks cause infinite recursion during scan | `importService.js` `scanDirectory()`, `mergeService.js` | Open | Use `fs.lstat()` and skip symlinks |
+| 6 | **No timeout on network operations** — import from `\\seestar\MyWorks` can hang forever if device goes offline mid-copy | `importService.js` | **DONE** — 30s inactivity timeout in all three copy services; timer resets on each data chunk; cleanup destroys streams + deletes partial file | — |
+| 7 | **Symlink recursion** — no symlink detection; circular symlinks cause infinite recursion during scan | `importService.js` `scanDirectory()`, `mergeService.js` | **DONE** — `fs.lstat()` replaces `fs.stat()` in both `scanDirectory()` methods; symlinks skipped with `continue` | — |
 | 8 | **Windows MAX_PATH not checked** — paths >260 characters fail silently per file | all copy loops | Open | Validate combined destination path length before each copy |
-| 9 | **Partial file on cancelled copy** — cancellation sets a flag but does not force-close the write stream | `importService.js`, `mergeService.js` | Open | Call `writeStream.destroy()` on cancellation |
+| 9 | **Partial file on cancelled copy** — cancellation sets a flag but does not force-close the write stream | `importService.js`, `mergeService.js` | **DONE** — `cleanup()` in all three services calls `readStream.destroy()` + `writeStream.destroy()` + `fs.unlink(destPath)` on error/cancel | — |
 | 10 | **`fs.statSync()` in async context** — blocks the event loop during every file copy in merge | `mergeService.js:608` | Open | Change to `await fs.stat(sourcePath)` |
 
 ---
@@ -97,13 +97,14 @@
 
 ## Release Criteria Checklist for v1.0 Stable
 
-- [ ] Issue #1 — Drive letter validated as `/^[A-Z]:$/i`; `exec(string)` replaced with `execFile()`; dead wmic fallback removed
-- [ ] Issue #2 — Operation state persisted (resume on restart, or clear error + partial-file cleanup)
+- [x] Issue #1 — Drive letter validated as `/^[A-Z]:$/i`; `exec(string)` replaced with `execFile()`; dead wmic fallback removed
+- [x] Issue #2 — Operation state persisted (resume on restart, or clear error + partial-file cleanup)
 - [x] Issue #3 — Vitest suite: 51 tests across unit (importService, mergeService, diagnostic) and integration (importRoutes, mergeRoutes)
-- [ ] Issue #4 — Global `unhandledRejection` and `uncaughtException` handlers in `server.js`
+- [x] Issue #4 — Global `unhandledRejection` and `uncaughtException` handlers in `server.js`
 - [x] Issue #5 — `operationStore` + `io.to()` wrapper in server.js; `GET /api/operations/:id/status`; wizard `pollStatus()` on reconnect
-- [ ] Issue #6 — Per-file network timeout (30s) during import from network paths
-- [ ] Issue #7 — Symlink detection (`fs.lstat()`) in all recursive directory scans
+- [x] Issue #6 — 30s inactivity timeout in all three copy services; resets on each data chunk; cleanup destroys streams + deletes partial file
+- [x] Issue #7 — `fs.lstat()` replaces `fs.stat()` in both `scanDirectory()` methods; symlinks skipped
+- [x] Issue #9 — Partial file on cancel — `cleanup()` destroys streams + `fs.unlink(destPath)` on error/cancel (fixed alongside #6)
 - [ ] Issue #10 — `fs.statSync()` in `mergeService.js:608` replaced with `await fs.stat()`
 - [ ] Issue #11 — Structured log file at `%APPDATA%\SSLM\logs\` with timestamps and severity
 - [ ] Issue #14 — Config schema validation with graceful fallback to defaults

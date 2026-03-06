@@ -14,6 +14,7 @@ class ImportService {
         this.progressEmitInterval = 500; // Emit progress every 500ms
         this.progressSamples = []; // For speed calculation
         this.sampleWindow = 5000; // 5 seconds window for speed calculation
+        this._abortCurrentFile = null; // Set by copyFileWithProgress; called by cancelImport
     }
 
     /**
@@ -292,6 +293,7 @@ class ImportService {
     async cancelImport() {
         if (this.currentOperation) {
             this.cancelled = true;
+            if (this._abortCurrentFile) this._abortCurrentFile();
             return { success: true, cancelled: true };
         }
         return { success: false, error: 'No active import operation' };
@@ -322,11 +324,15 @@ class ImportService {
                     const itemPath = path.join(currentPath, item);
 
                     try {
-                        const stats = await fs.stat(itemPath);
+                        // Use lstat so symlinks are never followed — prevents
+                        // infinite recursion from circular symlinks.
+                        const stats = await fs.lstat(itemPath);
+
+                        if (stats.isSymbolicLink()) continue;
 
                         if (stats.isDirectory()) {
                             await scan(itemPath);
-                        } else {
+                        } else if (stats.isFile()) {
                             const relativePath = path.relative(basePath, itemPath);
                             const destPath = path.join(
                                 destBasePath,
@@ -359,43 +365,58 @@ class ImportService {
      * @param {string} destPath - Destination file path
      * @param {Function} onProgress - Progress callback (currentBytes, totalBytes)
      */
-    async copyFileWithProgress(sourcePath, destPath, onProgress) {
+    async copyFileWithProgress(sourcePath, destPath, onProgress, timeoutMs = 30000) {
         return new Promise((resolve, reject) => {
             const readStream = fs.createReadStream(sourcePath);
             const writeStream = fs.createWriteStream(destPath);
 
             let copiedBytes = 0;
             let totalBytes = 0;
+            let timer = null;
+            let settled = false;
 
-            // Get file size
+            const cleanup = (err) => {
+                if (settled) return;
+                settled = true;
+                clearTimeout(timer);
+                this._abortCurrentFile = null;
+                readStream.destroy();
+                writeStream.destroy();
+                if (err) {
+                    fs.unlink(destPath).catch(() => {});
+                    reject(err);
+                } else {
+                    resolve();
+                }
+            };
+
+            const resetTimer = () => {
+                clearTimeout(timer);
+                timer = setTimeout(() => {
+                    cleanup(new Error(
+                        `Network timeout: no data received for ${timeoutMs / 1000}s while copying ${path.basename(sourcePath)}`
+                    ));
+                }, timeoutMs);
+            };
+
+            // Allow cancelImport() to abort immediately
+            this._abortCurrentFile = () => cleanup(new Error('Cancelled'));
+
             fs.stat(sourcePath)
-                .then(stats => {
-                    totalBytes = stats.size;
-                })
-                .catch(err => {
-                    console.warn('Cannot get file size:', err);
-                });
+                .then(stats => { totalBytes = stats.size; })
+                .catch(() => {});
+
+            resetTimer();
 
             readStream.on('data', chunk => {
                 copiedBytes += chunk.length;
-                if (onProgress) {
-                    onProgress(copiedBytes, totalBytes);
-                }
+                resetTimer(); // Data received — reset inactivity clock
+                if (onProgress) onProgress(copiedBytes, totalBytes);
             });
 
-            readStream.on('error', error => {
-                writeStream.destroy();
-                reject(error);
-            });
-
-            writeStream.on('error', error => {
-                readStream.destroy();
-                reject(error);
-            });
-
-            writeStream.on('finish', () => {
-                resolve();
-            });
+            readStream.on('error', err => cleanup(err));
+            writeStream.on('error', err => cleanup(err));
+            writeStream.on('finish', () => cleanup(null));
 
             readStream.pipe(writeStream);
         });

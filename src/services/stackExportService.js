@@ -27,6 +27,7 @@ class StackExportService {
         this.progressEmitInterval = 500;   // ms between throttled progress emits
         this.progressSamples = [];
         this.sampleWindow = 5000;   // 5-second window for speed calculation
+        this._abortCurrentFile = null; // Set by _copyFile; called by cancelExport
     }
 
     // ─────────────────────────────────────────────────────────────────────────
@@ -310,6 +311,7 @@ class StackExportService {
     async cancelExport() {
         if (this.currentOperation) {
             this.cancelled = true;
+            if (this._abortCurrentFile) this._abortCurrentFile();
             return { success: true };
         }
         return { success: false, error: 'No active export operation' };
@@ -406,20 +408,55 @@ class StackExportService {
     // Internal utilities  (same pattern as ImportService / MergeService)
     // ─────────────────────────────────────────────────────────────────────────
 
-    /** Stream-copy a single file, calling onProgress(bytesCopied) on each chunk. */
-    async _copyFile(sourcePath, destPath, onProgress) {
+    /** Stream-copy a single file, calling onProgress(bytesCopied) on each chunk.
+     *  Rejects with a timeout error if no data arrives for timeoutMs milliseconds
+     *  (guards against \\seestar going offline mid-copy). */
+    async _copyFile(sourcePath, destPath, onProgress, timeoutMs = 30000) {
         return new Promise((resolve, reject) => {
             const rs = fs.createReadStream(sourcePath);
             const ws = fs.createWriteStream(destPath);
+
             let copied = 0;
+            let timer = null;
+            let settled = false;
+
+            const cleanup = (err) => {
+                if (settled) return;
+                settled = true;
+                clearTimeout(timer);
+                this._abortCurrentFile = null;
+                rs.destroy();
+                ws.destroy();
+                if (err) {
+                    fs.unlink(destPath).catch(() => {});
+                    reject(err);
+                } else {
+                    resolve();
+                }
+            };
+
+            const resetTimer = () => {
+                clearTimeout(timer);
+                timer = setTimeout(() => {
+                    cleanup(new Error(
+                        `Network timeout: no data received for ${timeoutMs / 1000}s while copying ${path.basename(sourcePath)}`
+                    ));
+                }, timeoutMs);
+            };
+
+            // Allow cancelExport() to abort immediately
+            this._abortCurrentFile = () => cleanup(new Error('Cancelled'));
+
+            resetTimer();
 
             rs.on('data', chunk => {
                 copied += chunk.length;
+                resetTimer(); // Data received — reset inactivity clock
                 if (onProgress) onProgress(copied);
             });
-            rs.on('error', err => { ws.destroy(); reject(err); });
-            ws.on('error', err => { rs.destroy(); reject(err); });
-            ws.on('finish', resolve);
+            rs.on('error', err => cleanup(err));
+            ws.on('error', err => cleanup(err));
+            ws.on('finish', () => cleanup(null));
             rs.pipe(ws);
         });
     }

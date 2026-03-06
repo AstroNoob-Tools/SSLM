@@ -29,8 +29,9 @@ Thumbs.db
 *.tmp
 temp/
 
-# Local notes (not for sharing) — only HOW_TO_RELEASE is local-only
-notes/HOW_TO_RELEASE.md
+# Local notes — only specific committed files are tracked; rest is local-only
+notes/
+coverage_output.txt
 
 #Posts
 Posts/
