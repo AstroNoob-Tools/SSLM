@@ -238,6 +238,13 @@ class StackExportService {
                     return { success: false, cancelled: true };
                 }
 
+                // Windows MAX_PATH: paths ≥ 260 chars (incl. null) fail silently
+                if (file.destPath.length > 259) {
+                    console.warn(`[SKIP] Path too long (${file.destPath.length} chars): ${file.destPath}`);
+                    errors.push({ file: file.filename, error: `Destination path exceeds Windows MAX_PATH limit (${file.destPath.length} chars)` });
+                    continue;
+                }
+
                 try {
                     await fs.ensureDir(path.dirname(file.destPath));
 

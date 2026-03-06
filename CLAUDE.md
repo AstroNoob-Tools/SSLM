@@ -1,5 +1,12 @@
 # SSLM - SeeStar Library Manager
 
+## Startup — Always Read First
+
+At the start of **every session**, read `AI_CONTEXT.md` in the project root before doing anything else.
+It contains the current objective, completed tasks, open issues, and critical warnings.
+
+---
+
 ## Branch Development Plans
 
 When working on any branch other than `main`, always look for a corresponding plan file

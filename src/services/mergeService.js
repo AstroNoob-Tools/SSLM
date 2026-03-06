@@ -507,6 +507,13 @@ class MergeService {
 
                 const destPath = path.resolve(destinationPath, file.relativePath);
 
+                // Windows MAX_PATH: paths ≥ 260 chars (incl. null) fail silently
+                if (destPath.length > 259) {
+                    console.warn(`[SKIP] Path too long (${destPath.length} chars): ${destPath}`);
+                    errors.push({ file: file.relativePath, error: `Destination path exceeds Windows MAX_PATH limit (${destPath.length} chars)` });
+                    continue;
+                }
+
                 try {
                     // Ensure destination directory exists
                     await fs.ensureDir(path.dirname(destPath));
@@ -642,9 +649,9 @@ class MergeService {
             // Allow cancelMerge() to abort immediately
             this._abortCurrentFile = () => cleanup(new Error('Cancelled'));
 
-            try {
-                totalBytes = fs.statSync(sourcePath).size;
-            } catch (_) { /* non-fatal */ }
+            fs.stat(sourcePath)
+                .then(stats => { totalBytes = stats.size; })
+                .catch(() => {});
 
             resetTimer();
 

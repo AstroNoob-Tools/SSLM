@@ -230,6 +230,22 @@ describe('ImportService.startImport', () => {
         expect(result).toMatchObject({ cancelled: true });
     });
 
+    it('skips a file whose destination path exceeds 259 chars', async () => {
+        // path.join('/dst', longName) will be > 259 chars on both Windows and Linux
+        const longName = 'x'.repeat(255) + '.fit';
+        fs.readdir.mockResolvedValue([longName]);
+        fs.lstat = vi.fn().mockResolvedValue(makeStat({ size: 100 }));
+        const copySpy = vi.spyOn(svc, 'copyFileWithProgress').mockResolvedValue(undefined);
+
+        await svc.startImport('/src', '/dst', 'full', 'sock-1', 'op-1');
+
+        expect(copySpy).not.toHaveBeenCalled();
+        const completeCall = io._emitSpy.mock.calls.find(([ev]) => ev === 'import:complete');
+        expect(completeCall[1].filesSkipped).toBeGreaterThanOrEqual(1);
+        expect(completeCall[1].errors).toHaveLength(1);
+        expect(completeCall[1].errors[0].error).toMatch(/MAX_PATH/);
+    });
+
     it('emits import:error and rethrows when top-level ensureDir fails', async () => {
         fs.ensureDir.mockRejectedValue(new Error('no disk space'));
 

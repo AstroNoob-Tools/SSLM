@@ -209,6 +209,20 @@ describe('MergeService.executeMerge', () => {
         // Just verify that the rejection propagates correctly
     });
 
+    it('skips a file whose destination path exceeds 259 chars', async () => {
+        // path.resolve('/dst', longRel) will be > 259 chars on both Windows and Linux
+        const longRel = 'x'.repeat(255) + '.fit';
+        const plan = makePlan([makeFile(longRel)]);
+        svc.copyFileWithProgress.mockClear();
+
+        await svc.executeMerge(['/srcA'], '/dst', plan, 'sock-1', 'op-1');
+
+        expect(svc.copyFileWithProgress).not.toHaveBeenCalled();
+        const completeCall = io._emitSpy.mock.calls.find(([ev]) => ev === 'merge:complete');
+        expect(completeCall[1].errors).toHaveLength(1);
+        expect(completeCall[1].errors[0].error).toMatch(/MAX_PATH/);
+    });
+
     it('emits merge:complete even when one file copy fails (per-file error is non-fatal)', async () => {
         const plan = makePlan([makeFile('a.fit'), makeFile('b.fit')]);
         let callCount = 0;

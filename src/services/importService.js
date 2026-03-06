@@ -196,6 +196,14 @@ class ImportService {
                     return { success: false, cancelled: true };
                 }
 
+                // Windows MAX_PATH: paths ≥ 260 chars (incl. null) fail silently
+                if (file.destPath.length > 259) {
+                    console.warn(`[SKIP] Path too long (${file.destPath.length} chars): ${file.destPath}`);
+                    errors.push({ file: file.relativePath, error: `Destination path exceeds Windows MAX_PATH limit (${file.destPath.length} chars)` });
+                    filesSkipped++;
+                    continue;
+                }
+
                 try {
                     // Ensure destination directory exists
                     await fs.ensureDir(path.dirname(file.destPath));

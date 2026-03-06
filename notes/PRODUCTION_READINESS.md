@@ -1,7 +1,7 @@
 # SSLM Production Readiness Assessment
 
-**Date**: 2026-03-06
-**Current state**: Public Beta (v1.0.0-beta.4 / auto-update branch) — not yet production-ready
+**Date**: 2026-03-06 (updated March 2026)
+**Current state**: Release candidate — all v1.0 checklist items complete; ready to merge `auto-update` → `main` and tag v1.0.0-beta.4.1
 
 ---
 
@@ -16,12 +16,20 @@
 | Stack Export feature | Added in beta.4 |
 | Image viewer | Added in beta.4 |
 | Auto-update check + download + install flow | Added on `auto-update` branch |
-| Issue #3 (zero test coverage) | **DONE** — Vitest suite: 51 tests, unit + integration, `fileParallelism: false`, `forceExit: true` |
+| Issue #3 (zero test coverage) | **DONE** — Vitest suite: 53 tests, unit + integration, `fileParallelism: false`, `forceExit: true` |
 | `wmic` → PowerShell DriveInfo (Win 11 24H2 fix) | Fixed in post-beta.4 patch |
 | Issue #1 (command injection in disk check) | **DONE** — strict drive-letter validation + `execFile`, wmic fallback removed |
 | Issue #2 (no operation resume/recovery) | **DONE** — `last-operation.json` written on start, cleared on clean finish; startup warning modal |
 | Issue #4 (no global error handlers) | **DONE** — `unhandledRejection` + `uncaughtException` handlers added |
 | Issue #12 (no auto-update) | **DONE** |
+| Issue #5 (Socket.IO disconnect) | **DONE** — `operationStore` + polling endpoint + wizard `pollStatus()` on reconnect |
+| Issue #6 (network hang mid-copy) | **DONE** — 30s inactivity timeout in all three copy services |
+| Issue #7 (symlink recursion) | **DONE** — `fs.lstat()` + `isSymbolicLink()` guard in both `scanDirectory()` methods |
+| Issue #8 (Windows MAX_PATH) | **DONE** — `destPath.length > 259` guard before every copy call; skips with error entry |
+| Issue #9 (partial file on cancel) | **DONE** — `cleanup()` destroys streams + `fs.unlink(destPath)` on error/cancel |
+| Issue #10 (`fs.statSync` in async context) | **DONE** — replaced with `fs.stat().then().catch()` in `mergeService.js` |
+| Issue #11 (no persistent logging) | **DONE** — `src/utils/logger.js` singleton; daily log files at `%APPDATA%\SSLM\logs\`; no new dependencies |
+| Issue #14 (config schema not validated) | **DONE** — `applyConfigDefaults()` deep-merges; non-object JSON resets + re-persists |
 
 ---
 
@@ -45,9 +53,9 @@
 | 5 | **Socket.IO disconnect during long operation** — browser loses connection; server keeps copying; user never sees completion | `importWizard.js`, `mergeWizard.js` | **DONE** — `operationStore` Map in `server.js` snapshots every `*:progress` / `*:complete` / `*:error` / `*:cancelled` emit via a transparent `io.to()` wrapper. `GET /api/operations/:id/status` exposes the snapshot. On reconnect, `app.js` calls `wizard.pollStatus()` which fetches the endpoint and replays the terminal event if the operation finished while disconnected. Auto-expires after 10 min. | — |
 | 6 | **No timeout on network operations** — import from `\\seestar\MyWorks` can hang forever if device goes offline mid-copy | `importService.js` | **DONE** — 30s inactivity timeout in all three copy services; timer resets on each data chunk; cleanup destroys streams + deletes partial file | — |
 | 7 | **Symlink recursion** — no symlink detection; circular symlinks cause infinite recursion during scan | `importService.js` `scanDirectory()`, `mergeService.js` | **DONE** — `fs.lstat()` replaces `fs.stat()` in both `scanDirectory()` methods; symlinks skipped with `continue` | — |
-| 8 | **Windows MAX_PATH not checked** — paths >260 characters fail silently per file | all copy loops | Open | Validate combined destination path length before each copy |
+| 8 | **Windows MAX_PATH not checked** — paths >260 characters fail silently per file | all copy loops | **DONE** — `destPath.length > 259` guard before every copy call in all three services; skips file, logs warning, adds to `errors` array | — |
 | 9 | **Partial file on cancelled copy** — cancellation sets a flag but does not force-close the write stream | `importService.js`, `mergeService.js` | **DONE** — `cleanup()` in all three services calls `readStream.destroy()` + `writeStream.destroy()` + `fs.unlink(destPath)` on error/cancel | — |
-| 10 | **`fs.statSync()` in async context** — blocks the event loop during every file copy in merge | `mergeService.js:608` | Open | Change to `await fs.stat(sourcePath)` |
+| 10 | **`fs.statSync()` in async context** — blocks the event loop during every file copy in merge | `mergeService.js:608` | **DONE** — replaced with `fs.stat(sourcePath).then(...).catch(()=>{})` (non-blocking, matches importService pattern) | — |
 
 ---
 
@@ -55,17 +63,17 @@
 
 | # | Issue | Status | Notes |
 |---|-------|--------|-------|
-| 11 | **No structured/persistent logging** — all logs are `console.log()`, lost on restart, no timestamps or severity levels | Open | Add `pino` or `winston` with file rotation to `%APPDATA%\SSLM\logs\` |
+| 11 | **No structured/persistent logging** — all logs are `console.log()`, lost on restart, no timestamps or severity levels | **DONE** — `src/utils/logger.js` singleton; `logger.init()` + `console` override in `server.js`; daily log files at `%APPDATA%\SSLM\logs\sslm-YYYY-MM-DD.log`; no new dependencies | — |
 | 12 | **No auto-update check** — user had to manually watch GitHub releases | **DONE** | Implemented on `auto-update` branch — startup check, amber badge, download + install flow |
 | 13 | **Unstructured error codes in API** — frontend cannot distinguish error types for smart retry logic | Open | Standardize on `{ code, message }` error responses |
-| 14 | **Config schema not validated** — malformed `settings.json` crashes app on startup | Open | Add JSON schema validation with auto-reset to defaults |
+| 14 | **Config schema not validated** — malformed `settings.json` crashes app on startup | **DONE** — `applyConfigDefaults()` deep-merges loaded config with `defaultConfig`; non-object JSON resets to defaults + re-persists | — |
 | 15 | **No config migrations** — future schema changes silently break existing user configs | Open | Add version field + migration functions |
 
 ---
 
 ## What's Already Production-Quality
 
-- **Test suite**: Vitest 4 — 51 tests (unit: `importService`, `mergeService`, `diagnostic`; integration: `importRoutes`, `mergeRoutes`); `fileParallelism: false` + `forceExit: true` for stable server lifecycle
+- **Test suite**: Vitest 4 — 53 tests (unit: `importService`, `mergeService`, `diagnostic`; integration: `importRoutes`, `mergeRoutes`); `fileParallelism: false` + `forceExit: true` for stable server lifecycle
 - **npm audit**: Zero vulnerabilities — clean
 - **Path traversal protection**: `isAllowedPath()` applied consistently across all endpoints
 - **XSS prevention**: `escapeHtml()` + `DOMParser` stripping in all dynamic HTML (added beta.4)
@@ -79,6 +87,11 @@
 - **Config survives reinstall**: `%APPDATA%` storage correctly implemented
 - **Self-contained installer**: No Node.js requirement for end users
 - **Mount mode support**: Both `_sub` (EQ) and `-sub` (Alt/Az) handled throughout
+- **Per-file network timeout**: 30s inactivity guard on all three copy services; partial file cleaned up on abort
+- **Symlink safety**: `fs.lstat()` + `isSymbolicLink()` guard in all recursive directory scans
+- **Windows MAX_PATH guard**: Paths >259 chars logged and skipped gracefully (not silently lost)
+- **Persistent structured logging**: Daily log files at `%APPDATA%\SSLM\logs\sslm-YYYY-MM-DD.log`; zero new dependencies
+- **Config schema validation**: Startup-safe — malformed or missing `settings.json` gracefully resets to defaults
 
 ---
 
@@ -86,12 +99,11 @@
 
 | Priority group | Estimated work |
 |----------------|---------------|
-| Critical blockers (#1–4) | ~12–16 hrs — **#1, #2, #3, #4 all DONE** |
-| High priority (#5–10) | ~12–18 hrs |
-| Medium priority (#11, #13–15) | ~10–14 hrs |
-| **Total to stable v1.0** | **~34–48 hrs** |
-
-*Lower than beta.2 estimate — XSS, rate limiting, and auto-update are no longer in scope.*
+| Critical blockers (#1–4) | **ALL DONE** |
+| High priority (#5–10) | **ALL DONE** |
+| Medium priority (#11, #14) | **ALL DONE** |
+| Remaining open (#13, #15) | Deferred to post-v1.0 (nice-to-have, not blockers) |
+| **Total to stable v1.0** | **Complete** |
 
 ---
 
@@ -99,12 +111,13 @@
 
 - [x] Issue #1 — Drive letter validated as `/^[A-Z]:$/i`; `exec(string)` replaced with `execFile()`; dead wmic fallback removed
 - [x] Issue #2 — Operation state persisted (resume on restart, or clear error + partial-file cleanup)
-- [x] Issue #3 — Vitest suite: 51 tests across unit (importService, mergeService, diagnostic) and integration (importRoutes, mergeRoutes)
+- [x] Issue #3 — Vitest suite: 53 tests across unit (importService, mergeService, diagnostic) and integration (importRoutes, mergeRoutes)
 - [x] Issue #4 — Global `unhandledRejection` and `uncaughtException` handlers in `server.js`
 - [x] Issue #5 — `operationStore` + `io.to()` wrapper in server.js; `GET /api/operations/:id/status`; wizard `pollStatus()` on reconnect
 - [x] Issue #6 — 30s inactivity timeout in all three copy services; resets on each data chunk; cleanup destroys streams + deletes partial file
 - [x] Issue #7 — `fs.lstat()` replaces `fs.stat()` in both `scanDirectory()` methods; symlinks skipped
+- [x] Issue #8 — Windows MAX_PATH — `destPath.length > 259` guard before every copy call in all three services
 - [x] Issue #9 — Partial file on cancel — `cleanup()` destroys streams + `fs.unlink(destPath)` on error/cancel (fixed alongside #6)
-- [ ] Issue #10 — `fs.statSync()` in `mergeService.js:608` replaced with `await fs.stat()`
-- [ ] Issue #11 — Structured log file at `%APPDATA%\SSLM\logs\` with timestamps and severity
-- [ ] Issue #14 — Config schema validation with graceful fallback to defaults
+- [x] Issue #10 — `fs.statSync()` in `mergeService.js` replaced with `fs.stat().then().catch()` (non-blocking)
+- [x] Issue #11 — `src/utils/logger.js` singleton; daily log files at `%APPDATA%\SSLM\logs\sslm-YYYY-MM-DD.log`; `console` overridden in `server.js` so all modules log automatically
+- [x] Issue #14 — `applyConfigDefaults()` deep-merges loaded config with defaults; non-object JSON resets + re-persists

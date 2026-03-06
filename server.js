@@ -12,6 +12,7 @@ const MergeService = require('./src/services/mergeService');
 const StackExportService = require('./src/services/stackExportService');
 const DiskSpaceValidator = require('./src/utils/diskSpaceValidator');
 const FileRenamer = require('./src/utils/fileRenamer');
+const logger = require('./src/utils/logger');
 
 // Detect if running as a pkg-bundled executable
 const isPackaged = typeof process.pkg !== 'undefined';
@@ -65,6 +66,47 @@ const configDir = isPackaged
   : path.join(__dirname, 'config');
 const configPath = path.join(configDir, 'settings.json');
 const operationStatePath = path.join(configDir, 'last-operation.json');
+// Initialise file logging — %APPDATA%\SSLM\logs\ (packaged) or config/logs/ (dev).
+// Must happen before the first console.log so startup messages are captured.
+logger.init(path.join(configDir, 'logs'));
+
+// Redirect all console output through the logger so every module's
+// console.log/warn/error calls are automatically timestamped and persisted.
+console.log   = (...args) => logger.info(...args);
+console.warn  = (...args) => logger.warn(...args);
+console.error = (...args) => logger.error(...args);
+
+const defaultConfig = {
+  server: { port: 3000, host: 'localhost' },
+  mode: { online: false },
+  seestar: { directoryName: 'MyWorks' },
+  paths: { lastSourcePath: '', lastDestinationPath: '' },
+  preferences: { defaultImportStrategy: 'incremental' }
+};
+
+// Deep-merge loaded config with defaults:
+// - Missing or wrong-typed sections fall back to a fresh copy of the default (never a shared reference).
+// - Extra top-level keys not in defaultConfig are preserved so no user data is silently dropped.
+function applyConfigDefaults(raw) {
+  const result = {};
+  for (const key of Object.keys(defaultConfig)) {
+    const def = defaultConfig[key];
+    const val = raw[key];
+    if (typeof val === 'object' && val !== null && !Array.isArray(val)) {
+      result[key] = { ...def, ...val };               // merge: user values win, defaults fill gaps
+    } else if (val !== undefined && val !== null) {
+      result[key] = val;                               // primitive override (unusual but keep it)
+    } else {
+      result[key] = { ...def };                        // missing key — fresh copy, not a shared ref
+    }
+  }
+  // Preserve any extra top-level keys not in defaultConfig (e.g. keys written by POST /api/config)
+  for (const key of Object.keys(raw)) {
+    if (!(key in result)) result[key] = raw[key];
+  }
+  return result;
+}
+
 let config = {};
 
 // Write/clear/read a small JSON file that tracks the currently-running operation.
@@ -86,17 +128,15 @@ function readOperationState() {
 }
 
 try {
-  config = fs.readJSONSync(configPath);
+  const raw = fs.readJSONSync(configPath);
+  if (typeof raw !== 'object' || raw === null || Array.isArray(raw)) {
+    throw new Error('settings.json is not a JSON object — resetting to defaults');
+  }
+  config = applyConfigDefaults(raw);
 } catch (error) {
-  console.log('Config file not found, using defaults');
-  config = {
-    server: { port: 3000, host: 'localhost' },
-    mode: { online: false },
-    seestar: { directoryName: 'MyWorks' },
-    paths: { lastSourcePath: '', lastDestinationPath: '' },
-    preferences: { defaultImportStrategy: 'incremental' }
-  };
-  // When packaged, persist the default config to APPDATA on first run
+  console.warn('Config invalid or not found, using defaults:', error.message);
+  config = applyConfigDefaults({});
+  // When packaged, persist the default config to APPDATA on first run / after reset
   if (isPackaged) {
     try {
       fs.ensureDirSync(configDir);

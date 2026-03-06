@@ -9,7 +9,7 @@
 
 ## What's New in beta.4.1
 
-Beta 4.1 is a reliability and quality release. The four main themes are: **auto-update**, **security hardening (CWE-78 command injection fix)**, **crash resilience**, and **Socket.IO disconnect recovery**. A Vitest automated test suite is also introduced as a developer-facing quality improvement. There are no breaking changes and no migration steps required.
+Beta 4.1 is a reliability and quality release. The main themes are: **auto-update**, **security hardening (CWE-78 fix)**, **crash resilience**, **Socket.IO disconnect recovery**, **network copy robustness**, **persistent logging**, and **config validation**. A Vitest automated test suite is also introduced as a developer-facing quality improvement. There are no breaking changes and no migration steps required.
 
 ---
 
@@ -117,9 +117,63 @@ A Vitest test suite has been added as a developer-quality improvement. It is not
 | `tests/unit/diagnostic.test.js` | Unit | 1 |
 | `tests/integration/importRoutes.test.js` | Integration | 6 |
 | `tests/integration/mergeRoutes.test.js` | Integration | 7 |
-| **Total** | | **51** |
+| **Total** | | **53** |
 
 Unit tests cover `shouldCopyFile` logic, `startImport` / `executeMerge` happy and error paths, cancellation, and transfer validation. Integration tests exercise the Express route layer with mocked services, validating input guards (400 responses) and correct service delegation (200 responses).
+
+---
+
+## 6 — Network Copy Robustness
+
+Several edge cases that could silently corrupt or stall a copy operation are now handled.
+
+### Per-file inactivity timeout
+
+All three copy operations (import, merge, stack export) now apply a **30-second inactivity timeout** per file. If no data is received from the source for 30 consecutive seconds — which happens when the SeeStar device goes offline mid-copy — the operation is immediately aborted with a clear error message, the partial destination file is deleted, and the error appears in the completion summary. The timer resets on every received data chunk, so large files that are copying normally are never affected.
+
+### Immediate cancellation
+
+Clicking **Cancel** during a copy now aborts the in-flight stream instantly. Previously, the cancel flag was checked only between files; a large file being copied could continue until it finished. The new `_abortCurrentFile` hook allows the cancel handler to destroy the read/write streams immediately, regardless of where in the copy the operation is.
+
+### Partial file cleanup
+
+On any copy failure — timeout, network error, or cancellation — the partially written destination file is deleted automatically. The source file is never touched.
+
+### Symlink recursion guard
+
+Both the import and merge `scanDirectory()` functions now use `fs.lstat()` instead of `fs.stat()`. Symlinks are detected and skipped before recursion, preventing infinite loops from circular symlinks in the source library.
+
+### Windows MAX_PATH protection
+
+The Windows API silently fails for paths longer than 259 characters. All three copy loops now check the destination path length before attempting the copy. Files that would exceed the limit are skipped, logged with the exact path length, and recorded in the operation's error summary — so the user sees what was missed instead of the copy appearing to succeed.
+
+### Event-loop safety in merge
+
+`mergeService.js` used `fs.statSync()` (a synchronous, blocking call) inside an async copy loop to retrieve the file size for progress tracking. This has been replaced with a non-blocking `fs.stat().then().catch()` call, matching the pattern already used in `importService.js`.
+
+---
+
+## 7 — Persistent Structured Logging
+
+All application log output is now written to a daily log file at `%APPDATA%\SSLM\logs\sslm-YYYY-MM-DD.log` (packaged exe) or `config/logs/sslm-YYYY-MM-DD.log` (development). This means logs are:
+
+- **Persistent**: they survive app restarts and are available for troubleshooting after a crash.
+- **Timestamped**: every line includes an ISO 8601 timestamp and severity level (`INFO`, `WARN`, `ERROR`, `DEBUG`).
+- **Automatic**: no configuration required. All existing `console.log`, `console.warn`, and `console.error` calls throughout the codebase are captured automatically — the log covers the server, all services, and all utilities.
+
+The file rotates daily (a new file is opened when the date changes). No new npm dependencies were introduced — the logger is implemented with Node.js built-in streams only.
+
+---
+
+## 8 — Config Schema Validation
+
+Previously, a corrupted or manually edited `settings.json` that contained invalid JSON or an unexpected structure could crash SSLM on startup.
+
+`settings.json` is now validated at startup:
+
+- If the file contains invalid JSON or is not a JSON object, it is **reset to defaults** and (in the packaged exe) the clean default config is immediately written back to `%APPDATA%\SSLM\settings.json`.
+- If the file is valid JSON but some sections are missing or have the wrong type, the missing sections are **filled in from defaults** while all valid user values are preserved.
+- Extra top-level keys added by the API are also preserved (not silently dropped).
 
 ---
 
@@ -146,6 +200,8 @@ Unit tests cover `shouldCopyFile` logic, `startImport` / `executeMerge` happy an
 
 | Commit | Description |
 |--------|-------------|
+| *(pending)* | Config schema validation (`applyConfigDefaults`); persistent structured logging (`src/utils/logger.js`) |
+| *(pending)* | Windows MAX_PATH guard; `fs.statSync` → non-blocking in merge; symlink guard; per-file timeout; cancel abort hook |
 | *(pending)* | Socket.IO disconnect recovery — `operationStore`, `GET /api/operations/:id/status`, wizard `pollStatus()` |
 | *(pending)* | Vitest test suite — 51 tests (unit + integration) |
 | `fec7dac` | Global error handlers (`unhandledRejection` + `uncaughtException`) + interrupted operation recovery |
