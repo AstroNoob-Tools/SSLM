@@ -79,7 +79,7 @@ class ImportService {
      * @param {string} sourcePath - Source directory (MyWork folder)
      * @param {string} destinationPath - Destination directory
      * @param {string} strategy - 'full' or 'incremental'
-     * @param {string} socketId - Socket.IO client ID for progress updates
+     * @param {string} clientId - Socket.IO client ID for progress updates
      * @param {string} operationId - Unique operation ID
      */
     /**
@@ -102,9 +102,9 @@ class ImportService {
         return false;
     }
 
-    async startImport(sourcePath, destinationPath, strategy, socketId, operationId, subframeMode = 'all') {
+    async startImport(sourcePath, destinationPath, strategy, clientId, operationId, subframeMode = 'all') {
         this.cancelled = false;
-        this.currentOperation = { sourcePath, destinationPath, strategy, socketId, operationId, subframeMode };
+        this.currentOperation = { sourcePath, destinationPath, strategy, clientId, operationId, subframeMode };
         this.progressSamples = [];
 
         const startTime = Date.now();
@@ -182,7 +182,7 @@ class ImportService {
             for (const file of filesToCopy) {
                 // Check cancellation
                 if (this.cancelled) {
-                    this.emitEvent(socketId, 'import:cancelled', {
+                    this.emitEvent(clientId, 'import:cancelled', {
                         operationId,
                         status: 'cancelled',
                         filesCopied,
@@ -206,7 +206,7 @@ class ImportService {
                         (currentBytes, totalFileBytes) => {
                             const currentBytesCopied = bytesCopied + currentBytes;
 
-                            this.emitProgress(socketId, {
+                            this.emitProgress(clientId, {
                                 operationId,
                                 status: 'copying',
                                 currentFile: file.relativePath,
@@ -226,7 +226,7 @@ class ImportService {
                     filesCopied++;
 
                     // Emit progress after each file
-                    this.emitProgress(socketId, {
+                    this.emitProgress(clientId, {
                         operationId,
                         status: 'copying',
                         currentFile: file.relativePath,
@@ -254,7 +254,7 @@ class ImportService {
             const durationFormatted = this.formatDuration(duration);
 
             // Emit completion
-            this.emitEvent(socketId, 'import:complete', {
+            this.emitEvent(clientId, 'import:complete', {
                 operationId,
                 status: 'completed',
                 filesCopied,
@@ -274,7 +274,7 @@ class ImportService {
         } catch (error) {
             console.error('Import error:', error);
 
-            this.emitEvent(socketId, 'import:error', {
+            this.emitEvent(clientId, 'import:error', {
                 operationId,
                 status: 'error',
                 error: error.message,
@@ -449,10 +449,10 @@ class ImportService {
 
     /**
      * Emit progress update with throttling
-     * @param {string} socketId - Socket ID
+     * @param {string} clientId - Socket ID
      * @param {Object} progressData - Progress data
      */
-    emitProgress(socketId, progressData) {
+    emitProgress(clientId, progressData) {
         const now = Date.now();
 
         // Add sample for speed calculation
@@ -472,20 +472,20 @@ class ImportService {
 
         // Throttle emission
         if (now - this.lastProgressEmit >= this.progressEmitInterval) {
-            this.emitEvent(socketId, 'import:progress', enrichedData);
+            this.emitEvent(clientId, 'import:progress', enrichedData);
             this.lastProgressEmit = now;
         }
     }
 
     /**
      * Emit Socket.IO event
-     * @param {string} socketId - Socket ID
+     * @param {string} clientId - Socket ID
      * @param {string} event - Event name
      * @param {Object} data - Event data
      */
-    emitEvent(socketId, event, data) {
-        if (this.io && socketId) {
-            this.io.to(socketId).emit(event, data);
+    emitEvent(clientId, event, data) {
+        if (this.io && clientId) {
+            this.io.to(clientId).emit(event, data);
         }
     }
 
@@ -562,18 +562,18 @@ class ImportService {
      * Validate transfer integrity - verify all source files exist in destination with correct size
      * @param {string} sourcePath - Source directory (MyWorks folder)
      * @param {string} destinationPath - Destination directory
-     * @param {string} socketId - Socket.IO client ID for progress updates
+     * @param {string} clientId - Socket.IO client ID for progress updates
      * @param {string} operationId - Unique operation ID
      * @returns {Promise<Object>} Validation result with mismatches
      */
-    async validateTransfer(sourcePath, destinationPath, socketId, operationId, subframeMode = 'all') {
+    async validateTransfer(sourcePath, destinationPath, clientId, operationId, subframeMode = 'all') {
         const startTime = Date.now();
 
         try {
             console.log(`Starting transfer validation: ${sourcePath} -> ${destinationPath} (subframeMode: ${subframeMode})`);
 
             // Scan source directory
-            this.emitEvent(socketId, 'validate:progress', {
+            this.emitEvent(clientId, 'validate:progress', {
                 operationId,
                 status: 'scanning',
                 message: 'Scanning source files...',
@@ -626,7 +626,7 @@ class ImportService {
 
                     // Emit progress every 100 files
                     if (filesValidated % 100 === 0 || filesValidated === totalFiles) {
-                        this.emitEvent(socketId, 'validate:progress', {
+                        this.emitEvent(clientId, 'validate:progress', {
                             operationId,
                             status: 'validating',
                             filesValidated,
@@ -652,7 +652,7 @@ class ImportService {
             console.log(`Validation complete: ${isValid ? 'PASS' : 'FAIL'} - ${mismatches.length} issues found`);
 
             // Emit completion
-            this.emitEvent(socketId, 'validate:complete', {
+            this.emitEvent(clientId, 'validate:complete', {
                 operationId,
                 status: 'completed',
                 isValid,
@@ -673,7 +673,7 @@ class ImportService {
         } catch (error) {
             console.error('Validation error:', error);
 
-            this.emitEvent(socketId, 'validate:error', {
+            this.emitEvent(clientId, 'validate:error', {
                 operationId,
                 status: 'error',
                 error: error.message,

@@ -16,6 +16,7 @@ window.escapeHtml = escapeHtml;
 class App {
     constructor() {
         this.socket = null;
+        this.clientId = null;
         this.currentScreen = 'welcome';
         this.config = null;
 
@@ -24,6 +25,9 @@ class App {
 
     async init() {
         console.log('SSLM - SeeStar Library Manager - Initializing...');
+
+        // Initialize Session ID for persistent Socket.IO tracking
+        this.initClientId();
 
         // Setup event listeners first so header buttons always work,
         // even if socket.io or config loading fails later.
@@ -58,12 +62,33 @@ class App {
         console.log('Application ready!');
     }
 
+    initClientId() {
+        // Try to load an existing client ID from this browser tab's session
+        let id = sessionStorage.getItem('sslm_client_id');
+        if (!id) {
+            // Generate a simple unique ID (crypto.randomUUID is not available in non-secure contexts)
+            id = 'client_' + Date.now().toString(36) + '_' + Math.random().toString(36).substr(2, 9);
+            sessionStorage.setItem('sslm_client_id', id);
+        }
+        this.clientId = id;
+        console.log('Session Client ID initialized:', this.clientId);
+    }
+
     initializeSocket() {
         this.socket = io();
 
         this.socket.on('connect', () => {
-            console.log('Connected to server');
+            const isReconnect = this._wasConnected;
+            this._wasConnected = true;
+            console.log(isReconnect ? 'Reconnected to server' : 'Connected to server', '— registering client ID');
+            // Rejoin our persistent clientId room so future progress events reach us
+            this.socket.emit('register', { clientId: this.clientId });
             this.updateStatus('Connected');
+            // On reconnect, poll for the outcome of any in-progress operation in
+            // case it completed while the socket was down
+            if (isReconnect && this._activeOperation) {
+                this._activeOperation.pollStatus();
+            }
         });
 
         this.socket.on('disconnect', () => {
@@ -546,16 +571,16 @@ class App {
                 </table>
                 <div id="updateActionArea">
                     ${hasAsset
-                        ? `<p style="font-size: 0.85rem; color: var(--text-secondary); margin: 0 0 1rem;">
+                ? `<p style="font-size: 0.85rem; color: var(--text-secondary); margin: 0 0 1rem;">
                                The installer will be downloaded and launched automatically. SSLM will close when installation begins.
                            </p>
                            <button id="downloadInstallBtn" class="btn btn-primary" style="width: 100%;">
                                Download &amp; Install
                            </button>`
-                        : `<p style="font-size: 0.85rem; color: var(--text-secondary); margin: 0;">
+                : `<p style="font-size: 0.85rem; color: var(--text-secondary); margin: 0;">
                                No installer asset found for this release. Visit GitHub to download manually.
                            </p>`
-                    }
+            }
                 </div>
             </div>
         `;
@@ -571,7 +596,7 @@ class App {
                         method: 'POST',
                         headers: { 'Content-Type': 'application/json' },
                         body: JSON.stringify({ url: info.releaseUrl })
-                    }).catch(() => {});
+                    }).catch(() => { });
                 });
             }
 
@@ -782,6 +807,16 @@ class App {
         if (statusText) {
             statusText.textContent = message;
         }
+    }
+
+    // Track the wizard that owns the currently-running long operation.
+    // Called by importWizard / mergeWizard when they start and finish.
+    registerOperation(wizard) {
+        this._activeOperation = wizard;
+    }
+
+    clearOperation() {
+        this._activeOperation = null;
     }
 
     // Utility Methods

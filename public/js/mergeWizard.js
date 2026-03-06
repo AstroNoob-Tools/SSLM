@@ -387,7 +387,7 @@ class MergeWizard {
                 body: JSON.stringify({
                     sourcePaths: this.sourcePaths,
                     destinationPath: this.destinationPath,
-                    socketId: app.socket?.id,
+                    clientId: app.clientId,
                     subframeMode: this.subframeMode
                 })
             });
@@ -729,8 +729,8 @@ class MergeWizard {
                                 <td colspan="2" style="padding-left: 2rem;">
                                     • Sub-frame files:
                                     <strong>${this.subframeMode === 'fit_only'
-                                        ? '🔬 Expurged — only .FIT files copied from _sub directories'
-                                        : '📁 Full — all files copied from _sub directories'}</strong>
+                ? '🔬 Expurged — only .FIT files copied from _sub directories'
+                : '📁 Full — all files copied from _sub directories'}</strong>
                                 </td>
                             </tr>
                         </tbody>
@@ -873,10 +873,10 @@ class MergeWizard {
             return;
         }
 
-        // Guard: socket must be connected for progress events to arrive
-        const socketId = app.socket?.id;
-        if (!socketId) {
-            app.showModal('Error', 'Socket.IO not connected — cannot receive merge progress. Please refresh the page and try again.');
+        // Guard: client must have ID
+        const clientId = app.clientId;
+        if (!clientId) {
+            app.showModal('Error', 'Session Client ID not established. Please refresh the page and try again.');
             return;
         }
 
@@ -885,7 +885,7 @@ class MergeWizard {
         this.startElapsedTimer();
 
         try {
-            console.log('[MergeWizard] Starting merge, socketId:', socketId);
+            console.log('[MergeWizard] Starting merge, clientId:', clientId);
             console.log('[MergeWizard] Files to copy:', this.mergePlan?.filesToCopy?.length);
 
             const response = await fetch('/api/merge/start', {
@@ -895,7 +895,7 @@ class MergeWizard {
                     sourcePaths: this.sourcePaths,
                     destinationPath: this.destinationPath,
                     mergePlan: this.mergePlan,
-                    socketId: socketId
+                    clientId: clientId
                 })
             });
 
@@ -905,6 +905,7 @@ class MergeWizard {
             if (result.success) {
                 this.operationId = result.operationId;
                 console.log('[MergeWizard] Merge started, operationId:', result.operationId);
+                app.registerOperation(this);
             } else {
                 throw new Error(result.error || 'Failed to start merge');
             }
@@ -942,6 +943,7 @@ class MergeWizard {
 
     handleMergeComplete(data) {
         console.log('Merge complete:', data);
+        app.clearOperation();
         this.stopElapsedTimer();
 
         // Update progress display to show 100% completion
@@ -977,13 +979,36 @@ class MergeWizard {
 
     handleMergeError(data) {
         console.error('Merge error:', data);
+        app.clearOperation();
         app.showModal('Error', `Merge failed: ${escapeHtml(data.error)}`);
     }
 
     handleMergeCancelled(data) {
         console.log('Merge cancelled:', data);
+        app.clearOperation();
         this.stopElapsedTimer();
         app.showModal('Cancelled', 'Merge operation was cancelled.');
+    }
+
+    // Called by app.js on Socket.IO reconnect to check whether the merge
+    // completed while the client was disconnected.
+    async pollStatus() {
+        if (!this.operationId) return;
+        try {
+            const res = await fetch(`/api/operations/${this.operationId}/status`);
+            const data = await res.json();
+            console.log('[MergeWizard] Polled operation status:', data.status);
+            if (data.status === 'merge:complete') {
+                this.handleMergeComplete(data.result);
+            } else if (data.status === 'merge:error') {
+                this.handleMergeError(data.result);
+            } else if (data.status === 'merge:cancelled') {
+                this.handleMergeCancelled(data.result);
+            }
+            // 'in_progress' or 'unknown': do nothing — Socket.IO events will resume
+        } catch (e) {
+            console.warn('[MergeWizard] Could not poll operation status:', e);
+        }
     }
 
     async cancelMerge() {
@@ -1056,7 +1081,7 @@ class MergeWizard {
                 body: JSON.stringify({
                     destinationPath: this.destinationPath,
                     mergePlan: this.mergePlan,
-                    socketId: app.socket.id
+                    clientId: app.clientId
                 })
             });
 
@@ -1083,7 +1108,7 @@ class MergeWizard {
                 body: JSON.stringify({
                     destinationPath: this.destinationPath,
                     mergePlan: this.mergePlan,
-                    socketId: app.socket.id
+                    clientId: app.clientId
                 })
             });
 
@@ -1141,8 +1166,8 @@ class MergeWizard {
                     <h3>Validation Complete</h3>
                     <p style="color: var(--text-secondary); margin: 1rem 0;">
                         ${data.isValid
-                            ? `All ${data.filesValidated.toLocaleString()} files verified successfully!`
-                            : `Validation completed with ${data.mismatches?.length || 0} issues.`}
+                    ? `All ${data.filesValidated.toLocaleString()} files verified successfully!`
+                    : `Validation completed with ${data.mismatches?.length || 0} issues.`}
                     </p>
                     <p style="color: var(--text-secondary); font-size: 0.9em;">
                         Loading dashboard...

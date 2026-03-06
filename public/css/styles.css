@@ -145,6 +145,50 @@ body {
     color: #ff4444;
 }
 
+/* Update available badge (amber pill, mirrors .mode-indicator) */
+.update-badge {
+    display: flex;
+    align-items: center;
+    gap: 0.4rem;
+    padding: 0.4rem 0.75rem;
+    background: rgba(255, 170, 0, 0.12);
+    border: 1px solid rgba(255, 170, 0, 0.35);
+    border-radius: 20px;
+    font-size: 0.82rem;
+    cursor: pointer;
+    color: #ffaa00;
+    user-select: none;
+    transition: background 0.15s;
+}
+
+.update-badge:hover {
+    background: rgba(255, 170, 0, 0.22);
+}
+
+.update-badge-dot {
+    width: 7px;
+    height: 7px;
+    border-radius: 50%;
+    background: #ffaa00;
+    box-shadow: 0 0 6px #ffaa00;
+    flex-shrink: 0;
+}
+
+.update-badge-dismiss {
+    background: none;
+    border: none;
+    color: inherit;
+    cursor: pointer;
+    font-size: 0.75rem;
+    padding: 0 0 0 0.2rem;
+    opacity: 0.65;
+    line-height: 1;
+}
+
+.update-badge-dismiss:hover {
+    opacity: 1;
+}
+
 /* Main Content */
 .app-main {
     flex: 1;

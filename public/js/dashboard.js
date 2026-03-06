@@ -4,13 +4,13 @@ class Dashboard {
     constructor() {
         this.data = null;
         // Stack Export state
-        this._exportBrowsePath     = null;
-        this._exportBrowseResolve  = null;
-        this._exportManifest       = null;
-        this._exportCurrentObj     = null;
-        this._exportHandlersReady  = false;
-        this._exportTimerHandle    = null;
-        this._exportTimerStart     = null;
+        this._exportBrowsePath = null;
+        this._exportBrowseResolve = null;
+        this._exportManifest = null;
+        this._exportCurrentObj = null;
+        this._exportHandlersReady = false;
+        this._exportTimerHandle = null;
+        this._exportTimerStart = null;
         this.init();
     }
 
@@ -420,9 +420,9 @@ class Dashboard {
     _mountModeBadge(mountMode) {
         if (!mountMode) return '';
         const cfg = {
-            eq:    { label: 'EQ',     color: 'var(--info-color,    #3498db)' },
+            eq: { label: 'EQ', color: 'var(--info-color,    #3498db)' },
             altaz: { label: 'Alt/Az', color: 'var(--accent-color,  #9b59b6)' },
-            both:  { label: 'Both',   color: 'var(--success-color, #2ecc71)' }
+            both: { label: 'Both', color: 'var(--success-color, #2ecc71)' }
         };
         const { label, color } = cfg[mountMode] || { label: mountMode, color: 'var(--text-secondary)' };
         return `<span style="font-size:0.7rem; background:${color}; color:#fff;
@@ -614,12 +614,12 @@ class Dashboard {
     renderObjectRow(obj, index) {
         const allSubs = this._getSubFolders(obj);
         const totalFiles = obj.mainFolder.fileCount + allSubs.reduce((s, sf) => s + sf.fileCount, 0);
-        const totalSize  = obj.mainFolder.size     + allSubs.reduce((s, sf) => s + sf.size,      0);
+        const totalSize = obj.mainFolder.size + allSubs.reduce((s, sf) => s + sf.size, 0);
         const bgColor = index % 2 === 0 ? 'transparent' : 'var(--bg-tertiary)';
         const hoverBgColor = index % 2 === 0 ? 'var(--bg-tertiary)' : 'var(--bg-secondary)';
 
         // Count .fit and non-.fit files across all sub-frame folders
-        const subFitCount   = allSubs.reduce((s, sf) => s + sf.files.filter(f =>  f.endsWith('.fit')).length, 0);
+        const subFitCount = allSubs.reduce((s, sf) => s + sf.files.filter(f => f.endsWith('.fit')).length, 0);
         const subOtherCount = allSubs.reduce((s, sf) => s + sf.files.filter(f => !f.endsWith('.fit')).length, 0);
 
         const sessions = this.parseImagingSessions(obj);
@@ -933,9 +933,9 @@ class Dashboard {
         }
 
         const folderLabel = {
-            eq:    'the <code>_sub</code> directory (EQ mode)',
+            eq: 'the <code>_sub</code> directory (EQ mode)',
             altaz: 'the <code>-sub</code> directory (Alt/Az mode)',
-            both:  'both the <code>_sub</code> (EQ) and <code>-sub</code> (Alt/Az) directories'
+            both: 'both the <code>_sub</code> (EQ) and <code>-sub</code> (Alt/Az) directories'
         }[object.mountMode] || 'sub-frame directories';
 
         const confirmMessage = `
@@ -1279,7 +1279,7 @@ class Dashboard {
             // Format RA/Dec as HH:MM:SS / ±DD:MM:SS
             let coordsHtml = '';
             if (hasCoords) {
-                const ra  = escapeHtml(this._formatRA(parseFloat(data.ra)));
+                const ra = escapeHtml(this._formatRA(parseFloat(data.ra)));
                 const dec = escapeHtml(this._formatDec(parseFloat(data.dec)));
                 coordsHtml = `<span class="alias-coords">📍 RA ${ra} / Dec ${dec}</span>`;
             }
@@ -1339,18 +1339,18 @@ class Dashboard {
         const rem = (total / 15 - h) * 60;
         const m = Math.floor(rem);
         const s = ((rem - m) * 60).toFixed(1);
-        return `${String(h).padStart(2,'0')}h ${String(m).padStart(2,'0')}m ${String(s).padStart(4,'0')}s`;
+        return `${String(h).padStart(2, '0')}h ${String(m).padStart(2, '0')}m ${String(s).padStart(4, '0')}s`;
     }
 
     /** Convert decimal degrees Dec → ±DD MM SS */
     _formatDec(deg) {
         const sign = deg < 0 ? '−' : '+';
-        const abs  = Math.abs(deg);
-        const d    = Math.floor(abs);
-        const rem  = (abs - d) * 60;
-        const m    = Math.floor(rem);
-        const s    = Math.round((rem - m) * 60);
-        return `${sign}${String(d).padStart(2,'0')}° ${String(m).padStart(2,'0')}′ ${String(s).padStart(2,'0')}″`;
+        const abs = Math.abs(deg);
+        const d = Math.floor(abs);
+        const rem = (abs - d) * 60;
+        const m = Math.floor(rem);
+        const s = Math.round((rem - m) * 60);
+        return `${sign}${String(d).padStart(2, '0')}° ${String(m).padStart(2, '0')}′ ${String(s).padStart(2, '0')}″`;
     }
 
     // ── Rebrand (rename object) ───────────────────────────────────────────────
@@ -1441,9 +1441,9 @@ class Dashboard {
         const detailContent = document.querySelector('.object-detail-content');
         if (!detailContent) return;
 
-        const allSubs    = this._getSubFolders(obj);
+        const allSubs = this._getSubFolders(obj);
         const totalFiles = obj.mainFolder.fileCount + allSubs.reduce((s, sf) => s + sf.fileCount, 0);
-        const totalSize  = obj.mainFolder.size      + allSubs.reduce((s, sf) => s + sf.size,      0);
+        const totalSize = obj.mainFolder.size + allSubs.reduce((s, sf) => s + sf.size, 0);
 
         // Integration time: prefer sub-frame-derived value; fall back to sum(stackCount × exposure)
         // across sessions so objects without sub-frames also show a meaningful figure.
@@ -1472,18 +1472,18 @@ class Dashboard {
                 <div style="background: var(--bg-card); border-radius: 16px; padding: 2rem; margin-bottom: 2rem;">
                     <div style="display: flex; align-items: flex-start; gap: 1.5rem; flex-wrap: wrap;">
                         ${(() => {
-                            const jpgFiles = (obj.mainFolder.files || [])
-                                .filter(f => f.endsWith('.jpg') && !f.endsWith('_thn.jpg'))
-                                .sort().reverse();
-                            if (!jpgFiles.length) return '';
-                            const sep = obj.mainFolder.path.includes('\\') ? '\\' : '/';
-                            const imgPath = encodeURIComponent(obj.mainFolder.path + sep + jpgFiles[0]);
-                            return `<img src="/api/image?path=${imgPath}"
+                const jpgFiles = (obj.mainFolder.files || [])
+                    .filter(f => f.endsWith('.jpg') && !f.endsWith('_thn.jpg'))
+                    .sort().reverse();
+                if (!jpgFiles.length) return '';
+                const sep = obj.mainFolder.path.includes('\\') ? '\\' : '/';
+                const imgPath = encodeURIComponent(obj.mainFolder.path + sep + jpgFiles[0]);
+                return `<img src="/api/image?path=${imgPath}"
                                          alt="${escapeHtml(obj.displayName)}"
                                          style="width: 130px; height: 130px; object-fit: cover; border-radius: 10px;
                                                 flex-shrink: 0; border: 2px solid var(--border-color);"
                                          onerror="this.style.display='none'">`;
-                        })()}
+            })()}
                         <div style="flex: 1; min-width: 0; display: flex; justify-content: space-between; align-items: flex-start; flex-wrap: wrap; gap: 1rem;">
                             <div>
                                 <h1 style="font-size: 2.5rem; margin-bottom: 0.5rem;">
@@ -1558,10 +1558,10 @@ class Dashboard {
 
                 <!-- Sub-Frames Folder Details (one card per sub-folder: Eq _sub and/or Alt/Az -sub) -->
                 ${allSubs.map(sf => {
-                    const modeLabel = sf === obj.subFolderEq ? 'Eq' : 'Alt/Az';
-                    const fitCount  = sf.files.filter(f =>  f.endsWith('.fit')).length;
-                    const otherCount= sf.files.filter(f => !f.endsWith('.fit')).length;
-                    return `
+                const modeLabel = sf === obj.subFolderEq ? 'Eq' : 'Alt/Az';
+                const fitCount = sf.files.filter(f => f.endsWith('.fit')).length;
+                const otherCount = sf.files.filter(f => !f.endsWith('.fit')).length;
+                return `
                     <div style="background: var(--bg-card); border-radius: 16px; padding: 1.5rem; margin-bottom: 2rem;">
                         <h3 style="margin-bottom: 1rem;">📦 Sub-Frames Folder <span style="font-size:0.875rem; color:var(--text-secondary);">(${modeLabel} mount mode)</span></h3>
                         <div style="display: grid; grid-template-columns: 2fr repeat(4, 1fr); gap: 1rem; margin-bottom: 1.5rem;">
@@ -1588,7 +1588,7 @@ class Dashboard {
                         </div>
                         ${this.renderFileList(sf.files, 'Sub-Frame Files', sf.path, true)}
                     </div>`;
-                }).join('')}
+            }).join('')}
                 </div>
                 </div>
             </div>
@@ -1707,31 +1707,31 @@ class Dashboard {
                 <div style="background: var(--bg-card); border-radius: 16px; padding: 1.5rem; margin-bottom: 2rem;">
                     <h3 style="margin-bottom: 1rem;">📁 Main Folder Files (${mainFiles.length})</h3>
                     ${mainFiles.length > 0
-                        ? this.renderFileList(mainFiles, 'Session Stacked Images', obj.mainFolder.path, true)
-                        : '<p style="color: var(--text-muted);">No main folder files found for this session.</p>'}
+                ? this.renderFileList(mainFiles, 'Session Stacked Images', obj.mainFolder.path, true)
+                : '<p style="color: var(--text-muted);">No main folder files found for this session.</p>'}
                 </div>
 
                 <!-- Sub-Frame Light Frames (grouped per sub-folder) -->
                 ${this._getSubFolders(obj).length > 0 ? (() => {
-                    // Group subFiles by their folder path
-                    const byFolder = {};
-                    subFiles.forEach(({ folder, file }) => {
-                        if (!byFolder[folder]) byFolder[folder] = [];
-                        byFolder[folder].push(file);
-                    });
-                    const allSubFolders = this._getSubFolders(obj);
-                    return allSubFolders.map(sf => {
-                        const modeLabel  = sf === obj.subFolderEq ? 'Eq' : 'Alt/Az';
-                        const filesHere  = byFolder[sf.path] || [];
-                        return `
+                // Group subFiles by their folder path
+                const byFolder = {};
+                subFiles.forEach(({ folder, file }) => {
+                    if (!byFolder[folder]) byFolder[folder] = [];
+                    byFolder[folder].push(file);
+                });
+                const allSubFolders = this._getSubFolders(obj);
+                return allSubFolders.map(sf => {
+                    const modeLabel = sf === obj.subFolderEq ? 'Eq' : 'Alt/Az';
+                    const filesHere = byFolder[sf.path] || [];
+                    return `
                         <div style="background: var(--bg-card); border-radius: 16px; padding: 1.5rem; margin-bottom: 2rem;">
                             <h3 style="margin-bottom: 1rem;">📦 Sub-Frame Light Frames — ${modeLabel} (${filesHere.length})</h3>
                             ${filesHere.length > 0
-                                ? this.renderFileList(filesHere, 'Session Light Frames', sf.path, true)
-                                : '<p style="color: var(--text-muted);">No sub-frame files found for this session.</p>'}
+                            ? this.renderFileList(filesHere, 'Session Light Frames', sf.path, true)
+                            : '<p style="color: var(--text-muted);">No sub-frame files found for this session.</p>'}
                         </div>`;
-                    }).join('');
-                })() : ''}
+                }).join('');
+            })() : ''}
                 </div>
                 </div>
             </div>
@@ -1938,9 +1938,9 @@ class Dashboard {
                 label: 'Stacking Counts',
                 value: `${totalFrames} total (${sessionStackCounts.join(', ')} per session)`,
                 help: 'Each imaging session produces one stacked image by combining many individual sub-frames. ' +
-                      'The "per session" values show how many sub-frames were combined in each session\'s final stacked image. ' +
-                      'The "total" is the sum across all sessions. ' +
-                      'Higher counts generally mean better signal-to-noise and image quality.'
+                    'The "per session" values show how many sub-frames were combined in each session\'s final stacked image. ' +
+                    'The "total" is the sum across all sessions. ' +
+                    'Higher counts generally mean better signal-to-noise and image quality.'
             });
         }
 
@@ -2351,7 +2351,7 @@ class Dashboard {
     /** Return an array of existing sub-folder paths for obj (EQ and/or Alt/Az). */
     _getSubFolderPaths(obj) {
         const paths = [];
-        if (obj.subFolderEq    && obj.subFolderEq.path)    paths.push(obj.subFolderEq.path);
+        if (obj.subFolderEq && obj.subFolderEq.path) paths.push(obj.subFolderEq.path);
         if (obj.subFolderAltAz && obj.subFolderAltAz.path) paths.push(obj.subFolderAltAz.path);
         return paths;
     }
@@ -2410,7 +2410,7 @@ class Dashboard {
     /** Show a modal with a folder browser; resolves to the selected path or null. */
     async _showExportFolderBrowserModal(title) {
         return new Promise((resolve) => {
-            this._exportBrowsePath    = null;
+            this._exportBrowsePath = null;
             this._exportBrowseResolve = resolve;
 
             const body = `
@@ -2450,7 +2450,7 @@ class Dashboard {
 
     async _loadExportDrives() {
         try {
-            const res  = await fetch('/api/browse/drives');
+            const res = await fetch('/api/browse/drives');
             const data = await res.json();
             if (data.success) this._renderExportDrives(data.drives);
         } catch (err) {
@@ -2483,7 +2483,7 @@ class Dashboard {
     async _browseExportPath(targetPath) {
         this._exportBrowsePath = targetPath;
         try {
-            const res  = await fetch(`/api/browse/directory?path=${encodeURIComponent(targetPath)}`);
+            const res = await fetch(`/api/browse/directory?path=${encodeURIComponent(targetPath)}`);
             const data = await res.json();
             if (data.success) this._renderExportDirContents(data.directories || [], targetPath);
         } catch (err) {
@@ -2497,7 +2497,7 @@ class Dashboard {
         if (pathDiv) pathDiv.textContent = currentPath;
         if (!listDiv) return;
 
-        const sep        = currentPath.includes('\\') ? '\\' : '/';
+        const sep = currentPath.includes('\\') ? '\\' : '/';
         const parentPath = currentPath.lastIndexOf(sep) > 0
             ? currentPath.substring(0, currentPath.lastIndexOf(sep))
             : '';
@@ -2539,7 +2539,7 @@ class Dashboard {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({
-                    objectName:    obj.name,
+                    objectName: obj.name,
                     subFolderPaths: this._getSubFolderPaths(obj),
                     destinationPath: destPath
                 })
@@ -2615,7 +2615,7 @@ class Dashboard {
             return;
         }
 
-        this._exportManifest   = null;
+        this._exportManifest = null;
         this._exportCurrentObj = obj;
 
         app.showScreen('stackExportScreen');
@@ -2626,10 +2626,10 @@ class Dashboard {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({
-                    objectName:      obj.name,
-                    subFolderPaths:  this._getSubFolderPaths(obj),
+                    objectName: obj.name,
+                    subFolderPaths: this._getSubFolderPaths(obj),
                     destinationPath: destPath,
-                    socketId:        app.socket.id
+                    clientId: app.clientId
                 })
             });
             const data = await res.json();
@@ -2728,7 +2728,7 @@ class Dashboard {
 
         if (data.status === 'copying' || (data.status === 'starting' && data.totalFiles > 0)) {
             // Switch to determinate bar on first real progress
-            const indBar  = document.getElementById('exportBarIndeterminate');
+            const indBar = document.getElementById('exportBarIndeterminate');
             const realBar = document.getElementById('exportBarContainer');
             const barFill = document.getElementById('exportBar');
             if (indBar && indBar.style.display !== 'none') {
@@ -2754,21 +2754,21 @@ class Dashboard {
     _handleExportComplete(data) {
         this._stopExportTimer();
 
-        const indBar  = document.getElementById('exportBarIndeterminate');
+        const indBar = document.getElementById('exportBarIndeterminate');
         const realBar = document.getElementById('exportBarContainer');
         const barFill = document.getElementById('exportBar');
-        if (indBar)  indBar.style.display  = 'none';
+        if (indBar) indBar.style.display = 'none';
         if (realBar) realBar.style.display = 'block';
         if (barFill) { barFill.style.width = '100%'; barFill.textContent = '100%'; }
 
         const currentFileEl = document.getElementById('exportCurrentFile');
         if (currentFileEl) currentFileEl.textContent = 'Export complete!';
 
-        const cancelBtn   = document.getElementById('exportCancelBtn');
-        const doneBtn     = document.getElementById('exportDoneBtn');
+        const cancelBtn = document.getElementById('exportCancelBtn');
+        const doneBtn = document.getElementById('exportDoneBtn');
         const validateBtn = document.getElementById('exportValidateBtn');
-        if (cancelBtn)   cancelBtn.style.display   = 'none';
-        if (doneBtn)     doneBtn.style.display     = '';
+        if (cancelBtn) cancelBtn.style.display = 'none';
+        if (doneBtn) doneBtn.style.display = '';
         if (validateBtn) validateBtn.style.display = '';
 
         this._exportManifest = data.manifest || [];
@@ -2804,9 +2804,9 @@ class Dashboard {
         if (currentFileEl) currentFileEl.textContent = `Error: ${data.error || 'Unknown error'}`;
 
         const cancelBtn = document.getElementById('exportCancelBtn');
-        const doneBtn   = document.getElementById('exportDoneBtn');
+        const doneBtn = document.getElementById('exportDoneBtn');
         if (cancelBtn) cancelBtn.style.display = 'none';
-        if (doneBtn)   doneBtn.style.display   = '';
+        if (doneBtn) doneBtn.style.display = '';
 
         const resultArea = document.getElementById('exportResultArea');
         if (resultArea) {
@@ -2827,9 +2827,9 @@ class Dashboard {
         if (currentFileEl) currentFileEl.textContent = 'Export cancelled.';
 
         const cancelBtn = document.getElementById('exportCancelBtn');
-        const doneBtn   = document.getElementById('exportDoneBtn');
+        const doneBtn = document.getElementById('exportDoneBtn');
         if (cancelBtn) cancelBtn.style.display = 'none';
-        if (doneBtn)   doneBtn.style.display   = '';
+        if (doneBtn) doneBtn.style.display = '';
     }
 
     // ── Validation ────────────────────────────────────────────────────────────
@@ -2862,7 +2862,7 @@ class Dashboard {
             const res = await fetch('/api/export/stack/validate', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ manifest: this._exportManifest, socketId: app.socket.id })
+                body: JSON.stringify({ manifest: this._exportManifest, clientId: app.clientId })
             });
             const data = await res.json();
             if (!data.success) {
@@ -2880,7 +2880,7 @@ class Dashboard {
         const msg = document.getElementById('validationStatusMsg');
         if (bar && data.percentage != null) {
             bar.style.width = data.percentage + '%';
-            bar.textContent  = data.percentage + '%';
+            bar.textContent = data.percentage + '%';
         }
         if (msg && data.filesValidated != null) {
             const issues = data.mismatches ? ` — ${data.mismatches} issue(s) found` : '';
@@ -2895,7 +2895,7 @@ class Dashboard {
         const resultArea = document.getElementById('exportResultArea');
         if (!resultArea) return;
 
-        const ok     = data.success;
+        const ok = data.success;
         const issues = data.mismatches || [];
         let issueHtml = '';
 

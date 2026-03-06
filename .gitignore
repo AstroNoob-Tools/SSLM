@@ -29,8 +29,8 @@ Thumbs.db
 *.tmp
 temp/
 
-# Local notes (not for sharing)
-notes/
+# Local notes (not for sharing) — only HOW_TO_RELEASE is local-only
+notes/HOW_TO_RELEASE.md
 
 #Posts
 Posts/
@@ -38,12 +38,13 @@ Posts/
 # Claude Code local config (agents, memory, settings)
 .claude/
 
-# Documentation — exclude everything except the three public docs
-# (SECURITY_POSTURE is a per-release snapshot, lives in documentation/release-vX.X.X/)
+# Documentation — exclude everything except public docs and release note folders
 documentation/*
 !documentation/InstallationManual.md
 !documentation/SSLM_Functionalities.md
 !documentation/UserManual.md
+!documentation/release-v1.0.0-beta.4.1/
+!documentation/release-v1.0.0-beta.4.1/**
 
 # Future-version research — not ready for sharing
 documentation/fitsanalyser/

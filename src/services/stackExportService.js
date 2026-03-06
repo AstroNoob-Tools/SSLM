@@ -1,6 +1,6 @@
 'use strict';
 
-const fs   = require('fs-extra');
+const fs = require('fs-extra');
 const path = require('path');
 const DiskSpaceValidator = require('../utils/diskSpaceValidator');
 
@@ -18,15 +18,15 @@ const DiskSpaceValidator = require('../utils/diskSpaceValidator');
 class StackExportService {
 
     constructor(io, config) {
-        this.io     = io;
+        this.io = io;
         this.config = config;
 
-        this.currentOperation    = null;
-        this.cancelled           = false;
-        this.lastProgressEmit    = 0;
+        this.currentOperation = null;
+        this.cancelled = false;
+        this.lastProgressEmit = 0;
         this.progressEmitInterval = 500;   // ms between throttled progress emits
-        this.progressSamples     = [];
-        this.sampleWindow        = 5000;   // 5-second window for speed calculation
+        this.progressSamples = [];
+        this.sampleWindow = 5000;   // 5-second window for speed calculation
     }
 
     // ─────────────────────────────────────────────────────────────────────────
@@ -72,7 +72,7 @@ class StackExportService {
 
                 const fullPath = path.join(subPath, entry);
                 try {
-                    const stats    = await fs.stat(fullPath);
+                    const stats = await fs.stat(fullPath);
                     const existing = fileMap.get(entry);
                     if (!existing || stats.mtime > existing.mtime) {
                         fileMap.set(entry, { sourcePath: fullPath, size: stats.size, mtime: stats.mtime });
@@ -96,10 +96,10 @@ class StackExportService {
                 continue;
             }
 
-            const exposure    = parseFloat(m[1]);
-            const filter      = m[2].toUpperCase();
-            const dateStr     = m[3]; // YYYYMMDD
-            const expFolder   = `${this._formatExposure(exposure)}_${filter}`;
+            const exposure = parseFloat(m[1]);
+            const filter = m[2].toUpperCase();
+            const dateStr = m[3]; // YYYYMMDD
+            const expFolder = `${this._formatExposure(exposure)}_${filter}`;
             const sessionFolder = `Session_${dateStr}`;
 
             const destPath = path.join(
@@ -115,7 +115,7 @@ class StackExportService {
                 sourcePath: info.sourcePath,
                 destPath,
                 filename,
-                size:    info.size,
+                size: info.size,
                 session: dateStr,
                 exposure,
                 filter
@@ -157,20 +157,20 @@ class StackExportService {
     async scanForExport(subFolderPaths, objectName, destinationPath) {
         const plan = await this.buildExportPlan(subFolderPaths, objectName, destinationPath);
 
-        const required      = Math.ceil(plan.totalBytes * 1.1); // 10 % buffer
-        const available     = await DiskSpaceValidator.getAvailableSpace(destinationPath);
+        const required = Math.ceil(plan.totalBytes * 1.1); // 10 % buffer
+        const available = await DiskSpaceValidator.getAvailableSpace(destinationPath);
         const hasEnoughSpace = available >= required;
 
         return {
-            totalFiles:             plan.totalFiles,
-            totalBytes:             plan.totalBytes,
-            totalBytesFormatted:    DiskSpaceValidator.formatBytes(plan.totalBytes),
+            totalFiles: plan.totalFiles,
+            totalBytes: plan.totalBytes,
+            totalBytesFormatted: DiskSpaceValidator.formatBytes(plan.totalBytes),
             required,
-            requiredFormatted:      DiskSpaceValidator.formatBytes(required),
+            requiredFormatted: DiskSpaceValidator.formatBytes(required),
             available,
-            availableFormatted:     DiskSpaceValidator.formatBytes(available),
+            availableFormatted: DiskSpaceValidator.formatBytes(available),
             hasEnoughSpace,
-            destinationRoot:        plan.destinationRoot
+            destinationRoot: plan.destinationRoot
         };
     }
 
@@ -180,20 +180,20 @@ class StackExportService {
      * @param {string}   objectName
      * @param {string[]} subFolderPaths
      * @param {string}   destinationPath  base folder (object sub-folder created inside)
-     * @param {string}   socketId
+     * @param {string}   clientId
      * @param {string}   operationId
      */
-    async exportToStacking(objectName, subFolderPaths, destinationPath, socketId, operationId) {
-        this.cancelled        = false;
-        this.progressSamples  = [];
+    async exportToStacking(objectName, subFolderPaths, destinationPath, clientId, operationId) {
+        this.cancelled = false;
+        this.progressSamples = [];
         this.lastProgressEmit = 0;
-        this.currentOperation = { objectName, subFolderPaths, destinationPath, socketId, operationId };
+        this.currentOperation = { objectName, subFolderPaths, destinationPath, clientId, operationId };
 
         const startTime = Date.now();
 
         try {
             // ── Scan phase ────────────────────────────────────────────────
-            this._emit(socketId, 'stackexport:progress', {
+            this._emit(clientId, 'stackexport:progress', {
                 operationId, status: 'scanning',
                 currentFile: 'Scanning source files…',
                 filesCopied: 0, totalFiles: 0,
@@ -210,7 +210,7 @@ class StackExportService {
             console.log(`Dest   : ${plan.destinationRoot}`);
 
             // Announce totals so the UI can show the correct denominator immediately
-            this._emit(socketId, 'stackexport:progress', {
+            this._emit(clientId, 'stackexport:progress', {
                 operationId, status: 'starting',
                 currentFile: `Preparing export (${plan.totalFiles} files)…`,
                 filesCopied: 0, totalFiles: plan.totalFiles,
@@ -222,13 +222,13 @@ class StackExportService {
             // ── Copy phase ────────────────────────────────────────────────
             let filesCopied = 0;
             let bytesCopied = 0;
-            const errors   = [];
+            const errors = [];
             const manifest = [];
 
             for (const file of plan.filesToCopy) {
                 // Check cancellation
                 if (this.cancelled) {
-                    this._emit(socketId, 'stackexport:cancelled', {
+                    this._emit(clientId, 'stackexport:cancelled', {
                         operationId, filesCopied,
                         totalFiles: plan.totalFiles, bytesCopied,
                         totalBytes: plan.totalBytes, timestamp: Date.now()
@@ -241,7 +241,7 @@ class StackExportService {
                     await fs.ensureDir(path.dirname(file.destPath));
 
                     await this._copyFile(file.sourcePath, file.destPath, (currentBytes) => {
-                        this._emitProgress(socketId, {
+                        this._emitProgress(clientId, {
                             operationId, status: 'copying',
                             currentFile: file.filename,
                             filesCopied, totalFiles: plan.totalFiles,
@@ -259,7 +259,7 @@ class StackExportService {
                     manifest.push({ sourcePath: file.sourcePath, destPath: file.destPath, size: file.size });
 
                     // Per-file event (unconditional, ensures final state is emitted)
-                    this._emitProgress(socketId, {
+                    this._emitProgress(clientId, {
                         operationId, status: 'copying',
                         currentFile: file.filename,
                         filesCopied, totalFiles: plan.totalFiles,
@@ -279,7 +279,7 @@ class StackExportService {
             // ── Complete ──────────────────────────────────────────────────
             const duration = Date.now() - startTime;
 
-            this._emit(socketId, 'stackexport:complete', {
+            this._emit(clientId, 'stackexport:complete', {
                 operationId, status: 'completed',
                 filesCopied, totalFiles: plan.totalFiles,
                 bytesCopied, totalBytes: plan.totalBytes,
@@ -295,7 +295,7 @@ class StackExportService {
 
         } catch (error) {
             console.error('Stack export error:', error);
-            this._emit(socketId, 'stackexport:error', {
+            this._emit(clientId, 'stackexport:error', {
                 operationId, status: 'error', error: error.message, timestamp: Date.now()
             });
             this.currentOperation = null;
@@ -325,46 +325,46 @@ class StackExportService {
      * Socket.IO events so the existing validation UI works unchanged.
      *
      * @param {Array<{sourcePath, destPath, size}>} manifest
-     * @param {string} socketId
+     * @param {string} clientId
      * @param {string} operationId
      */
-    async validateExport(manifest, socketId, operationId) {
-        const startTime  = Date.now();
+    async validateExport(manifest, clientId, operationId) {
+        const startTime = Date.now();
         const totalFiles = manifest.length;
         let filesValidated = 0;
         const mismatches = [];
 
         try {
-            this._emit(socketId, 'validate:progress', {
+            this._emit(clientId, 'validate:progress', {
                 operationId, status: 'scanning',
                 message: 'Validating exported files…', timestamp: Date.now()
             });
 
             for (const entry of manifest) {
                 try {
-                    const srcStats  = await fs.stat(entry.sourcePath);
+                    const srcStats = await fs.stat(entry.sourcePath);
                     const destExists = await fs.pathExists(entry.destPath);
 
                     if (!destExists) {
                         mismatches.push({
-                            file:    path.basename(entry.destPath),
-                            issue:   'missing',
+                            file: path.basename(entry.destPath),
+                            issue: 'missing',
                             message: 'File does not exist in destination'
                         });
                     } else {
                         const dstStats = await fs.stat(entry.destPath);
                         if (srcStats.size !== dstStats.size) {
                             mismatches.push({
-                                file:    path.basename(entry.destPath),
-                                issue:   'size_mismatch',
+                                file: path.basename(entry.destPath),
+                                issue: 'size_mismatch',
                                 message: `Size mismatch: source ${srcStats.size} B, destination ${dstStats.size} B`
                             });
                         }
                     }
                 } catch (err) {
                     mismatches.push({
-                        file:    path.basename(entry.destPath || ''),
-                        issue:   'error',
+                        file: path.basename(entry.destPath || ''),
+                        issue: 'error',
                         message: `Validation error: ${err.message}`
                     });
                 }
@@ -372,20 +372,20 @@ class StackExportService {
                 filesValidated++;
 
                 if (filesValidated % 100 === 0 || filesValidated === totalFiles) {
-                    this._emit(socketId, 'validate:progress', {
+                    this._emit(clientId, 'validate:progress', {
                         operationId, status: 'validating',
                         filesValidated, totalFiles,
-                        percentage:  Math.round((filesValidated / totalFiles) * 100),
-                        mismatches:  mismatches.length,
-                        timestamp:   Date.now()
+                        percentage: Math.round((filesValidated / totalFiles) * 100),
+                        mismatches: mismatches.length,
+                        timestamp: Date.now()
                     });
                 }
             }
 
             const duration = Date.now() - startTime;
-            const success  = mismatches.length === 0;
+            const success = mismatches.length === 0;
 
-            this._emit(socketId, 'validate:complete', {
+            this._emit(clientId, 'validate:complete', {
                 operationId, success,
                 filesValidated, totalFiles, mismatches,
                 duration, durationFormatted: this._fmtDuration(duration),
@@ -395,7 +395,7 @@ class StackExportService {
             return { success, mismatches };
 
         } catch (error) {
-            this._emit(socketId, 'validate:error', {
+            this._emit(clientId, 'validate:error', {
                 operationId, error: error.message, timestamp: Date.now()
             });
             throw error;
@@ -425,29 +425,29 @@ class StackExportService {
     }
 
     /** Throttled progress emit enriched with speed and ETA. */
-    _emitProgress(socketId, data) {
+    _emitProgress(clientId, data) {
         const now = Date.now();
         this._addSample(data.bytesCopied);
 
         const speed = this._calcSpeed();
-        const eta   = this._calcETA(data.bytesCopied, data.totalBytes);
+        const eta = this._calcETA(data.bytesCopied, data.totalBytes);
 
         const enriched = {
             ...data,
             speed,
-            speedFormatted:       DiskSpaceValidator.formatBytes(speed) + '/s',
-            timeRemaining:        eta,
+            speedFormatted: DiskSpaceValidator.formatBytes(speed) + '/s',
+            timeRemaining: eta,
             timeRemainingFormatted: this._fmtDuration(eta != null ? eta * 1000 : 0)
         };
 
         if (now - this.lastProgressEmit >= this.progressEmitInterval) {
-            this._emit(socketId, 'stackexport:progress', enriched);
+            this._emit(clientId, 'stackexport:progress', enriched);
             this.lastProgressEmit = now;
         }
     }
 
-    _emit(socketId, event, data) {
-        if (this.io && socketId) this.io.to(socketId).emit(event, data);
+    _emit(clientId, event, data) {
+        if (this.io && clientId) this.io.to(clientId).emit(event, data);
     }
 
     _addSample(bytesCopied) {
@@ -458,8 +458,8 @@ class StackExportService {
 
     _calcSpeed() {
         if (this.progressSamples.length < 2) return 0;
-        const a  = this.progressSamples[0];
-        const b  = this.progressSamples[this.progressSamples.length - 1];
+        const a = this.progressSamples[0];
+        const b = this.progressSamples[this.progressSamples.length - 1];
         const dt = (b.timestamp - a.timestamp) / 1000;
         return dt > 0 ? Math.round((b.bytes - a.bytes) / dt) : 0;
     }

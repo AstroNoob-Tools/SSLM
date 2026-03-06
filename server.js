@@ -117,6 +117,42 @@ if (interruptedOperation) {
   console.warn(`[STARTUP] Interrupted operation detected: ${interruptedOperation.type} started at ${interruptedOperation.startedAt}`);
 }
 
+// ─── Operation status store ──────────────────────────────────────────────────
+// Keeps the last progress snapshot and final outcome for each active operation
+// so that clients can poll after a Socket.IO disconnect and not miss completion.
+const operationStore = new Map();
+
+function initOperation(operationId, type, clientId) {
+  operationStore.set(operationId, { type, clientId, status: 'in_progress', lastProgress: null, result: null });
+}
+
+// Wrap io.to() so every emit to a clientId room is automatically snapshotted.
+// Services call this.io.to(clientId).emit(event, data) — the wrapper intercepts
+// those calls transparently without requiring changes to any service file.
+const _realIoTo = io.to.bind(io);
+io.to = function(room) {
+  const broadcaster = _realIoTo(room);
+  const _realEmit = broadcaster.emit.bind(broadcaster);
+  broadcaster.emit = function(event, data) {
+    if (data && typeof data.operationId === 'string') {
+      const entry = operationStore.get(data.operationId);
+      if (entry) {
+        if (event.endsWith(':progress')) {
+          entry.lastProgress = { event, data };
+        } else if (event.endsWith(':complete') || event.endsWith(':error') || event.endsWith(':cancelled')) {
+          entry.status = event;
+          entry.result = data;
+          entry.completedAt = Date.now();
+          // Auto-remove after 10 minutes so the Map doesn't grow unbounded
+          setTimeout(() => operationStore.delete(data.operationId), 10 * 60 * 1000);
+        }
+      }
+    }
+    return _realEmit(event, data);
+  };
+  return broadcaster;
+};
+
 // Initialize services with Socket.IO and config
 const importService = new ImportService(io, config);
 const mergeService = new MergeService(io, config);
@@ -188,6 +224,22 @@ app.get('/api/status', lightLimiter, (req, res) => {
     version: '1.0.0',
     mode: config.mode.online ? 'online' : 'offline',
     timestamp: new Date().toISOString()
+  });
+});
+
+// GET /api/operations/:id/status — poll the last-known state of a long-running
+// operation so the client can recover after a Socket.IO disconnect.
+app.get('/api/operations/:id/status', lightLimiter, (req, res) => {
+  const entry = operationStore.get(req.params.id);
+  if (!entry) {
+    return res.json({ status: 'unknown' });
+  }
+  res.json({
+    status: entry.status,        // 'in_progress' | '<event>:complete' | '<event>:error' | '<event>:cancelled'
+    type: entry.type,
+    lastProgress: entry.lastProgress,
+    result: entry.result,
+    completedAt: entry.completedAt || null,
   });
 });
 
@@ -670,14 +722,14 @@ app.post('/api/import/validate-space', analysisLimiter, async (req, res) => {
 
 app.post('/api/import/start', heavyOpLimiter, async (req, res) => {
   try {
-    const { strategy, socketId, subframeMode } = req.body;
+    const { strategy, clientId, subframeMode } = req.body;
     const rawSource = req.body.sourcePath;
     const rawDest = req.body.destinationPath;
     if (!rawSource || typeof rawSource !== 'string' || !rawDest || typeof rawDest !== 'string' ||
-      !strategy || !socketId) {
+      !strategy || !clientId) {
       return res.status(400).json({
         success: false,
-        error: 'sourcePath, destinationPath, strategy, and socketId required'
+        error: 'sourcePath, destinationPath, strategy, and clientId required'
       });
     }
     const sourcePath = path.resolve(rawSource);
@@ -691,8 +743,9 @@ app.post('/api/import/start', heavyOpLimiter, async (req, res) => {
 
     // Start import asynchronously (don't await - it's long-running)
     const operationId = Date.now().toString();
+    initOperation(operationId, 'import', clientId);
     writeOperationState({ type: 'import', sourcePath, destinationPath, strategy, operationId });
-    importService.startImport(sourcePath, destinationPath, strategy, socketId, operationId, importSubframeMode)
+    importService.startImport(sourcePath, destinationPath, strategy, clientId, operationId, importSubframeMode)
       .then(() => {
         clearOperationState();
         console.log(`Import completed successfully`);
@@ -700,7 +753,7 @@ app.post('/api/import/start', heavyOpLimiter, async (req, res) => {
       .catch(error => {
         clearOperationState();
         console.error(`Import failed:`, error);
-        io.to(socketId).emit('import:error', {
+        io.to(clientId).emit('import:error', {
           error: error.message,
           operationId
         });
@@ -728,14 +781,14 @@ app.post('/api/import/cancel', lightLimiter, async (req, res) => {
 
 app.post('/api/import/validate', analysisLimiter, async (req, res) => {
   try {
-    const { socketId, subframeMode = 'all' } = req.body;
+    const { clientId, subframeMode = 'all' } = req.body;
     const rawSource = req.body.sourcePath;
     const rawDest = req.body.destinationPath;
     if (!rawSource || typeof rawSource !== 'string' || !rawDest || typeof rawDest !== 'string' ||
-      !socketId) {
+      !clientId) {
       return res.status(400).json({
         success: false,
-        error: 'sourcePath, destinationPath, and socketId required'
+        error: 'sourcePath, destinationPath, and clientId required'
       });
     }
     const sourcePath = path.resolve(rawSource);
@@ -748,9 +801,9 @@ app.post('/api/import/validate', analysisLimiter, async (req, res) => {
     console.log(`Starting transfer validation: ${sourcePath} -> ${destinationPath} (subframeMode: ${subframeMode})`);
 
     // Start validation asynchronously
-    importService.validateTransfer(sourcePath, destinationPath, socketId, operationId, subframeMode)
+    importService.validateTransfer(sourcePath, destinationPath, clientId, operationId, subframeMode)
       .catch(error => {
-        io.to(socketId).emit('validate:error', {
+        io.to(clientId).emit('validate:error', {
           error: error.message,
           operationId
         });
@@ -766,7 +819,7 @@ app.post('/api/import/validate', analysisLimiter, async (req, res) => {
 // Merge API Routes
 app.post('/api/merge/analyze', analysisLimiter, async (req, res) => {
   try {
-    const { socketId, subframeMode } = req.body;
+    const { clientId, subframeMode } = req.body;
     const sourcePaths = (Array.isArray(req.body.sourcePaths) ? req.body.sourcePaths : [])
       .filter(p => p && typeof p === 'string')
       .map(p => path.resolve(p))
@@ -793,7 +846,7 @@ app.post('/api/merge/analyze', analysisLimiter, async (req, res) => {
 
     const mergeSubframeMode = subframeMode || 'all';
     console.log(`Analyzing ${sourcePaths.length} libraries for merge (${mergeSubframeMode})...`);
-    const result = await mergeService.analyzeSources(sourcePaths, destinationPath, socketId, mergeSubframeMode);
+    const result = await mergeService.analyzeSources(sourcePaths, destinationPath, clientId, mergeSubframeMode);
 
     res.json({ success: true, ...result });
   } catch (error) {
@@ -852,7 +905,7 @@ app.post('/api/merge/validate-space', analysisLimiter, async (req, res) => {
 
 app.post('/api/merge/start', heavyOpLimiter, async (req, res) => {
   try {
-    const { mergePlan, socketId } = req.body;
+    const { mergePlan, clientId } = req.body;
     const sourcePaths = (Array.isArray(req.body.sourcePaths) ? req.body.sourcePaths : [])
       .filter(p => p && typeof p === 'string')
       .map(p => path.resolve(p))
@@ -860,10 +913,10 @@ app.post('/api/merge/start', heavyOpLimiter, async (req, res) => {
     const rawDest = req.body.destinationPath;
 
     if (!sourcePaths.length || !rawDest || typeof rawDest !== 'string' ||
-      !mergePlan || !socketId) {
+      !mergePlan || !clientId) {
       return res.status(400).json({
         success: false,
-        error: 'sourcePaths, destinationPath, mergePlan, and socketId required'
+        error: 'sourcePaths, destinationPath, mergePlan, and clientId required'
       });
     }
     const destinationPath = path.resolve(rawDest);
@@ -889,8 +942,9 @@ app.post('/api/merge/start', heavyOpLimiter, async (req, res) => {
     }
 
     const operationId = Date.now().toString();
+    initOperation(operationId, 'merge', clientId);
     writeOperationState({ type: 'merge', sourcePaths, destinationPath, operationId });
-    mergeService.executeMerge(sourcePaths, destinationPath, mergePlan, socketId, operationId)
+    mergeService.executeMerge(sourcePaths, destinationPath, mergePlan, clientId, operationId)
       .then(() => {
         clearOperationState();
         console.log(`Merge completed successfully`);
@@ -898,7 +952,7 @@ app.post('/api/merge/start', heavyOpLimiter, async (req, res) => {
       .catch(error => {
         clearOperationState();
         console.error(`Merge failed:`, error);
-        io.to(socketId).emit('merge:error', {
+        io.to(clientId).emit('merge:error', {
           error: error.message,
           operationId
         });
@@ -925,12 +979,12 @@ app.post('/api/merge/cancel', lightLimiter, async (req, res) => {
 
 app.post('/api/merge/validate', analysisLimiter, async (req, res) => {
   try {
-    const { mergePlan, socketId } = req.body;
+    const { mergePlan, clientId } = req.body;
     const rawDest = req.body.destinationPath;
-    if (!rawDest || typeof rawDest !== 'string' || !mergePlan || !socketId) {
+    if (!rawDest || typeof rawDest !== 'string' || !mergePlan || !clientId) {
       return res.status(400).json({
         success: false,
-        error: 'destinationPath, mergePlan, and socketId required'
+        error: 'destinationPath, mergePlan, and clientId required'
       });
     }
     const destinationPath = path.resolve(rawDest);
@@ -942,9 +996,9 @@ app.post('/api/merge/validate', analysisLimiter, async (req, res) => {
     console.log(`Starting merge validation: ${destinationPath}`);
     console.log(`MergePlan summary: filesToCopy=${mergePlan.filesToCopy?.length || 0}, filesAlreadyExist=${mergePlan.filesAlreadyExist?.length || 0}, uniqueFiles=${mergePlan.uniqueFiles}`);
 
-    mergeService.validateMerge(destinationPath, mergePlan, socketId, operationId)
+    mergeService.validateMerge(destinationPath, mergePlan, clientId, operationId)
       .catch(error => {
-        io.to(socketId).emit('validate:error', {
+        io.to(clientId).emit('validate:error', {
           error: error.message,
           operationId
         });
@@ -991,17 +1045,17 @@ app.post('/api/export/stack/scan', analysisLimiter, async (req, res) => {
 /** Start the stack export (async — progress via Socket.IO). */
 app.post('/api/export/stack', heavyOpLimiter, async (req, res) => {
   try {
-    const { objectName, socketId } = req.body;
+    const { objectName, clientId } = req.body;
     const rawDest = req.body.destinationPath;
     const subFolderPaths = (Array.isArray(req.body.subFolderPaths) ? req.body.subFolderPaths : [])
       .filter(p => p && typeof p === 'string')
       .map(p => path.resolve(p))
       .filter(p => isAllowedPath(p));
 
-    if (!objectName || !rawDest || typeof rawDest !== 'string' || !socketId || !subFolderPaths.length) {
+    if (!objectName || !rawDest || typeof rawDest !== 'string' || !clientId || !subFolderPaths.length) {
       return res.status(400).json({
         success: false,
-        error: 'objectName, subFolderPaths, destinationPath, and socketId are required'
+        error: 'objectName, subFolderPaths, destinationPath, and clientId are required'
       });
     }
     const destinationPath = path.resolve(rawDest);
@@ -1010,14 +1064,15 @@ app.post('/api/export/stack', heavyOpLimiter, async (req, res) => {
     }
 
     const operationId = Date.now().toString();
+    initOperation(operationId, 'stackexport', clientId);
     console.log(`Starting stack export: "${objectName}" → ${destinationPath}`);
     writeOperationState({ type: 'stackexport', objectName, destinationPath, operationId });
 
-    stackExportService.exportToStacking(objectName, subFolderPaths, destinationPath, socketId, operationId)
+    stackExportService.exportToStacking(objectName, subFolderPaths, destinationPath, clientId, operationId)
       .then(() => { clearOperationState(); })
       .catch(error => {
         clearOperationState();
-        io.to(socketId).emit('stackexport:error', { error: error.message, operationId });
+        io.to(clientId).emit('stackexport:error', { error: error.message, operationId });
       });
 
     res.json({ success: true, operationId });
@@ -1041,11 +1096,11 @@ app.post('/api/export/stack/cancel', lightLimiter, async (req, res) => {
 /** Validate the exported files against the manifest returned on completion. */
 app.post('/api/export/stack/validate', heavyOpLimiter, async (req, res) => {
   try {
-    const { socketId } = req.body;
+    const { clientId } = req.body;
     const manifest = Array.isArray(req.body.manifest) ? req.body.manifest : [];
 
-    if (!socketId || !manifest.length) {
-      return res.status(400).json({ success: false, error: 'socketId and manifest are required' });
+    if (!clientId || !manifest.length) {
+      return res.status(400).json({ success: false, error: 'clientId and manifest are required' });
     }
 
     // Validate each path in the manifest is on an allowed Windows root
@@ -1060,9 +1115,9 @@ app.post('/api/export/stack/validate', heavyOpLimiter, async (req, res) => {
 
     const operationId = Date.now().toString();
 
-    stackExportService.validateExport(validatedManifest, socketId, operationId)
+    stackExportService.validateExport(validatedManifest, clientId, operationId)
       .catch(error => {
-        io.to(socketId).emit('validate:error', { error: error.message, operationId });
+        io.to(clientId).emit('validate:error', { error: error.message, operationId });
       });
 
     res.json({ success: true, operationId });
@@ -1212,6 +1267,14 @@ io.on('connection', (socket) => {
 
   socket.on('disconnect', () => {
     console.log('Client disconnected:', socket.id);
+  });
+
+  // Register persistent client session for reconnects
+  socket.on('register', (data) => {
+    if (data && data.clientId) {
+      socket.join(data.clientId);
+      console.log(`Socket ${socket.id} registered to client room: ${data.clientId}`);
+    }
   });
 
   // Will be used for progress updates during file operations
@@ -1422,4 +1485,4 @@ process.on('uncaughtException', (err) => {
   gracefulShutdown();
 });
 
-module.exports = { app, io };
+module.exports = { app, io, server };

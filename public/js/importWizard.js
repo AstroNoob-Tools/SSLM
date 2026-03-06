@@ -831,8 +831,8 @@ class ImportWizard {
                             <td style="padding: 0.75rem; font-weight: 600; color: var(--text-secondary);">Sub-frame Files:</td>
                             <td style="padding: 0.75rem;">
                                 ${this.subframeMode === 'fit_only'
-                                    ? '🔬 Expurged (FIT only in _sub directories)'
-                                    : '📁 Full (all files)'}
+                ? '🔬 Expurged (FIT only in _sub directories)'
+                : '📁 Full (all files)'}
                             </td>
                         </tr>
                         <tr>
@@ -985,10 +985,11 @@ class ImportWizard {
             // Start elapsed time counter
             this.startElapsedTimer();
 
-            // Get socket ID
-            const socketId = app.socket?.id;
-            if (!socketId) {
-                throw new Error('Socket.IO not connected');
+            // Get client ID
+            const clientId = app.clientId;
+            if (!clientId) {
+                app.showModal('Error', 'Session Client ID not established. Please refresh the page and try again.');
+                return;
             }
 
             // Start import
@@ -999,7 +1000,7 @@ class ImportWizard {
                     sourcePath: this.selectedDevice.fullPath,
                     destinationPath: this.destinationPath,
                     strategy: this.selectedStrategy,
-                    socketId: socketId,
+                    clientId: clientId,
                     subframeMode: this.subframeMode
                 })
             });
@@ -1009,12 +1010,34 @@ class ImportWizard {
             if (data.success) {
                 this.operationId = data.operationId;
                 console.log('Import started:', this.operationId);
+                app.registerOperation(this);
             } else {
                 throw new Error(data.error || 'Failed to start import');
             }
         } catch (error) {
             console.error('Error starting import:', error);
             alert('Error starting import: ' + error.message);
+        }
+    }
+
+    // Called by app.js on Socket.IO reconnect to check whether the operation
+    // completed while the client was disconnected.
+    async pollStatus() {
+        if (!this.operationId) return;
+        try {
+            const res = await fetch(`/api/operations/${this.operationId}/status`);
+            const data = await res.json();
+            console.log('[ImportWizard] Polled operation status:', data.status);
+            if (data.status === 'import:complete') {
+                this.handleImportComplete(data.result);
+            } else if (data.status === 'import:error') {
+                this.handleImportError(data.result);
+            } else if (data.status === 'import:cancelled') {
+                this.handleImportCancelled(data.result);
+            }
+            // 'in_progress' or 'unknown': do nothing — Socket.IO events will resume
+        } catch (e) {
+            console.warn('[ImportWizard] Could not poll operation status:', e);
         }
     }
 
@@ -1100,6 +1123,7 @@ class ImportWizard {
 
     async handleImportComplete(data) {
         console.log('Import complete:', data);
+        app.clearOperation();
 
         // Freeze elapsed timer
         this.stopElapsedTimer();
@@ -1200,6 +1224,7 @@ class ImportWizard {
 
     handleImportError(data) {
         console.error('Import error:', data);
+        app.clearOperation();
 
         app.showModal(
             'Import Error',
@@ -1219,6 +1244,7 @@ class ImportWizard {
 
     handleImportCancelled(data) {
         console.log('Import cancelled:', data);
+        app.clearOperation();
 
         app.showModal(
             'Import Cancelled',
@@ -1286,7 +1312,7 @@ class ImportWizard {
                 body: JSON.stringify({
                     sourcePath: this.selectedDevice.fullPath,
                     destinationPath: this.destinationPath,
-                    socketId: app.socket.id,
+                    clientId: app.clientId,
                     subframeMode: this.subframeMode
                 })
             });

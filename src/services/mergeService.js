@@ -17,7 +17,7 @@ class MergeService {
      * Analyze multiple source libraries and build merge plan
      * @param {Array<string>} sourcePaths - Array of source library paths
      * @param {string} destinationPath - Destination path for merged library
-     * @param {string} socketId - Socket ID for progress updates (optional)
+     * @param {string} clientId - Socket ID for progress updates (optional)
      * @returns {Promise<Object>} Analysis result with merge plan
      */
     /**
@@ -39,7 +39,7 @@ class MergeService {
         return false;
     }
 
-    async analyzeSources(sourcePaths, destinationPath, socketId = null, subframeMode = 'all') {
+    async analyzeSources(sourcePaths, destinationPath, clientId = null, subframeMode = 'all') {
         console.log(`\n===== MERGE ANALYSIS =====`);
         console.log(`Sources: ${sourcePaths.length} libraries`);
         sourcePaths.forEach((src, i) => console.log(`  [${i + 1}] ${src}`));
@@ -47,12 +47,12 @@ class MergeService {
 
         try {
             // Build file inventory from all sources
-            const inventory = await this.buildFileInventory(sourcePaths, socketId, subframeMode);
+            const inventory = await this.buildFileInventory(sourcePaths, clientId, subframeMode);
             console.log(`Total unique relative paths: ${inventory.size}`);
 
             // Emit progress: scanning destination
-            if (socketId) {
-                this.emitEvent(socketId, 'analyze:progress', {
+            if (clientId) {
+                this.emitEvent(clientId, 'analyze:progress', {
                     status: 'scanning_destination',
                     message: 'Scanning destination directory...'
                 });
@@ -63,8 +63,8 @@ class MergeService {
             console.log(`Existing files in destination: ${existingFiles.size}`);
 
             // Emit progress: resolving conflicts
-            if (socketId) {
-                this.emitEvent(socketId, 'analyze:progress', {
+            if (clientId) {
+                this.emitEvent(clientId, 'analyze:progress', {
                     status: 'resolving',
                     message: 'Resolving conflicts and building merge plan...'
                 });
@@ -95,10 +95,10 @@ class MergeService {
     /**
      * Build unified file inventory from all sources
      * @param {Array<string>} sourcePaths - Array of source library paths
-     * @param {string} socketId - Socket ID for progress updates (optional)
+     * @param {string} clientId - Socket ID for progress updates (optional)
      * @returns {Promise<Map>} Map of relativePath -> Array of file candidates
      */
-    async buildFileInventory(sourcePaths, socketId = null, subframeMode = 'all') {
+    async buildFileInventory(sourcePaths, clientId = null, subframeMode = 'all') {
         const inventory = new Map();
 
         for (let i = 0; i < sourcePaths.length; i++) {
@@ -106,8 +106,8 @@ class MergeService {
             console.log(`\nScanning source [${i + 1}/${sourcePaths.length}]: ${sourcePath}`);
 
             // Emit progress: scanning this source
-            if (socketId) {
-                this.emitEvent(socketId, 'analyze:progress', {
+            if (clientId) {
+                this.emitEvent(clientId, 'analyze:progress', {
                     status: 'scanning_source',
                     currentSource: i + 1,
                     totalSources: sourcePaths.length,
@@ -133,8 +133,8 @@ class MergeService {
                 }
 
                 // Emit progress: found files in this source
-                if (socketId) {
-                    this.emitEvent(socketId, 'analyze:progress', {
+                if (clientId) {
+                    this.emitEvent(clientId, 'analyze:progress', {
                         status: 'scanning_source',
                         currentSource: i + 1,
                         totalSources: sourcePaths.length,
@@ -447,12 +447,12 @@ class MergeService {
      * @param {Array<string>} sourcePaths - Source library paths
      * @param {string} destinationPath - Destination library path
      * @param {Object} mergePlan - Pre-computed merge plan
-     * @param {string} socketId - Socket.IO client ID
+     * @param {string} clientId - Socket.IO client ID
      * @param {string} operationId - Operation ID
      */
-    async executeMerge(sourcePaths, destinationPath, mergePlan, socketId, operationId) {
+    async executeMerge(sourcePaths, destinationPath, mergePlan, clientId, operationId) {
         this.cancelled = false;
-        this.currentOperation = { sourcePaths, destinationPath, mergePlan, socketId, operationId };
+        this.currentOperation = { sourcePaths, destinationPath, mergePlan, clientId, operationId };
         this.progressSamples = [];
 
         const startTime = Date.now();
@@ -468,7 +468,7 @@ class MergeService {
 
         try {
             // Emit immediate start event so the UI shows total file count right away
-            this.emitEvent(socketId, 'merge:progress', {
+            this.emitEvent(clientId, 'merge:progress', {
                 status: 'starting',
                 currentFile: 'Preparing...',
                 currentSource: '',
@@ -490,7 +490,7 @@ class MergeService {
                 // Check for cancellation
                 if (this.cancelled) {
                     console.log('Merge cancelled by user');
-                    this.emitEvent(socketId, 'merge:cancelled', {
+                    this.emitEvent(clientId, 'merge:cancelled', {
                         filesCopied,
                         bytesCopied,
                         totalFiles: filesToCopy.length,
@@ -512,7 +512,7 @@ class MergeService {
                         file.sourcePath,
                         destPath,
                         (currentFileBytes) => {
-                            this.emitProgress(socketId, {
+                            this.emitProgress(clientId, {
                                 status: 'copying',
                                 currentFile: file.relativePath,
                                 currentSource: file.sourceLibrary,
@@ -531,7 +531,7 @@ class MergeService {
                     filesCopied++;
 
                     // Emit a definitive post-file event (resets in-file byte accumulation)
-                    this.emitProgress(socketId, {
+                    this.emitProgress(clientId, {
                         status: 'copying',
                         currentFile: file.relativePath,
                         currentSource: file.sourceLibrary,
@@ -563,7 +563,7 @@ class MergeService {
             console.log(`  Errors: ${errors.length}`);
 
             // Emit completion event
-            this.emitEvent(socketId, 'merge:complete', {
+            this.emitEvent(clientId, 'merge:complete', {
                 success: true,
                 filesCopied,
                 bytesCopied,
@@ -586,7 +586,7 @@ class MergeService {
 
         } catch (error) {
             console.error('Fatal error during merge:', error);
-            this.emitEvent(socketId, 'merge:error', {
+            this.emitEvent(clientId, 'merge:error', {
                 error: error.message,
                 operationId
             });
@@ -638,10 +638,10 @@ class MergeService {
      * Validate merged library integrity
      * @param {string} destinationPath - Destination library path
      * @param {Object} mergePlan - Merge plan with expected files
-     * @param {string} socketId - Socket.IO client ID
+     * @param {string} clientId - Socket.IO client ID
      * @param {string} operationId - Operation ID
      */
-    async validateMerge(destinationPath, mergePlan, socketId, operationId) {
+    async validateMerge(destinationPath, mergePlan, clientId, operationId) {
         console.log(`\n===== VALIDATING MERGE =====`);
         console.log(`Destination: ${destinationPath}`);
 
@@ -713,7 +713,7 @@ class MergeService {
 
                 // Emit progress every 100 files or on completion
                 if (filesValidated % 100 === 0 || filesValidated === filesToValidate.length) {
-                    this.emitEvent(socketId, 'validate:progress', {
+                    this.emitEvent(clientId, 'validate:progress', {
                         status: 'validating',
                         filesValidated,
                         totalFiles: filesToValidate.length,
@@ -733,7 +733,7 @@ class MergeService {
             console.log(`  Duration: ${this.formatDuration(duration)}`);
 
             // Emit completion event
-            this.emitEvent(socketId, 'validate:complete', {
+            this.emitEvent(clientId, 'validate:complete', {
                 isValid,
                 filesValidated,
                 mismatches: mismatches.slice(0, 50), // Only send first 50
@@ -743,7 +743,7 @@ class MergeService {
 
         } catch (error) {
             console.error('Error during validation:', error);
-            this.emitEvent(socketId, 'validate:error', {
+            this.emitEvent(clientId, 'validate:error', {
                 error: error.message,
                 operationId
             });
@@ -762,10 +762,10 @@ class MergeService {
 
     /**
      * Emit progress event with throttling
-     * @param {string} socketId - Socket.IO client ID
+     * @param {string} clientId - Socket.IO client ID
      * @param {Object} progressData - Progress data to emit
      */
-    emitProgress(socketId, progressData) {
+    emitProgress(clientId, progressData) {
         const now = Date.now();
 
         // Throttle emissions to max every 500ms
@@ -783,7 +783,7 @@ class MergeService {
         const eta = this.calculateETA(progressData.bytesCopied, progressData.totalBytes);
 
         // Emit progress event
-        this.emitEvent(socketId, 'merge:progress', {
+        this.emitEvent(clientId, 'merge:progress', {
             ...progressData,
             speed,
             speedFormatted: this.formatSpeed(speed),
@@ -795,13 +795,13 @@ class MergeService {
 
     /**
      * Emit Socket.IO event
-     * @param {string} socketId - Socket.IO client ID
+     * @param {string} clientId - Socket.IO client ID
      * @param {string} event - Event name
      * @param {Object} data - Event data
      */
-    emitEvent(socketId, event, data) {
-        if (this.io && socketId) {
-            this.io.to(socketId).emit(event, data);
+    emitEvent(clientId, event, data) {
+        if (this.io && clientId) {
+            this.io.to(clientId).emit(event, data);
         }
     }
 
