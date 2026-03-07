@@ -9,7 +9,7 @@
 
 ## What's New in beta.4.1
 
-Beta 4.1 is a reliability and quality release. The main themes are: **auto-update**, **security hardening (CWE-78 + CWE-79 fixes)**, **crash resilience**, **Socket.IO disconnect recovery**, **network copy robustness**, **persistent logging**, and **config validation**. A Vitest automated test suite is also introduced as a developer-facing quality improvement. There are no breaking changes and no migration steps required.
+Beta 4.1 is a reliability and quality release. The main themes are: **auto-update**, **security hardening (CWE-78 + CWE-79 fixes)**, **crash resilience**, **Socket.IO disconnect recovery**, **network copy robustness**, **persistent logging**, **config validation**, and **merge reliability & UX improvements**. A Vitest automated test suite is also introduced as a developer-facing quality improvement. There are no breaking changes and no migration steps required.
 
 ---
 
@@ -215,6 +215,38 @@ Previously, a corrupted or manually edited `settings.json` that contained invali
 
 ---
 
+## 9 — Merge Reliability & UX Improvements
+
+### Merge re-copy bug — FIXED
+
+Running the same merge a second time (same sources → same destination) previously re-copied all files instead of skipping those already present.
+
+**Root cause**: `buildMergePlan()` compared both file size and modification time (`mtime`) against existing destination files. After the first merge, the destination file's mtime was set to the copy time, not the original capture time, so the symmetrical equality check always failed and every file was added to `filesToCopy` again.
+
+**Fix**:
+- The deduplication check is now **size-only**: `needsToCopy = !existingFile || existingFile.size !== selected.size`. Since SeeStar FIT filenames encode the capture timestamp, two files at the same path with the same size are definitively the same file.
+- `fs.utimes()` is called after each successful copy to preserve the source file's modification time on the destination. The call now correctly converts the ISO 8601 string stored in the merge plan to a `Date` object (`new Date(file.mtime)`) before passing it to the API.
+
+### Drive browser back-navigation — FIXED
+
+Once a drive was selected in the import or merge folder browser, it was not possible to navigate back to the drive list to choose a different drive.
+
+**Root cause (mergeWizard.js)**: The `..` item used `currentPath.split('\\').slice(0,-1).join('\\')` to compute the parent path. From a drive root (`C:\`), this produces `'C:'` (truthy), so the browser attempted to navigate to `C:` rather than returning to the drives list — causing an infinite loop.
+
+**Root cause (importWizard.js)**: The up-button handler called `path.dirname()`, a Node.js API that is not available in the browser.
+
+**Fix**: Both wizards now use a drive-root detection regex (`/^[A-Za-z]:[\\\/]?$/`). When the current path is a drive root, navigation goes back to the drives list instead of attempting a parent traversal. Parent path calculation uses browser-safe string operations.
+
+### Existing-files UX warning — NEW
+
+When the merge analysis detects that files already exist in the destination, the result screen now shows a clear, prominent notice **above the statistics table** so it is the first thing visible without scrolling:
+
+- **All files already exist**: A panel with a "← Cancel" button and an orange "Overwrite All" button replaces the previous auto-advance behaviour (which silently proceeded to validation after 2 seconds). The user must make an explicit choice.
+- **Partial overlap**: An amber notice shows how many files will be skipped and how many will be copied, with an "Overwrite All Instead" option if a full re-copy is needed.
+- **Overwrite All**: Triggers a fresh analysis with `forceOverwrite = true`, which bypasses the destination scan so all files are placed in `filesToCopy`, then proceeds normally to the confirmation step.
+
+---
+
 ## Known Limitations
 
 - The auto-update download endpoint is only available in the packaged exe. The "Check for Updates" button in the About dialog is present in development mode but the install step returns HTTP 403.
@@ -246,6 +278,7 @@ Previously, a corrupted or manually edited `settings.json` that contained invali
 | `c383a67` | Fix CWE-78 command injection in `diskSpaceValidator.js` — strict drive-letter validation + `execFile` |
 | *(pending)* | Auto-update feature — version check, download progress, install flow |
 | *(pending)* | Fix CWE-78 (3× `exec` → `spawn`) + CWE-79 (4× `escapeHtml` on error messages) — Snyk Code audit |
+| *(pending)* | Merge re-copy bug — size-only dedup + `fs.utimes` fix; drive browser back-navigation fix; existing-files UX warning with Overwrite All option; `btn-warning` CSS class |
 
 ---
 

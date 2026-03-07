@@ -615,11 +615,13 @@ class ImportWizard {
 
         if (upBtn) {
             upBtn.onclick = () => {
-                const parentPath = path.dirname(currentPath);
-                if (parentPath && parentPath !== currentPath) {
-                    this.loadBrowserData(parentPath);
+                if (/^[A-Za-z]:[\\\/]?$/.test(currentPath)) {
+                    this.loadBrowserData(null); // At drive root — back to drives list
                 } else {
-                    this.loadBrowserData(null); // Back to drives
+                    const normalized = currentPath.replace(/[\\\/]+$/, '');
+                    const lastSep = Math.max(normalized.lastIndexOf('\\'), normalized.lastIndexOf('/'));
+                    const parentPath = lastSep > 2 ? normalized.slice(0, lastSep) : normalized.slice(0, 3);
+                    this.loadBrowserData(parentPath);
                 }
             };
         }

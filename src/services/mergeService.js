@@ -40,7 +40,7 @@ class MergeService {
         return false;
     }
 
-    async analyzeSources(sourcePaths, destinationPath, clientId = null, subframeMode = 'all') {
+    async analyzeSources(sourcePaths, destinationPath, clientId = null, subframeMode = 'all', forceOverwrite = false) {
         console.log(`\n===== MERGE ANALYSIS =====`);
         console.log(`Sources: ${sourcePaths.length} libraries`);
         sourcePaths.forEach((src, i) => console.log(`  [${i + 1}] ${src}`));
@@ -75,7 +75,7 @@ class MergeService {
             const resolutionPlan = this.resolveConflicts(inventory);
 
             // Calculate statistics including destination analysis
-            const mergePlan = this.buildMergePlan(inventory, resolutionPlan, sourcePaths, existingFiles);
+            const mergePlan = this.buildMergePlan(inventory, resolutionPlan, sourcePaths, existingFiles, forceOverwrite);
 
             console.log(`\nMerge Plan Summary:`);
             console.log(`  Total files from all sources: ${mergePlan.totalFiles}`);
@@ -350,7 +350,8 @@ class MergeService {
      * @param {Map} existingFiles - Existing files in destination (relativePath -> metadata)
      * @returns {Object} Complete merge plan
      */
-    buildMergePlan(inventory, resolutionPlan, sourcePaths, existingFiles = new Map()) {
+    buildMergePlan(inventory, resolutionPlan, sourcePaths, existingFiles = new Map(), forceOverwrite = false) {
+        if (forceOverwrite) existingFiles = new Map();
         const filesToCopy = [];
         const filesAlreadyExist = [];
         const sourceStats = {};
@@ -378,11 +379,10 @@ class MergeService {
                 uniqueFiles++;
                 totalBytesAllUnique += selected.size;
 
-                // Check if file already exists in destination with same size and mtime
+                // Check if file already exists in destination with same size
                 const existingFile = existingFiles.get(relativePath);
                 const needsToCopy = !existingFile ||
-                    existingFile.size !== selected.size ||
-                    existingFile.mtime.getTime() !== selected.mtime.getTime();
+                    existingFile.size !== selected.size;
 
                 if (needsToCopy) {
                     filesToCopy.push({
@@ -541,6 +541,12 @@ class MergeService {
 
                     bytesCopied += file.size;
                     filesCopied++;
+
+                    // Preserve source mtime so deduplication works on subsequent merge runs
+                    try {
+                        const mtime = new Date(file.mtime);
+                    await fs.utimes(destPath, mtime, mtime);
+                    } catch (_) { /* non-fatal — file was copied successfully */ }
 
                     // Emit a definitive post-file event (resets in-file byte accumulation)
                     this.emitProgress(clientId, {

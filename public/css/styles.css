@@ -386,6 +386,17 @@ body {
     box-shadow: var(--shadow);
 }
 
+.btn-warning {
+    background: var(--warning-color);
+    color: white;
+}
+
+.btn-warning:hover {
+    background: #d68910;
+    transform: translateY(-2px);
+    box-shadow: var(--shadow);
+}
+
 .btn:disabled {
     opacity: 0.5;
     cursor: not-allowed;

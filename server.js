@@ -860,7 +860,7 @@ app.post('/api/import/validate', analysisLimiter, async (req, res) => {
 // Merge API Routes
 app.post('/api/merge/analyze', analysisLimiter, async (req, res) => {
   try {
-    const { clientId, subframeMode } = req.body;
+    const { clientId, subframeMode, forceOverwrite } = req.body;
     const sourcePaths = (Array.isArray(req.body.sourcePaths) ? req.body.sourcePaths : [])
       .filter(p => p && typeof p === 'string')
       .map(p => path.resolve(p))
@@ -887,7 +887,7 @@ app.post('/api/merge/analyze', analysisLimiter, async (req, res) => {
 
     const mergeSubframeMode = subframeMode || 'all';
     console.log(`Analyzing ${sourcePaths.length} libraries for merge (${mergeSubframeMode})...`);
-    const result = await mergeService.analyzeSources(sourcePaths, destinationPath, clientId, mergeSubframeMode);
+    const result = await mergeService.analyzeSources(sourcePaths, destinationPath, clientId, mergeSubframeMode, forceOverwrite === true);
 
     res.json({ success: true, ...result });
   } catch (error) {

@@ -14,7 +14,7 @@ Harden SSLM for a stable v1.0 release by closing the remaining open issues in `n
 | Backend | Express 4 + Socket.IO 4 |
 | Frontend | Vanilla HTML/CSS/JS (`public/`) |
 | File I/O | `fs-extra` 11 (wraps Node `fs` with promise API) |
-| Tests | Vitest 4 + Supertest — 51 tests in `tests/` |
+| Tests | Vitest 4 + Supertest — 53 tests in `tests/` |
 | Packaging | `@yao-pkg/pkg` → `dist/sslm.exe`; Inno Setup 6 → installer |
 
 No React, no TypeScript, no build step for the frontend.
@@ -71,6 +71,9 @@ Every user-supplied path goes through `path.resolve()` then `isAllowedPath()` in
 - [x] **.gitignore** — restored `notes/` as full-directory ignore; added `!documentation/release-v1.0.0-beta.4.1/**` exception
 - [x] **Engagement modals** — welcome modal (first operation, Reddit community links) + engagement modal (max 3×, 14-day throttle; Star/Coffee/Feedback cards); state in `settings.json → engagement{}`
 - [x] **Snyk Code audit** — 63 findings triaged; 7 genuine issues fixed: 3× CWE-78 (`exec` → `spawn` in auto-browser-open, open-url, update-install endpoints) + 4× CWE-79 (`escapeHtml` on `error.message`/`data.error` in importWizard.js + mergeWizard.js); 56 false positives documented (Path Traversal/rate-limit/HTTP findings)
+- [x] **Merge re-copy bug** — `buildMergePlan()` dedup changed to size-only (mtime check removed); `fs.utimes` fixed to use `new Date(file.mtime)` (was silently failing with ISO string); `forceOverwrite` param threads through `analyzeSources()` → `buildMergePlan()` → `/api/merge/analyze`
+- [x] **Drive browser back-navigation** — drive-root regex guard in both `importWizard.js` and `mergeWizard.js`; `..` item correctly returns to drives list from drive root
+- [x] **Merge analysis UX** — existing-files warning card moved above stats table; `noFilesToCopy` auto-advance replaced with explicit Cancel + orange Overwrite All buttons; partial-overlap shows amber notice + Overwrite All option; `btn-warning` CSS class added
 
 ---
 
@@ -91,7 +94,7 @@ From `notes/PRODUCTION_READINESS.md` — fix these before tagging v1.0 stable:
 1. Run `git branch --show-current` — should be `auto-update`
 2. Read `notes/auto-update-plan.md` — it defines the full scope of this branch
 3. Read `notes/PRODUCTION_READINESS.md` — it is the canonical checklist of what is done/open
-4. Run `npx vitest run` — all 51 tests must pass before making any changes
+4. Run `npx vitest run` — all 53 tests must pass before making any changes
 
 Then pick the next open issue (see table above) and proceed.
 
@@ -145,7 +148,7 @@ Never remove or bypass these. They are the primary security layer for this local
 | `public/js/app.js` | App class, Socket.IO client, modal system, reconnect recovery |
 | `public/js/importWizard.js` | 5-step import wizard + `pollStatus()` |
 | `public/js/mergeWizard.js` | 6-step merge wizard + `pollStatus()` |
-| `tests/` | Vitest test suite (51 tests) |
+| `tests/` | Vitest test suite (53 tests) |
 | `notes/PRODUCTION_READINESS.md` | Canonical issue tracker for v1.0 stable |
 | `notes/auto-update-plan.md` | Branch plan for `auto-update` branch |
 | `CLAUDE.md` | Full project instructions for Claude Code |

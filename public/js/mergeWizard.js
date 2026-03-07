@@ -195,6 +195,12 @@ class MergeWizard {
                     return false;
                 }
                 return true;
+            case 3:
+                if (this.mergePlan && this.mergePlan.filesToCopy.length === 0) {
+                    app.showModal('Nothing to copy', 'All files already exist in the destination. Use "Overwrite All" to force a re-copy, or Cancel to go back.');
+                    return false;
+                }
+                return true;
             default:
                 return true;
         }
@@ -353,7 +359,7 @@ class MergeWizard {
     // Step 3: Analysis & Preview
     // ========================================================================
 
-    async renderStep3_AnalysisPreview() {
+    async renderStep3_AnalysisPreview(forceOverwrite = false) {
         const content = document.getElementById('mergeWizardContent');
         content.innerHTML = `
             <div class="wizard-step-content">
@@ -388,7 +394,8 @@ class MergeWizard {
                     sourcePaths: this.sourcePaths,
                     destinationPath: this.destinationPath,
                     clientId: app.clientId,
-                    subframeMode: this.subframeMode
+                    subframeMode: this.subframeMode,
+                    forceOverwrite
                 })
             });
 
@@ -423,6 +430,33 @@ class MergeWizard {
         content.innerHTML = `
             <div class="wizard-step-content">
                 <h3>Merge Plan Preview</h3>
+
+                ${noFilesToCopy ? `
+                    <div style="margin: 0 0 1.5rem 0; padding: 1.5rem; background: var(--bg-tertiary); border-left: 4px solid var(--success-color); border-radius: 8px;">
+                        <h4 style="margin: 0 0 0.5rem 0;">All Files Already Exist in Destination</h4>
+                        <p style="margin: 0 0 1rem 0; color: var(--text-secondary);">
+                            All ${mergePlan.uniqueFiles.toLocaleString()} unique files already exist in the destination with matching content.
+                            No files need to be copied.
+                        </p>
+                        <div style="display: flex; gap: 0.75rem;">
+                            <button class="btn btn-secondary" onclick="mergeWizard.previousStep()">← Cancel</button>
+                            <button class="btn btn-warning" onclick="mergeWizard.renderStep3_AnalysisPreview(true)">Overwrite All</button>
+                        </div>
+                    </div>
+                ` : ''}
+
+                ${!noFilesToCopy && mergePlan.existingInDestination > 0 ? `
+                    <div style="margin: 0 0 1rem 0; padding: 1rem; background: var(--bg-tertiary); border-left: 4px solid var(--warning-color, #f59e0b); border-radius: 4px;">
+                        <strong>Previous Merge Detected</strong><br>
+                        <span style="color: var(--text-secondary);">
+                            ${mergePlan.existingInDestination.toLocaleString()} file${mergePlan.existingInDestination > 1 ? 's' : ''} already exist in the destination and will be skipped.
+                            Only the ${mergePlan.filesToCopy.length.toLocaleString()} new file${mergePlan.filesToCopy.length > 1 ? 's' : ''} will be copied.
+                        </span>
+                        <div style="margin-top: 0.75rem;">
+                            <button class="btn btn-secondary" onclick="mergeWizard.renderStep3_AnalysisPreview(true)">Overwrite All Instead</button>
+                        </div>
+                    </div>
+                ` : ''}
 
                 <div class="merge-stats-table">
                     <table>
@@ -471,24 +505,6 @@ class MergeWizard {
                     </table>
                 </div>
 
-                ${noFilesToCopy ? `
-                    <div class="info-message" style="margin: 1.5rem 0; padding: 1.5rem; background: var(--success-color); color: white; border-radius: 8px; text-align: center;">
-                        <div style="font-size: 2.5rem; margin-bottom: 0.5rem;">✓</div>
-                        <h4 style="margin: 0 0 0.5rem 0; color: white;">All Files Already Exist in Destination</h4>
-                        <p style="margin: 0; opacity: 0.9;">
-                            All unique files from the source libraries already exist in the destination directory.<br>
-                            No files need to be copied. Starting validation...
-                        </p>
-                    </div>
-                ` : ''}
-
-                ${!noFilesToCopy && mergePlan.existingInDestination > 0 ? `
-                    <div class="info-message" style="margin: 1rem 0; padding: 1rem; background: var(--bg-tertiary); border-left: 4px solid var(--primary-color); border-radius: 4px;">
-                        <strong>ℹ️ Previous Merge Detected</strong><br>
-                        ${mergePlan.existingInDestination} file${mergePlan.existingInDestination > 1 ? 's' : ''} already exist${mergePlan.existingInDestination === 1 ? 's' : ''} in the destination with matching content and will be skipped.
-                    </div>
-                ` : ''}
-
                 ${mergePlan.conflicts.count > 0 ? `
                     <div class="conflict-preview">
                         <h4>Conflict Resolution Preview</h4>
@@ -520,13 +536,6 @@ class MergeWizard {
             </div>
         `;
 
-        // If no files to copy, automatically proceed to validation after showing message
-        if (noFilesToCopy) {
-            setTimeout(async () => {
-                await this.renderStep(6);
-                await this.startValidation();
-            }, 2000);
-        }
     }
 
     // ========================================================================
@@ -1395,19 +1404,20 @@ class MergeWizard {
         if (listDiv) {
             let html = '';
 
-            // Add "up" button
-            const parentPath = currentPath.split('\\').slice(0, -1).join('\\');
-            if (parentPath) {
-                html += `
-                    <div class="folder-item" data-path="${parentPath}" style="padding: 0.75rem; cursor: pointer;
-                         border-bottom: 1px solid var(--border-color); transition: background 0.2s;">
-                        <div style="display: flex; align-items: center; gap: 0.5rem;">
-                            <span>⬆️</span>
-                            <span>..</span>
-                        </div>
+            // Add "up" button — data-path="" means "back to drives list"
+            const isAtDriveRoot = /^[A-Za-z]:[\\\/]?$/.test(currentPath);
+            const normalized = currentPath.replace(/[\\\/]+$/, '');
+            const lastSep = Math.max(normalized.lastIndexOf('\\'), normalized.lastIndexOf('/'));
+            const parentPath = isAtDriveRoot ? '' : (lastSep > 2 ? normalized.slice(0, lastSep) : normalized.slice(0, 3));
+            html += `
+                <div class="folder-item" data-path="${parentPath}" style="padding: 0.75rem; cursor: pointer;
+                     border-bottom: 1px solid var(--border-color); transition: background 0.2s;">
+                    <div style="display: flex; align-items: center; gap: 0.5rem;">
+                        <span>⬆️</span>
+                        <span>..</span>
                     </div>
-                `;
-            }
+                </div>
+            `;
 
             // Add directories
             if (directories && directories.length > 0) {
@@ -1430,7 +1440,11 @@ class MergeWizard {
             listDiv.querySelectorAll('.folder-item').forEach(item => {
                 item.addEventListener('click', () => {
                     const dirPath = item.getAttribute('data-path');
-                    this.browsePath(dirPath);
+                    if (dirPath) {
+                        this.browsePath(dirPath);
+                    } else {
+                        this.loadDrivesForBrowser();
+                    }
                 });
 
                 // Add hover effect
