@@ -81,7 +81,8 @@ const defaultConfig = {
   mode: { online: false },
   seestar: { directoryName: 'MyWorks' },
   paths: { lastSourcePath: '', lastDestinationPath: '' },
-  preferences: { defaultImportStrategy: 'incremental' }
+  preferences: { defaultImportStrategy: 'incremental' },
+  engagement: { welcomeShown: false, dismissCount: 0, lastShown: null }
 };
 
 // Deep-merge loaded config with defaults:
@@ -1339,8 +1340,8 @@ server.listen(PORT, HOST, () => {
   // When running as a packaged exe, auto-open the browser after a short delay
   // to ensure the server socket is fully accepting connections first.
   if (isPackaged) {
-    const { exec } = require('child_process');
-    setTimeout(() => exec(`start http://${HOST}:${PORT}`), 1500);
+    const { spawn } = require('child_process');
+    setTimeout(() => spawn('cmd', ['/c', 'start', '', `http://${HOST}:${PORT}`], { detached: true, stdio: 'ignore' }).unref(), 1500);
   }
 });
 
@@ -1351,8 +1352,8 @@ app.post('/api/open-url', lightLimiter, (req, res) => {
   if (!url || !allowed.test(url)) {
     return res.status(400).json({ error: 'URL not allowed' });
   }
-  const { exec } = require('child_process');
-  exec(`start "" "${url.replace(/"/g, '')}"`);
+  const { spawn } = require('child_process');
+  spawn('cmd', ['/c', 'start', '', url], { detached: true, stdio: 'ignore' }).unref();
   res.json({ success: true });
 });
 
@@ -1473,11 +1474,41 @@ app.post('/api/update/install', lightLimiter, (req, res) => {
   }
 
   res.json({ message: 'Launching installer and shutting down...' });
-  const { exec } = require('child_process');
+  const { spawn } = require('child_process');
   setTimeout(() => {
-    exec(`start "" "${filePath}"`);
+    spawn('cmd', ['/c', 'start', '', filePath], { detached: true, stdio: 'ignore' }).unref();
     setTimeout(gracefulShutdown, 500);
   }, 300);
+});
+
+// ── Engagement endpoints ───────────────────────────────────────────────────────
+
+// GET /api/engagement/check — returns which modal to show (if any)
+app.get('/api/engagement/check', lightLimiter, (req, res) => {
+  const e = config.engagement || {};
+  if (!e.welcomeShown) return res.json({ show: 'welcome' });
+  const fourteenDays = 14 * 24 * 60 * 60 * 1000;
+  const shouldShow =
+    (e.dismissCount || 0) < 3 &&
+    (!e.lastShown || Date.now() - new Date(e.lastShown).getTime() > fourteenDays);
+  res.json({ show: shouldShow ? 'engagement' : 'none' });
+});
+
+// POST /api/engagement/record-welcome — mark welcome modal as shown
+app.post('/api/engagement/record-welcome', lightLimiter, async (req, res) => {
+  if (!config.engagement) config.engagement = {};
+  config.engagement.welcomeShown = true;
+  await fs.writeJSON(configPath, config, { spaces: 2 });
+  res.json({ ok: true });
+});
+
+// POST /api/engagement/record — record one engagement modal display
+app.post('/api/engagement/record', lightLimiter, async (req, res) => {
+  if (!config.engagement) config.engagement = {};
+  config.engagement.dismissCount = (config.engagement.dismissCount || 0) + 1;
+  config.engagement.lastShown = new Date().toISOString();
+  await fs.writeJSON(configPath, config, { spaces: 2 });
+  res.json({ ok: true });
 });
 
 // Quit endpoint — lets the browser trigger a graceful shutdown

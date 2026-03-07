@@ -59,6 +59,14 @@ class App {
         // Check for updates silently on startup
         this.checkForUpdates(true);
 
+        // Register engagement modal triggers — fires 2.5s after any major operation completes
+        this._engagementShownThisSession = false;
+        ['import:complete', 'merge:complete', 'stackexport:complete'].forEach(event => {
+            this.socket.on(event, () => {
+                setTimeout(() => this.checkAndShowEngagement(), 2500);
+            });
+        });
+
         console.log('Application ready!');
     }
 
@@ -748,6 +756,95 @@ class App {
         } catch (_) {
             // Network error means the server already closed — expected behaviour
         }
+    }
+
+    // ── Engagement modals ─────────────────────────────────────────────────────
+
+    async checkAndShowEngagement() {
+        if (this._engagementShownThisSession) return;
+        try {
+            const res = await fetch('/api/engagement/check');
+            const { show } = await res.json();
+            if (show === 'none') return;
+            this._engagementShownThisSession = true;
+            if (show === 'welcome') {
+                fetch('/api/engagement/record-welcome', { method: 'POST' }).catch(() => {});
+                this.showWelcomeModal();
+            } else {
+                fetch('/api/engagement/record', { method: 'POST' }).catch(() => {});
+                this.showEngagementModal();
+            }
+        } catch (_) { /* silent — never block the user */ }
+    }
+
+    showWelcomeModal() {
+        const html = `
+            <div style="text-align:center;padding:0.25rem 0 0.5rem">
+                <p style="color:var(--text-secondary);margin-bottom:0.25rem;font-size:0.95rem;line-height:1.6;">
+                    Thank you for using SSLM! You're now part of a growing community of SeeStar
+                    astrophotographers. Your feedback directly shapes this tool — please share
+                    what you think, report bugs, or just say hi.
+                </p>
+                <div class="engagement-cards">
+                    <a class="engagement-card"
+                       href="https://www.reddit.com/r/SeeStarAstro/"
+                       target="_blank" rel="noopener noreferrer">
+                        <span class="engagement-card-icon">🪐</span>
+                        <strong>r/SeeStarAstro</strong>
+                        <span style="font-size:0.78rem;color:var(--text-secondary);">Join the subreddit</span>
+                    </a>
+                    <a class="engagement-card"
+                       href="https://www.reddit.com/user/GoatZealousideal5489/"
+                       target="_blank" rel="noopener noreferrer">
+                        <span class="engagement-card-icon">💬</span>
+                        <strong>u/GoatZealousideal5489</strong>
+                        <span style="font-size:0.78rem;color:var(--text-secondary);">Message the developer</span>
+                    </a>
+                </div>
+                <p style="margin-top:1rem;font-size:0.78rem;color:var(--text-secondary);opacity:0.7;">
+                    You can also open a
+                    <a href="https://github.com/AstroNoob-Tools/SSLM/issues" target="_blank"
+                       rel="noopener noreferrer" style="color:inherit;text-decoration:underline;">
+                        GitHub Issue
+                    </a>
+                    for bug reports.
+                </p>
+            </div>`;
+        this.showModal('Welcome to the SSLM community! \uD83C\uDF1F', html, null, 'Thanks!');
+    }
+
+    showEngagementModal() {
+        const html = `
+            <div style="text-align:center;padding:0.25rem 0 0.5rem">
+                <p style="color:var(--text-secondary);margin-bottom:0.25rem;font-size:0.95rem;line-height:1.6;">
+                    SSLM is free and open source. If it's been useful for your astrophotography
+                    sessions, here are a few small ways to support its development:
+                </p>
+                <div class="engagement-cards">
+                    <a class="engagement-card"
+                       href="https://github.com/AstroNoob-Tools/SSLM"
+                       target="_blank" rel="noopener noreferrer">
+                        <span class="engagement-card-icon">⭐</span>
+                        <strong>Star on GitHub</strong>
+                        <span style="font-size:0.78rem;color:var(--text-secondary);">Show your support</span>
+                    </a>
+                    <a class="engagement-card"
+                       href="https://buymeacoffee.com/astro_noob"
+                       target="_blank" rel="noopener noreferrer">
+                        <span class="engagement-card-icon">☕</span>
+                        <strong>Buy Me a Coffee</strong>
+                        <span style="font-size:0.78rem;color:var(--text-secondary);">Fund development</span>
+                    </a>
+                    <a class="engagement-card"
+                       href="https://github.com/AstroNoob-Tools/SSLM/issues"
+                       target="_blank" rel="noopener noreferrer">
+                        <span class="engagement-card-icon">📧</span>
+                        <strong>Send Feedback</strong>
+                        <span style="font-size:0.78rem;color:var(--text-secondary);">Ideas &amp; bug reports</span>
+                    </a>
+                </div>
+            </div>`;
+        this.showModal('Enjoying SSLM?', html, null, 'Close');
     }
 
     // Quit Application

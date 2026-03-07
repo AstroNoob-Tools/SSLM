@@ -405,7 +405,7 @@ class MergeWizard {
             content.innerHTML = `
                 <div class="wizard-step-content">
                     <h3>Analysis Failed</h3>
-                    <p class="error-message">${error.message}</p>
+                    <p class="error-message">${escapeHtml(error.message)}</p>
                     <button class="btn btn-secondary" onclick="mergeWizard.previousStep()">
                         ← Go Back
                     </button>

@@ -9,7 +9,7 @@
 
 ## What's New in beta.4.1
 
-Beta 4.1 is a reliability and quality release. The main themes are: **auto-update**, **security hardening (CWE-78 fix)**, **crash resilience**, **Socket.IO disconnect recovery**, **network copy robustness**, **persistent logging**, and **config validation**. A Vitest automated test suite is also introduced as a developer-facing quality improvement. There are no breaking changes and no migration steps required.
+Beta 4.1 is a reliability and quality release. The main themes are: **auto-update**, **security hardening (CWE-78 + CWE-79 fixes)**, **crash resilience**, **Socket.IO disconnect recovery**, **network copy robustness**, **persistent logging**, and **config validation**. A Vitest automated test suite is also introduced as a developer-facing quality improvement. There are no breaking changes and no migration steps required.
 
 ---
 
@@ -53,6 +53,44 @@ The disk space check in `diskSpaceValidator.js` previously used `wmic logicaldis
 - The `wmic` fallback path has been removed entirely.
 
 **Additional benefit**: This change also resolves a compatibility issue on Windows 11 24H2, where `wmic` was deprecated and could fail silently.
+
+### CWE-78 Command Injection in shell launch calls — FIXED
+
+Three additional `child_process.exec()` calls in `server.js` used template-literal string interpolation to build shell commands, which passes the string through `cmd.exe` and is susceptible to metacharacter injection (CWE-78):
+
+| Endpoint | Old code |
+|----------|----------|
+| Auto browser-open on startup | `exec(\`start http://${HOST}:${PORT}\`)` |
+| `POST /api/open-url` | `exec(\`start "" "${url}"\`)` |
+| `POST /api/update/install` | `exec(\`start "" "${filePath}"\`)` |
+
+**Fix**: All three replaced with `spawn('cmd', ['/c', 'start', '', target], { detached: true, stdio: 'ignore' }).unref()`. Arguments are passed as an array so `cmd.exe` never interprets them as shell text, regardless of their content.
+
+### DOM XSS in error messages — FIXED
+
+Four locations in the frontend rendered error text directly into `innerHTML` without HTML-escaping, creating a potential DOM-based XSS vector (CWE-79) if a server-side error message contained HTML markup:
+
+| File | Location | Source |
+|------|----------|--------|
+| `public/js/importWizard.js` | Device scan error | `error.message` |
+| `public/js/importWizard.js` | Disk space — API error | `data.error` |
+| `public/js/importWizard.js` | Disk space — exception | `error.message` |
+| `public/js/mergeWizard.js` | Analysis failure | `error.message` |
+
+**Fix**: Each value is now wrapped with the existing global `escapeHtml()` function before insertion into the DOM.
+
+### Snyk Code audit — false positive summary
+
+A full Snyk Code scan of the source tree produced 63 findings. The 7 genuine issues above were fixed. The remaining 56 are confirmed false positives:
+
+| Category | Count | Why they are not exploitable |
+|----------|-------|------------------------------|
+| **Path Traversal** (CWE-22) | 14 | Every user-supplied path in `server.js` is passed through `path.resolve()` then `isAllowedPath()` before reaching any `fs` call. `isAllowedPath()` rejects anything that does not resolve to a Windows drive-letter root (`X:\`) or UNC path (`\\server\share`). Snyk Code does not model custom validator functions, so it reports these as unsanitised even though the guard is present. |
+| **No rate limiting** | 14 | Every flagged route already has one of the three Express rate-limiter middlewares applied at the route declaration (`lightLimiter`, `analysisLimiter`, or `heavyOpLimiter`). Snyk flags the file-system operation line inside the handler body without correlating it back to the middleware on the route definition. |
+| **HTTP instead of HTTPS** | 1 | `server.js` creates an HTTP server intentionally. SSLM binds to `localhost` only and is never exposed to a network — a TLS certificate provides no meaningful security benefit for a local-only process. This is documented in a comment at `server.js:57`. |
+| **Unchecked HTTP source type** | 4 | The flagged `.length` accesses use optional chaining (`?.length`), which safely returns `undefined` rather than throwing. The flagged `.replace()` calls are on values already validated by a `RegExp.test()` guard immediately above, which coerces non-strings via `toString()` and rejects invalid input before the call is reached. |
+| **DOM XSS on `data-path` attributes** | ~8 | Several folder-browser lists inject Windows filesystem paths into `data-path="..."` HTML attributes without `escapeHtml()`. On Windows, path names cannot legally contain `"`, `<`, or `>` (the OS rejects them), so no HTML-breaking payload can exist in a real path. |
+| **DOM XSS on static templates** | ~15 | The flagged `innerHTML` assignments are static string literals with no user-controlled data. Snyk's taint analysis traces a data flow from an earlier network call to the same code block and conservatively flags the assignment, but the injected string contains no variable interpolation from that source. |
 
 ---
 
@@ -207,6 +245,7 @@ Previously, a corrupted or manually edited `settings.json` that contained invali
 | `fec7dac` | Global error handlers (`unhandledRejection` + `uncaughtException`) + interrupted operation recovery |
 | `c383a67` | Fix CWE-78 command injection in `diskSpaceValidator.js` — strict drive-letter validation + `execFile` |
 | *(pending)* | Auto-update feature — version check, download progress, install flow |
+| *(pending)* | Fix CWE-78 (3× `exec` → `spawn`) + CWE-79 (4× `escapeHtml` on error messages) — Snyk Code audit |
 
 ---
 

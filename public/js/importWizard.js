@@ -339,7 +339,7 @@ class ImportWizard {
                 this.updateNavigationButtons();
             }
         } catch (error) {
-            resultDiv.innerHTML = `<span style="color: var(--danger-color);">Error: ${error.message}</span>`;
+            resultDiv.innerHTML = `<span style="color: var(--danger-color);">Error: ${escapeHtml(error.message)}</span>`;
             this.selectedDevice = null;
             this.updateNavigationButtons();
         }
@@ -792,13 +792,13 @@ class ImportWizard {
                 this.updateNavigationButtons();
             } else {
                 spaceContent.innerHTML = `
-                    <p style="color: var(--danger-color);">Error validating disk space: ${data.error}</p>
+                    <p style="color: var(--danger-color);">Error validating disk space: ${escapeHtml(data.error || '')}</p>
                 `;
             }
         } catch (error) {
             console.error('Error validating space:', error);
             spaceContent.innerHTML = `
-                <p style="color: var(--danger-color);">Error: ${error.message}</p>
+                <p style="color: var(--danger-color);">Error: ${escapeHtml(error.message)}</p>
             `;
         }
     }
