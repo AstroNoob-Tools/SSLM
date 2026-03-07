@@ -1,5 +1,8 @@
 # AI Context — SSLM (SeeStar Library Manager)
 
+**Last Updated**: 2026-03-07
+
+
 ## Current Objective
 
 Harden SSLM for a stable v1.0 release by closing the remaining open issues in `notes/PRODUCTION_READINESS.md`, currently working on the `auto-update` branch.
@@ -74,6 +77,19 @@ Every user-supplied path goes through `path.resolve()` then `isAllowedPath()` in
 - [x] **Merge re-copy bug** — `buildMergePlan()` dedup changed to size-only (mtime check removed); `fs.utimes` fixed to use `new Date(file.mtime)` (was silently failing with ISO string); `forceOverwrite` param threads through `analyzeSources()` → `buildMergePlan()` → `/api/merge/analyze`
 - [x] **Drive browser back-navigation** — drive-root regex guard in both `importWizard.js` and `mergeWizard.js`; `..` item correctly returns to drives list from drive root
 - [x] **Merge analysis UX** — existing-files warning card moved above stats table; `noFilesToCopy` auto-advance replaced with explicit Cancel + orange Overwrite All buttons; partial-overlap shows amber notice + Overwrite All option; `btn-warning` CSS class added
+- [x] **AI Context Persistence** — Formalized the protocol for AI assistants to read and update `AI_CONTEXT.md` for cross-session continuity.
+
+---
+
+## AI Interaction Protocol
+
+**Every AI assistant operating on this project MUST follow these rules:**
+
+1. **Read `AI_CONTEXT.md` FIRST** — Upon starting a session or being tasked, this file must be read to establish current state, stack, and architectural constraints.
+2. **Update `AI_CONTEXT.md` UPON ACHIEVEMENT** — Every time a significant task, feature, or fix is completed, record it in the `Completed Tasks` section and advance the `Current Objective` if necessary.
+3. **Respect Warnings** — Never violate the constraints listed in the `Warnings` section.
+4. **Link to Notes** — Maintain the practice of linking to detailed plans/checklists in the `notes/` directory for complex work.
+
 
 ---
 

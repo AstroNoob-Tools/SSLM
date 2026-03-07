@@ -1,9 +1,10 @@
 # SSLM - SeeStar Library Manager
 
-## Startup — Always Read First
+## Startup — Always Read & Update
 
-At the start of **every session**, read `AI_CONTEXT.md` in the project root before doing anything else.
-It contains the current objective, completed tasks, open issues, and critical warnings.
+1. **Read `AI_CONTEXT.md` FIRST** — At the start of **every session**, read `AI_CONTEXT.md` in the project root before doing anything else. It contains the current objective, completed tasks, open issues, and critical warnings.
+2. **Update `AI_CONTEXT.md` UPON ACHIEVEMENT** — Every time a significant task, feature, or fix is completed, record it in the `Completed Tasks` section of `AI_CONTEXT.md` and advance the `Current Objective` if necessary.
+
 
 ---
 
