@@ -15,11 +15,11 @@ Download the latest installer from the **[Releases](https://github.com/AstroNoob
 > **Security Guarantee**: SSLM is unsigned freeware. When you run the installer, Windows Defender SmartScreen may show a blue warning saying "Windows protected your PC" because the publisher is unknown. You can safely install it by clicking **More info** -> **Run anyway**.
 > SHA-256: `2dab40b285b0de647259a69dd31b67b91dafc72af5aae9434f8d4c88d79e7d14` — **[View the VirusTotal Security Scan (75/76 clean — 1 false positive, 3 Mar 2026)](https://www.virustotal.com/gui/file/2dab40b285b0de647259a69dd31b67b91dafc72af5aae9434f8d4c88d79e7d14)** — all major engines (Defender, Kaspersky, ESET, Sophos, CrowdStrike…) are clean. SSLM is strictly offline-only, open-source, and never modifies files on your SeeStar device.
 
-**Current release**: `v1.0.0-beta.4` — public beta
+**Current release**: `v1.0.0-Preproduction` — Pre-production release candidate
 
 **No prerequisites** — Node.js is bundled inside the installer.
 
-1. Run `SSLM-Setup-v1.0.0-beta.4.exe`
+1. Run `SSLM-Setup-v1.0.0-Preproduction.exe`
 2. Follow the wizard to choose your preferred installation folder (no admin rights needed)
 3. Launch from the **Start Menu** or **Desktop shortcut**
 4. Your browser opens automatically at `http://localhost:3000`
@@ -39,6 +39,8 @@ Download the latest installer from the **[Releases](https://github.com/AstroNoob
 - **Clean up** unnecessary preview files from sub-frame directories to save disk space
 - **Look up** cross-catalog identifiers and J2000 coordinates via the SIMBAD database (optional, Online Mode)
 - **Re-classify** objects by renaming all files and folders to a different catalog designation in one operation (Online Mode)
+- **Automatic Updates** — check for and install new SSLM versions with one click
+- **Session Recovery** — resume progress tracking automatically if the browser or connection is interrupted mid-operation
 
 ## What It Does NOT Do
 
@@ -125,6 +127,7 @@ Results are cached in memory so repeated visits cost zero additional network cal
 ### Application Header
 - **Offline / Online badge** — click to toggle Online Mode; all core features remain available in either state
 - **⚙️ Settings** — configure port, SeeStar directory name, import strategy
+- **🔔 Auto-Update** — amber badge notifications and one-click download+install flow
 - **ℹ️ About** — version number and contact details
 - **⏻ Quit** — gracefully shuts down the server from the browser
 
@@ -174,7 +177,7 @@ npm run build
 "C:\Program Files (x86)\Inno Setup 6\ISCC.exe" installer\sslm.iss
 ```
 
-Output: `installer/output/SSLM-Setup-v1.0.0-beta.4.exe`
+Output: `installer/output/SSLM-Setup-v1.0.0-Preproduction.exe`
 
 See [documentation/InstallationManual.md](documentation/InstallationManual.md) for the full release checklist.
 
@@ -230,4 +233,4 @@ Contact: astronoob001@gmail.com
 
 ---
 
-*SSLM — SeeStar Library Manager v1.0.0-beta.4 | Last updated: March 2026*
+*SSLM — SeeStar Library Manager v1.0.0-Preproduction | Last updated: March 2026*
