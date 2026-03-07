@@ -72,11 +72,12 @@ logger.init(path.join(configDir, 'logs'));
 
 // Redirect all console output through the logger so every module's
 // console.log/warn/error calls are automatically timestamped and persisted.
-console.log   = (...args) => logger.info(...args);
-console.warn  = (...args) => logger.warn(...args);
+console.log = (...args) => logger.info(...args);
+console.warn = (...args) => logger.warn(...args);
 console.error = (...args) => logger.error(...args);
 
 const defaultConfig = {
+  configVersion: 1,
   server: { port: 3000, host: 'localhost' },
   mode: { online: false },
   seestar: { directoryName: 'MyWorks' },
@@ -85,11 +86,48 @@ const defaultConfig = {
   engagement: { welcomeShown: false, dismissCount: 0, lastShown: null }
 };
 
+// Custom schema validator to ensure type safety without external dependencies
+function validateConfigTypes(rawConfig) {
+  const result = { ...rawConfig };
+
+  // Helper to coerce or default types securely
+  const ensureNumber = (val, def) => (typeof val === 'number' && !isNaN(val) ? val : def);
+  const ensureString = (val, def) => (typeof val === 'string' ? val : def);
+  const ensureBoolean = (val, def) => (typeof val === 'boolean' ? val : def);
+
+  if (result.server) {
+    result.server.port = ensureNumber(result.server.port, defaultConfig.server.port);
+    result.server.host = ensureString(result.server.host, defaultConfig.server.host);
+  }
+
+  if (result.mode) {
+    result.mode.online = ensureBoolean(result.mode.online, defaultConfig.mode.online);
+  }
+
+  if (result.seestar) {
+    result.seestar.directoryName = ensureString(result.seestar.directoryName, defaultConfig.seestar.directoryName);
+  }
+
+  if (result.paths) {
+    result.paths.lastSourcePath = ensureString(result.paths.lastSourcePath, defaultConfig.paths.lastSourcePath);
+    result.paths.lastDestinationPath = ensureString(result.paths.lastDestinationPath, defaultConfig.paths.lastDestinationPath);
+  }
+
+  if (result.preferences) {
+    result.preferences.defaultImportStrategy = ensureString(result.preferences.defaultImportStrategy, defaultConfig.preferences.defaultImportStrategy);
+  }
+
+  // Enforce config versioning
+  result.configVersion = defaultConfig.configVersion;
+
+  return result;
+}
+
 // Deep-merge loaded config with defaults:
 // - Missing or wrong-typed sections fall back to a fresh copy of the default (never a shared reference).
 // - Extra top-level keys not in defaultConfig are preserved so no user data is silently dropped.
 function applyConfigDefaults(raw) {
-  const result = {};
+  let result = {};
   for (const key of Object.keys(defaultConfig)) {
     const def = defaultConfig[key];
     const val = raw[key];
@@ -105,6 +143,10 @@ function applyConfigDefaults(raw) {
   for (const key of Object.keys(raw)) {
     if (!(key in result)) result[key] = raw[key];
   }
+
+  // Validate basic types and handle version migrations
+  result = validateConfigTypes(result);
+
   return result;
 }
 
@@ -171,10 +213,10 @@ function initOperation(operationId, type, clientId) {
 // Services call this.io.to(clientId).emit(event, data) — the wrapper intercepts
 // those calls transparently without requiring changes to any service file.
 const _realIoTo = io.to.bind(io);
-io.to = function(room) {
+io.to = function (room) {
   const broadcaster = _realIoTo(room);
   const _realEmit = broadcaster.emit.bind(broadcaster);
-  broadcaster.emit = function(event, data) {
+  broadcaster.emit = function (event, data) {
     if (data && typeof data.operationId === 'string') {
       const entry = operationStore.get(data.operationId);
       if (entry) {

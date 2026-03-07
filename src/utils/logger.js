@@ -5,8 +5,8 @@ const path = require('path');
 // Save originals before server.js overrides console — logger always writes
 // to the real console regardless of any overrides applied later.
 const _orig = {
-    log:   console.log.bind(console),
-    warn:  console.warn.bind(console),
+    log: console.log.bind(console),
+    warn: console.warn.bind(console),
     error: console.error.bind(console),
 };
 
@@ -31,6 +31,32 @@ class Logger {
             _orig.error('[Logger] Cannot create log directory, file logging disabled:', err.message);
             this.logDir = null;
         }
+
+        // Clean up old log files right after initialization
+        this._cleanupOldLogs();
+    }
+
+    _cleanupOldLogs() {
+        if (!this.logDir) return;
+        try {
+            const now = Date.now();
+            const maxAgeMs = 7 * 24 * 60 * 60 * 1000; // 7 days
+            const files = fs.readdirSync(this.logDir);
+
+            for (const file of files) {
+                if (file.startsWith('sslm-') && file.endsWith('.log')) {
+                    const filePath = path.join(this.logDir, file);
+                    const stats = fs.statSync(filePath);
+                    if (now - stats.mtimeMs > maxAgeMs) {
+                        try {
+                            fs.removeSync(filePath);
+                        } catch (_) { }
+                    }
+                }
+            }
+        } catch (err) {
+            _orig.warn('[Logger] Failed to clean up old logs:', err.message);
+        }
     }
 
     _getStream() {
@@ -38,7 +64,7 @@ class Logger {
         if (today !== this.currentDate) {
             // Date rolled over — close current stream and open a new file
             if (this.stream) {
-                try { this.stream.end(); } catch (_) {}
+                try { this.stream.end(); } catch (_) { }
                 this.stream = null;
             }
             this.currentDate = today;
@@ -47,7 +73,7 @@ class Logger {
                 try {
                     this.stream = fs.createWriteStream(logFile, { flags: 'a' });
                     this.stream.on('error', () => { this.stream = null; });
-                } catch (_) {}
+                } catch (_) { }
             }
         }
         return this.stream;
@@ -56,23 +82,23 @@ class Logger {
     _write(level, args) {
         const ts = new Date().toISOString();
         const msg = args.map(a =>
-            a instanceof Error  ? `${a.message}\n${a.stack}` :
-            typeof a === 'object' && a !== null ? JSON.stringify(a) : String(a)
+            a instanceof Error ? `${a.message}\n${a.stack}` :
+                typeof a === 'object' && a !== null ? JSON.stringify(a) : String(a)
         ).join(' ');
 
         const stream = this._getStream();
         if (stream) {
-            try { stream.write(`${ts} [${level.padEnd(5)}] ${msg}\n`); } catch (_) {}
+            try { stream.write(`${ts} [${level.padEnd(5)}] ${msg}\n`); } catch (_) { }
         }
 
         // Pass through to the real console
         if (level === 'ERROR') _orig.error(msg);
-        else if (level === 'WARN')  _orig.warn(msg);
-        else                        _orig.log(msg);
+        else if (level === 'WARN') _orig.warn(msg);
+        else _orig.log(msg);
     }
 
-    info(...args)  { this._write('INFO',  args); }
-    warn(...args)  { this._write('WARN',  args); }
+    info(...args) { this._write('INFO', args); }
+    warn(...args) { this._write('WARN', args); }
     error(...args) { this._write('ERROR', args); }
     debug(...args) { this._write('DEBUG', args); }
 }
