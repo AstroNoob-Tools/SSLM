@@ -1,5 +1,10 @@
 const fs = require('fs-extra');
 const path = require('path');
+const os = require('os');
+const { execFile } = require('child_process');
+const { promisify } = require('util');
+
+const execFileAsync = promisify(execFile);
 
 class MergeService {
     constructor(io, config) {
@@ -11,7 +16,7 @@ class MergeService {
         this.progressEmitInterval = 500; // Emit progress every 500ms (match ImportService)
         this.progressSamples = []; // For speed calculation
         this.sampleWindow = 5000; // 5 seconds window for speed calculation
-        this._abortCurrentFile = null; // Set by copyFileWithProgress; called by cancelMerge
+        this._abortCurrentFiles = new Set(); // Populated by copyFileWithProgress; iterated by cancelMerge
     }
 
     /**
@@ -490,68 +495,74 @@ class MergeService {
                 operationId
             });
 
-            // Copy files
-            for (const file of filesToCopy) {
-                // Check for cancellation
-                if (this.cancelled) {
-                    console.log('Merge cancelled by user');
-                    this.emitEvent(clientId, 'merge:cancelled', {
-                        filesCopied,
-                        bytesCopied,
-                        totalFiles: filesToCopy.length,
-                        totalBytes,
-                        operationId
-                    });
-                    return { success: false, cancelled: true };
-                }
+            // Determine concurrency: 4 for internal drives, 1 for USB/network
+            const allPaths = [destinationPath, ...sourcePaths];
+            const concurrency = await this._getDriveConcurrency(allPaths);
+            console.log(`Merge concurrency: ${concurrency} (${concurrency > 1 ? 'parallel' : 'sequential'})`);
 
+            // Per-file copy logic extracted so the worker pool can call it
+            const queue = [...filesToCopy];
+            // relativePath → { bytes, worker } — tracks in-flight progress per concurrent copy
+            const inFlightBytes = new Map();
+
+            const buildCurrentFiles = () =>
+                [...inFlightBytes.entries()].map(([fp, { worker }]) => ({
+                    worker,
+                    file: path.basename(fp)
+                }));
+
+            const copyOneFile = async (file, workerIndex) => {
                 const destPath = path.resolve(destinationPath, file.relativePath);
 
                 // Windows MAX_PATH: paths ≥ 260 chars (incl. null) fail silently
                 if (destPath.length > 259) {
                     console.warn(`[SKIP] Path too long (${destPath.length} chars): ${destPath}`);
                     errors.push({ file: file.relativePath, error: `Destination path exceeds Windows MAX_PATH limit (${destPath.length} chars)` });
-                    continue;
+                    return;
                 }
 
                 try {
-                    // Ensure destination directory exists
                     await fs.ensureDir(path.dirname(destPath));
 
-                    // Copy file — emit throttled progress on each chunk so large files
-                    // show continuous byte-level feedback instead of going silent
+                    // Copy file — emit throttled progress on each chunk; sum all in-flight bytes
+                    // so total progress is accurate when multiple files copy concurrently
                     await this.copyFileWithProgress(
                         file.sourcePath,
                         destPath,
                         (currentFileBytes) => {
+                            inFlightBytes.set(file.relativePath, { bytes: currentFileBytes, worker: workerIndex });
+                            const inflightTotal = [...inFlightBytes.values()].reduce((a, b) => a + b.bytes, 0);
                             this.emitProgress(clientId, {
                                 status: 'copying',
-                                currentFile: file.relativePath,
+                                currentFile: `Copying ${inFlightBytes.size} file(s)...`,
+                                currentFiles: buildCurrentFiles(),
                                 currentSource: file.sourceLibrary,
                                 filesCopied,
                                 totalFiles: filesToCopy.length,
                                 filesPercentage: Math.round((filesCopied / filesToCopy.length) * 100),
-                                bytesCopied: bytesCopied + currentFileBytes,
+                                bytesCopied: bytesCopied + inflightTotal,
                                 totalBytes,
-                                bytesPercentage: Math.round(((bytesCopied + currentFileBytes) / totalBytes) * 100),
+                                bytesPercentage: Math.round(((bytesCopied + inflightTotal) / totalBytes) * 100),
                                 operationId
                             });
                         }
                     );
 
+                    inFlightBytes.delete(file.relativePath);
                     bytesCopied += file.size;
                     filesCopied++;
 
                     // Preserve source mtime so deduplication works on subsequent merge runs
                     try {
                         const mtime = new Date(file.mtime);
-                    await fs.utimes(destPath, mtime, mtime);
+                        await fs.utimes(destPath, mtime, mtime);
                     } catch (_) { /* non-fatal — file was copied successfully */ }
 
-                    // Emit a definitive post-file event (resets in-file byte accumulation)
+                    // Emit a definitive post-file event
                     this.emitProgress(clientId, {
                         status: 'copying',
-                        currentFile: file.relativePath,
+                        currentFile: `Copying ${inFlightBytes.size} file(s)...`,
+                        currentFiles: buildCurrentFiles(),
                         currentSource: file.sourceLibrary,
                         filesCopied,
                         totalFiles: filesToCopy.length,
@@ -563,12 +574,40 @@ class MergeService {
                     });
 
                 } catch (error) {
-                    console.error(`Error copying file ${file.relativePath}:`, error.message);
-                    errors.push({
-                        file: file.relativePath,
-                        error: error.message
-                    });
+                    inFlightBytes.delete(file.relativePath);
+                    if (!this.cancelled) {
+                        // Only log real errors — abort-on-cancel errors are expected
+                        console.error(`Error copying file ${file.relativePath}:`, error.message);
+                        errors.push({ file: file.relativePath, error: error.message });
+                    }
                 }
+            };
+
+            // Worker pool: pull files from queue until empty or cancelled
+            const workers = Array.from(
+                { length: Math.min(concurrency, Math.max(filesToCopy.length, 1)) },
+                async (_, i) => {
+                    const workerIndex = i + 1; // 1-based for display
+                    while (queue.length > 0) {
+                        if (this.cancelled) break;
+                        const file = queue.shift(); // safe: Node.js is single-threaded
+                        await copyOneFile(file, workerIndex);
+                    }
+                }
+            );
+            await Promise.all(workers);
+
+            // Handle cancellation after all workers have stopped
+            if (this.cancelled) {
+                console.log('Merge cancelled by user');
+                this.emitEvent(clientId, 'merge:cancelled', {
+                    filesCopied,
+                    bytesCopied,
+                    totalFiles: filesToCopy.length,
+                    totalBytes,
+                    operationId
+                });
+                return { success: false, cancelled: true };
             }
 
             // Calculate duration
@@ -628,11 +667,13 @@ class MergeService {
             let timer = null;
             let settled = false;
 
+            const abort = () => cleanup(new Error('Cancelled'));
+
             const cleanup = (err) => {
                 if (settled) return;
                 settled = true;
                 clearTimeout(timer);
-                this._abortCurrentFile = null;
+                this._abortCurrentFiles.delete(abort);
                 readStream.destroy();
                 writeStream.destroy();
                 if (err) {
@@ -652,8 +693,8 @@ class MergeService {
                 }, timeoutMs);
             };
 
-            // Allow cancelMerge() to abort immediately
-            this._abortCurrentFile = () => cleanup(new Error('Cancelled'));
+            // Allow cancelMerge() to abort all in-flight copies immediately
+            this._abortCurrentFiles.add(abort);
 
             fs.stat(sourcePath)
                 .then(stats => { totalBytes = stats.size; })
@@ -793,12 +834,45 @@ class MergeService {
     }
 
     /**
+     * Determine how many files to copy in parallel based on drive types.
+     * Uses [System.IO.DriveInfo].DriveType — same .NET API as diskSpaceValidator.js.
+     * Returns 1 (sequential) for USB/network drives, 4 for internal drives.
+     * @param {Array<string>} paths - All paths involved in the merge (sources + destination)
+     * @returns {Promise<number>} Concurrency limit
+     */
+    async _getDriveConcurrency(paths) {
+        // UNC network share — no OS call needed
+        if (paths.some(p => p.startsWith('\\\\'))) return 1;
+
+        // Extract unique drive letters (regex guarantees only [A-Za-z])
+        const letters = [...new Set(
+            paths.map(p => p.match(/^([A-Za-z]):/)?.[1]).filter(Boolean)
+        )].map(l => l.toUpperCase());
+        if (letters.length === 0) return Math.max(1, os.cpus().length - 1); // relative paths — assume local
+
+        try {
+            // DriveType: 'Fixed' = internal HDD/SSD, 'Removable' = USB, 'Network' = mapped drive
+            const checks = letters.map(l => `[System.IO.DriveInfo]::new('${l}:').DriveType`).join('; ');
+            const { stdout } = await execFileAsync(
+                'powershell',
+                ['-NoProfile', '-Command', `@(${checks}) | ConvertTo-Json -Compress`]
+            );
+            const types = [].concat(JSON.parse(stdout.trim() || '[]'));
+            if (types.some(t => t !== 'Fixed' && t !== 3)) return 1;
+        } catch (_) {
+            // PowerShell unavailable — fall back to parallel
+        }
+        return Math.max(1, os.cpus().length - 1);
+    }
+
+    /**
      * Cancel ongoing merge operation
      */
     async cancelMerge() {
         console.log('Cancelling merge operation...');
         this.cancelled = true;
-        if (this._abortCurrentFile) this._abortCurrentFile();
+        for (const abort of this._abortCurrentFiles) abort();
+        this._abortCurrentFiles.clear();
         return { success: true, message: 'Merge cancelled' };
     }
 

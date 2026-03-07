@@ -2684,8 +2684,10 @@ class Dashboard {
                     <div class="progress-bar" id="exportBar" style="width: 0%;">0%</div>
                 </div>
 
-                <div id="exportCurrentFile" style="color: var(--text-secondary); font-style: italic; margin-top: 1rem;">
-                    Scanning source files…
+                <div style="margin-top: 1rem; padding: 0.75rem; background: var(--bg-secondary); border-radius: 8px; border: 1px solid var(--border-color); height: 120px; overflow: hidden; box-sizing: border-box;">
+                    <div id="exportCurrentFile" style="font-family: monospace; font-size: 0.9em; color: var(--text-secondary); word-break: break-all; overflow: hidden;">
+                        Scanning source files…
+                    </div>
                 </div>
                 <div class="stats-pills-row" style="margin-top: 0.75rem;">
                     <div id="exportFileCount" style="display: none;">Files: 0 / 0</div>
@@ -2724,7 +2726,15 @@ class Dashboard {
 
     _handleExportProgress(data) {
         const currentFileEl = document.getElementById('exportCurrentFile');
-        if (currentFileEl) currentFileEl.textContent = data.currentFile || '';
+        if (currentFileEl) {
+            if (data.currentFiles && data.currentFiles.length > 0) {
+                currentFileEl.innerHTML = data.currentFiles
+                    .map(f => `<div style="margin: 2px 0;"><span style="color: var(--accent-color); display: inline-block; min-width: 72px;">Worker ${f.worker}:</span> ${escapeHtml(f.file)}</div>`)
+                    .join('');
+            } else {
+                currentFileEl.textContent = data.currentFile || '';
+            }
+        }
 
         if (data.status === 'copying' || (data.status === 'starting' && data.totalFiles > 0)) {
             // Switch to determinate bar on first real progress

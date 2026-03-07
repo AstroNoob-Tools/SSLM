@@ -2,7 +2,12 @@
 
 const fs = require('fs-extra');
 const path = require('path');
+const os = require('os');
+const { execFile } = require('child_process');
+const { promisify } = require('util');
 const DiskSpaceValidator = require('../utils/diskSpaceValidator');
+
+const execFileAsync = promisify(execFile);
 
 /**
  * StackExportService
@@ -27,7 +32,7 @@ class StackExportService {
         this.progressEmitInterval = 500;   // ms between throttled progress emits
         this.progressSamples = [];
         this.sampleWindow = 5000;   // 5-second window for speed calculation
-        this._abortCurrentFile = null; // Set by _copyFile; called by cancelExport
+        this._abortCurrentFiles = new Set(); // Populated by _copyFile; iterated by cancelExport
     }
 
     // ─────────────────────────────────────────────────────────────────────────
@@ -226,42 +231,50 @@ class StackExportService {
             const errors = [];
             const manifest = [];
 
-            for (const file of plan.filesToCopy) {
-                // Check cancellation
-                if (this.cancelled) {
-                    this._emit(clientId, 'stackexport:cancelled', {
-                        operationId, filesCopied,
-                        totalFiles: plan.totalFiles, bytesCopied,
-                        totalBytes: plan.totalBytes, timestamp: Date.now()
-                    });
-                    this.currentOperation = null;
-                    return { success: false, cancelled: true };
-                }
+            // Determine concurrency based on drive types
+            const allPaths = [destinationPath, ...subFolderPaths];
+            const concurrency = await this._getDriveConcurrency(allPaths);
+            console.log(`Export concurrency: ${concurrency} (${concurrency > 1 ? 'parallel' : 'sequential'})`);
 
+            // relativePath → { bytes, worker } — per-file in-flight tracking
+            const queue = [...plan.filesToCopy];
+            const inFlightBytes = new Map();
+
+            const buildCurrentFiles = () =>
+                [...inFlightBytes.entries()].map(([fp, { worker }]) => ({
+                    worker,
+                    file: path.basename(fp)
+                }));
+
+            const copyOneFile = async (file, workerIndex) => {
                 // Windows MAX_PATH: paths ≥ 260 chars (incl. null) fail silently
                 if (file.destPath.length > 259) {
                     console.warn(`[SKIP] Path too long (${file.destPath.length} chars): ${file.destPath}`);
                     errors.push({ file: file.filename, error: `Destination path exceeds Windows MAX_PATH limit (${file.destPath.length} chars)` });
-                    continue;
+                    return;
                 }
 
                 try {
                     await fs.ensureDir(path.dirname(file.destPath));
 
                     await this._copyFile(file.sourcePath, file.destPath, (currentBytes) => {
+                        inFlightBytes.set(file.sourcePath, { bytes: currentBytes, worker: workerIndex });
+                        const inflightTotal = [...inFlightBytes.values()].reduce((a, b) => a + b.bytes, 0);
                         this._emitProgress(clientId, {
                             operationId, status: 'copying',
-                            currentFile: file.filename,
+                            currentFile: `Copying ${inFlightBytes.size} file(s)...`,
+                            currentFiles: buildCurrentFiles(),
                             filesCopied, totalFiles: plan.totalFiles,
                             filesPercentage: Math.round((filesCopied / plan.totalFiles) * 100),
-                            bytesCopied: bytesCopied + currentBytes,
+                            bytesCopied: bytesCopied + inflightTotal,
                             totalBytes: plan.totalBytes,
                             bytesPercentage: plan.totalBytes > 0
-                                ? Math.round(((bytesCopied + currentBytes) / plan.totalBytes) * 100) : 0,
+                                ? Math.round(((bytesCopied + inflightTotal) / plan.totalBytes) * 100) : 0,
                             timestamp: Date.now()
                         });
                     });
 
+                    inFlightBytes.delete(file.sourcePath);
                     bytesCopied += file.size;
                     filesCopied++;
                     manifest.push({ sourcePath: file.sourcePath, destPath: file.destPath, size: file.size });
@@ -269,7 +282,8 @@ class StackExportService {
                     // Per-file event (unconditional, ensures final state is emitted)
                     this._emitProgress(clientId, {
                         operationId, status: 'copying',
-                        currentFile: file.filename,
+                        currentFile: `Copying ${inFlightBytes.size} file(s)...`,
+                        currentFiles: buildCurrentFiles(),
                         filesCopied, totalFiles: plan.totalFiles,
                         filesPercentage: Math.round((filesCopied / plan.totalFiles) * 100),
                         bytesCopied, totalBytes: plan.totalBytes,
@@ -279,9 +293,37 @@ class StackExportService {
                     });
 
                 } catch (err) {
-                    console.error(`Error copying ${file.sourcePath}:`, err.message);
-                    errors.push({ file: file.filename, error: err.message });
+                    inFlightBytes.delete(file.sourcePath);
+                    if (!this.cancelled) {
+                        console.error(`Error copying ${file.sourcePath}:`, err.message);
+                        errors.push({ file: file.filename, error: err.message });
+                    }
                 }
+            };
+
+            // Worker pool: pull files from queue until empty or cancelled
+            const workers = Array.from(
+                { length: Math.min(concurrency, Math.max(plan.filesToCopy.length, 1)) },
+                async (_, i) => {
+                    const workerIndex = i + 1;
+                    while (queue.length > 0) {
+                        if (this.cancelled) break;
+                        const file = queue.shift(); // safe: Node.js is single-threaded
+                        await copyOneFile(file, workerIndex);
+                    }
+                }
+            );
+            await Promise.all(workers);
+
+            // Handle cancellation after all workers have stopped
+            if (this.cancelled) {
+                this._emit(clientId, 'stackexport:cancelled', {
+                    operationId, filesCopied,
+                    totalFiles: plan.totalFiles, bytesCopied,
+                    totalBytes: plan.totalBytes, timestamp: Date.now()
+                });
+                this.currentOperation = null;
+                return { success: false, cancelled: true };
             }
 
             // ── Complete ──────────────────────────────────────────────────
@@ -318,10 +360,40 @@ class StackExportService {
     async cancelExport() {
         if (this.currentOperation) {
             this.cancelled = true;
-            if (this._abortCurrentFile) this._abortCurrentFile();
+            for (const abort of this._abortCurrentFiles) abort();
+            this._abortCurrentFiles.clear();
             return { success: true };
         }
         return { success: false, error: 'No active export operation' };
+    }
+
+    /**
+     * Determine how many files to copy in parallel based on drive types.
+     * Uses [System.IO.DriveInfo].DriveType — same .NET API as diskSpaceValidator.js.
+     * Returns 1 (sequential) for USB/network drives, cores-1 for internal drives.
+     * @param {Array<string>} paths - All paths involved (sources + destination)
+     * @returns {Promise<number>} Concurrency limit
+     */
+    async _getDriveConcurrency(paths) {
+        if (paths.some(p => p.startsWith('\\\\'))) return 1;
+
+        const letters = [...new Set(
+            paths.map(p => p.match(/^([A-Za-z]):/)?.[1]).filter(Boolean)
+        )].map(l => l.toUpperCase());
+        if (letters.length === 0) return Math.max(1, os.cpus().length - 1);
+
+        try {
+            const checks = letters.map(l => `[System.IO.DriveInfo]::new('${l}:').DriveType`).join('; ');
+            const { stdout } = await execFileAsync(
+                'powershell',
+                ['-NoProfile', '-Command', `@(${checks}) | ConvertTo-Json -Compress`]
+            );
+            const types = [].concat(JSON.parse(stdout.trim() || '[]'));
+            if (types.some(t => t !== 'Fixed' && t !== 3)) return 1;
+        } catch (_) {
+            // PowerShell unavailable — fall back to parallel
+        }
+        return Math.max(1, os.cpus().length - 1);
     }
 
     // ─────────────────────────────────────────────────────────────────────────
@@ -427,11 +499,13 @@ class StackExportService {
             let timer = null;
             let settled = false;
 
+            const abort = () => cleanup(new Error('Cancelled'));
+
             const cleanup = (err) => {
                 if (settled) return;
                 settled = true;
                 clearTimeout(timer);
-                this._abortCurrentFile = null;
+                this._abortCurrentFiles.delete(abort);
                 rs.destroy();
                 ws.destroy();
                 if (err) {
@@ -451,8 +525,8 @@ class StackExportService {
                 }, timeoutMs);
             };
 
-            // Allow cancelExport() to abort immediately
-            this._abortCurrentFile = () => cleanup(new Error('Cancelled'));
+            // Allow cancelExport() to abort all in-flight copies immediately
+            this._abortCurrentFiles.add(abort);
 
             resetTimer();
 

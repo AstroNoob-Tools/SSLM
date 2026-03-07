@@ -803,8 +803,8 @@ class MergeWizard {
                 </div>
 
                 <!-- Current File -->
-                <div style="margin: 1.5rem 0; padding: 1rem; background: var(--bg-secondary); border-radius: 8px; border: 1px solid var(--border-color);">
-                    <div id="mergeCurrentFile" style="font-family: monospace; font-size: 0.9em; color: var(--text-secondary); word-break: break-all;">
+                <div style="margin: 1.5rem 0; padding: 1rem; background: var(--bg-secondary); border-radius: 8px; border: 1px solid var(--border-color); height: 120px; overflow: hidden; box-sizing: border-box;">
+                    <div id="mergeCurrentFile" style="font-family: monospace; font-size: 0.9em; color: var(--text-secondary); word-break: break-all; overflow: hidden;">
                         Starting merge...
                     </div>
                 </div>
@@ -961,9 +961,15 @@ class MergeWizard {
         if (progressPercentage) progressPercentage.textContent = `${pct}%`;
 
         if (currentFile) {
-            currentFile.textContent = data.status === 'starting'
-                ? `Preparing merge (${data.totalFiles} files to copy)...`
-                : `Copying: ${data.currentFile}`;
+            if (data.status === 'starting') {
+                currentFile.textContent = `Preparing merge (${data.totalFiles} files to copy)...`;
+            } else if (data.currentFiles && data.currentFiles.length > 0) {
+                currentFile.innerHTML = data.currentFiles
+                    .map(f => `<div style="margin: 2px 0;"><span style="color: var(--accent-color); display: inline-block; min-width: 72px;">Worker ${f.worker}:</span> ${escapeHtml(f.file)}</div>`)
+                    .join('');
+            } else {
+                currentFile.textContent = data.currentFile || 'Copying...';
+            }
         }
         if (filesProgress) filesProgress.textContent = `${data.filesCopied} / ${data.totalFiles}`;
         if (bytesProgress) bytesProgress.textContent = `${this.formatBytes(data.bytesCopied)} / ${this.formatBytes(data.totalBytes)}`;
