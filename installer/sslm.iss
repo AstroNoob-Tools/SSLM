@@ -10,7 +10,7 @@
 
 #define AppName      "SSLM - SeeStar Library Manager"
 #define AppShortName "SSLM"
-#define AppVersion   "1.0.0-beta.4"
+#define AppVersion   "1.0.0-preproduction"
 #define AppPublisher "SeeStar Library Manager"
 #define AppExeName   "sslm.exe"
 #define AppURL       "https://github.com/"
