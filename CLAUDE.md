@@ -40,7 +40,7 @@ All five development phases are complete and released.
 | Version | Status | Notes |
 |---------|--------|-------|
 | **v1.0.0-beta.4** | Current public beta | Export to Stacking, XSS/CWE-78 fixes, licensing |
-| **v1.0.0-beta.4.1** | In development (`auto-update` branch) | Auto-update, Socket.IO recovery, Vitest suite |
+| **V1.0.0-Preproduction** | In development (`main` branch) | Auto-update, Socket.IO recovery, Vitest suite, AI Protocol, Security fixes |
 
 **GitHub Releases**: https://github.com/AstroNoob-Tools/SSLM/releases
 

@@ -40,6 +40,27 @@ class MergeWizard {
             return;
         }
 
+        // Handle reconnects during an active operation
+        app.socket.on('connect', async () => {
+            console.log('Socket reconnected in MergeWizard');
+            if (this.operationId) {
+                try {
+                    const response = await fetch(`/api/operations/${this.operationId}/status`);
+                    const data = await response.json();
+
+                    if (data.status === 'completed' || data.status === 'merge:complete') {
+                        this.handleMergeComplete(data.result || data.lastProgress || {});
+                    } else if (data.status === 'error' || data.status === 'merge:error') {
+                        this.handleMergeError(data.result || data.lastProgress || {});
+                    } else if (data.status === 'cancelled' || data.status === 'merge:cancelled') {
+                        this.handleMergeCancelled(data.result || data.lastProgress || {});
+                    }
+                } catch (err) {
+                    console.error('Failed to poll operation status after reconnect:', err);
+                }
+            }
+        });
+
         // Analysis progress events
         app.socket.on('analyze:progress', (data) => this.handleAnalyzeProgress(data));
 

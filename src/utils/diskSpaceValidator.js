@@ -82,7 +82,8 @@ class DiskSpaceValidator {
                         const itemPath = path.join(dirPath, item);
 
                         try {
-                            const stats = await fs.stat(itemPath);
+                            const stats = await fs.lstat(itemPath);
+                            if (stats.isSymbolicLink()) continue;
 
                             if (stats.isDirectory()) {
                                 await scanDirectory(itemPath);
@@ -132,7 +133,8 @@ class DiskSpaceValidator {
                         const destItemPath = path.join(currentDestPath, item);
 
                         try {
-                            const sourceStats = await fs.stat(sourceItemPath);
+                            const sourceStats = await fs.lstat(sourceItemPath);
+                            if (sourceStats.isSymbolicLink()) continue;
 
                             if (sourceStats.isDirectory()) {
                                 // Recurse into subdirectory
@@ -259,7 +261,8 @@ class DiskSpaceValidator {
                 const itemPath = path.join(dirPath, item);
 
                 try {
-                    const stats = await fs.stat(itemPath);
+                    const stats = await fs.lstat(itemPath);
+                    if (stats.isSymbolicLink()) continue;
 
                     if (stats.isDirectory()) {
                         await this.buildMergeInventory(itemPath, basePath, inventory, subframeMode);

@@ -72,11 +72,12 @@ logger.init(path.join(configDir, 'logs'));
 
 // Redirect all console output through the logger so every module's
 // console.log/warn/error calls are automatically timestamped and persisted.
-console.log   = (...args) => logger.info(...args);
-console.warn  = (...args) => logger.warn(...args);
+console.log = (...args) => logger.info(...args);
+console.warn = (...args) => logger.warn(...args);
 console.error = (...args) => logger.error(...args);
 
 const defaultConfig = {
+  configVersion: 1,
   server: { port: 3000, host: 'localhost' },
   mode: { online: false },
   seestar: { directoryName: 'MyWorks' },
@@ -85,11 +86,48 @@ const defaultConfig = {
   engagement: { welcomeShown: false, dismissCount: 0, lastShown: null }
 };
 
+// Custom schema validator to ensure type safety without external dependencies
+function validateConfigTypes(rawConfig) {
+  const result = { ...rawConfig };
+
+  // Helper to coerce or default types securely
+  const ensureNumber = (val, def) => (typeof val === 'number' && !isNaN(val) ? val : def);
+  const ensureString = (val, def) => (typeof val === 'string' ? val : def);
+  const ensureBoolean = (val, def) => (typeof val === 'boolean' ? val : def);
+
+  if (result.server) {
+    result.server.port = ensureNumber(result.server.port, defaultConfig.server.port);
+    result.server.host = ensureString(result.server.host, defaultConfig.server.host);
+  }
+
+  if (result.mode) {
+    result.mode.online = ensureBoolean(result.mode.online, defaultConfig.mode.online);
+  }
+
+  if (result.seestar) {
+    result.seestar.directoryName = ensureString(result.seestar.directoryName, defaultConfig.seestar.directoryName);
+  }
+
+  if (result.paths) {
+    result.paths.lastSourcePath = ensureString(result.paths.lastSourcePath, defaultConfig.paths.lastSourcePath);
+    result.paths.lastDestinationPath = ensureString(result.paths.lastDestinationPath, defaultConfig.paths.lastDestinationPath);
+  }
+
+  if (result.preferences) {
+    result.preferences.defaultImportStrategy = ensureString(result.preferences.defaultImportStrategy, defaultConfig.preferences.defaultImportStrategy);
+  }
+
+  // Enforce config versioning
+  result.configVersion = defaultConfig.configVersion;
+
+  return result;
+}
+
 // Deep-merge loaded config with defaults:
 // - Missing or wrong-typed sections fall back to a fresh copy of the default (never a shared reference).
 // - Extra top-level keys not in defaultConfig are preserved so no user data is silently dropped.
 function applyConfigDefaults(raw) {
-  const result = {};
+  let result = {};
   for (const key of Object.keys(defaultConfig)) {
     const def = defaultConfig[key];
     const val = raw[key];
@@ -105,6 +143,10 @@ function applyConfigDefaults(raw) {
   for (const key of Object.keys(raw)) {
     if (!(key in result)) result[key] = raw[key];
   }
+
+  // Validate basic types and handle version migrations
+  result = validateConfigTypes(result);
+
   return result;
 }
 
@@ -171,10 +213,10 @@ function initOperation(operationId, type, clientId) {
 // Services call this.io.to(clientId).emit(event, data) — the wrapper intercepts
 // those calls transparently without requiring changes to any service file.
 const _realIoTo = io.to.bind(io);
-io.to = function(room) {
+io.to = function (room) {
   const broadcaster = _realIoTo(room);
   const _realEmit = broadcaster.emit.bind(broadcaster);
-  broadcaster.emit = function(event, data) {
+  broadcaster.emit = function (event, data) {
     if (data && typeof data.operationId === 'string') {
       const entry = operationStore.get(data.operationId);
       if (entry) {
@@ -229,7 +271,7 @@ function createRateLimiter({ windowMs = 60_000, max = 10 } = {}) {
     const now = Date.now();
     const window = (hits.get(ip) || []).filter(t => now - t < windowMs);
     if (window.length >= max) {
-      return res.status(429).json({ success: false, error: 'Too many requests, please try again later.' });
+      return res.status(429).json({ success: false, error: { code: 'API_ERROR', message: 'Too many requests, please try again later.' } });
     }
     window.push(now);
     hits.set(ip, window);
@@ -308,7 +350,7 @@ app.post('/api/config', analysisLimiter, async (req, res) => {
 
     res.json({ success: true, config });
   } catch (error) {
-    res.status(500).json({ success: false, error: error.message });
+    res.status(500).json({ success: false, error: { code: 'API_ERROR', message: error.message } });
   }
 });
 
@@ -318,13 +360,13 @@ app.get('/api/image', lightLimiter, async (req, res) => {
     const imagePath = req.query.path;
 
     if (!imagePath || typeof imagePath !== 'string') {
-      return res.status(400).json({ success: false, error: 'Image path is required' });
+      return res.status(400).json({ success: false, error: { code: 'API_ERROR', message: 'Image path is required' } });
     }
 
     // Resolve then allowlist-check to prevent traversal (CWE-22)
     const resolvedPath = path.resolve(imagePath);
     if (!isAllowedPath(resolvedPath)) {
-      return res.status(400).json({ success: false, error: 'Invalid image path' });
+      return res.status(400).json({ success: false, error: { code: 'API_ERROR', message: 'Invalid image path' } });
     }
 
     // Only serve explicitly allowed image extensions — no fallback to arbitrary files
@@ -341,13 +383,13 @@ app.get('/api/image', lightLimiter, async (req, res) => {
 
     const contentType = contentTypes[ext];
     if (!contentType) {
-      return res.status(400).json({ success: false, error: 'File type not allowed' });
+      return res.status(400).json({ success: false, error: { code: 'API_ERROR', message: 'File type not allowed' } });
     }
 
     // Check if file exists
     const exists = await fs.pathExists(resolvedPath);
     if (!exists) {
-      return res.status(404).json({ success: false, error: 'Image not found' });
+      return res.status(404).json({ success: false, error: { code: 'API_ERROR', message: 'Image not found' } });
     }
 
     // Send file using absolute resolved path
@@ -355,7 +397,7 @@ app.get('/api/image', lightLimiter, async (req, res) => {
     res.sendFile(resolvedPath);
   } catch (error) {
     console.error('Error serving image:', error);
-    res.status(500).json({ success: false, error: error.message });
+    res.status(500).json({ success: false, error: { code: 'API_ERROR', message: error.message } });
   }
 });
 
@@ -365,7 +407,7 @@ app.get('/api/favorites', lightLimiter, (req, res) => {
     const favorites = config.favorites || [];
     res.json({ success: true, favorites });
   } catch (error) {
-    res.status(500).json({ success: false, error: error.message });
+    res.status(500).json({ success: false, error: { code: 'API_ERROR', message: error.message } });
   }
 });
 
@@ -374,7 +416,7 @@ app.post('/api/favorites/add', analysisLimiter, async (req, res) => {
     const { path: favPath, name } = req.body;
 
     if (!favPath) {
-      return res.status(400).json({ success: false, error: 'Path required' });
+      return res.status(400).json({ success: false, error: { code: 'API_ERROR', message: 'Path required' } });
     }
 
     // Initialize favorites if not exists
@@ -400,7 +442,7 @@ app.post('/api/favorites/add', analysisLimiter, async (req, res) => {
 
     res.json({ success: true, favorites: config.favorites });
   } catch (error) {
-    res.status(500).json({ success: false, error: error.message });
+    res.status(500).json({ success: false, error: { code: 'API_ERROR', message: error.message } });
   }
 });
 
@@ -409,7 +451,7 @@ app.post('/api/favorites/remove', analysisLimiter, async (req, res) => {
     const { path: favPath } = req.body;
 
     if (!favPath) {
-      return res.status(400).json({ success: false, error: 'Path required' });
+      return res.status(400).json({ success: false, error: { code: 'API_ERROR', message: 'Path required' } });
     }
 
     if (!config.favorites) {
@@ -424,7 +466,7 @@ app.post('/api/favorites/remove', analysisLimiter, async (req, res) => {
 
     res.json({ success: true, favorites: config.favorites });
   } catch (error) {
-    res.status(500).json({ success: false, error: error.message });
+    res.status(500).json({ success: false, error: { code: 'API_ERROR', message: error.message } });
   }
 });
 
@@ -440,7 +482,7 @@ app.get('/api/browse/drives', lightLimiter, async (req, res) => {
       common
     });
   } catch (error) {
-    res.status(500).json({ success: false, error: error.message });
+    res.status(500).json({ success: false, error: { code: 'API_ERROR', message: error.message } });
   }
 });
 
@@ -448,11 +490,11 @@ app.get('/api/browse/directory', analysisLimiter, async (req, res) => {
   try {
     const rawPath = req.query.path;
     if (!rawPath || typeof rawPath !== 'string') {
-      return res.status(400).json({ success: false, error: 'Path parameter required' });
+      return res.status(400).json({ success: false, error: { code: 'API_ERROR', message: 'Path parameter required' } });
     }
     const directoryPath = path.resolve(rawPath);
     if (!isAllowedPath(directoryPath)) {
-      return res.status(400).json({ success: false, error: 'Invalid path' });
+      return res.status(400).json({ success: false, error: { code: 'API_ERROR', message: 'Invalid path' } });
     }
 
     const result = await DirectoryBrowser.getDirectoryContents(directoryPath);
@@ -465,7 +507,7 @@ app.get('/api/browse/directory', analysisLimiter, async (req, res) => {
       error: result.error
     });
   } catch (error) {
-    res.status(500).json({ success: false, error: error.message });
+    res.status(500).json({ success: false, error: { code: 'API_ERROR', message: error.message } });
   }
 });
 
@@ -474,19 +516,13 @@ app.post('/api/browse/create-directory', analysisLimiter, async (req, res) => {
     const { parentPath, folderName } = req.body;
 
     if (!parentPath || !folderName) {
-      return res.status(400).json({
-        success: false,
-        error: 'parentPath and folderName required'
-      });
+      return res.status(400).json({ success: false, error: { code: 'API_ERROR', message: 'parentPath and folderName required' } });
     }
 
     // Validate parent path exists
     const parentExists = await fs.pathExists(parentPath);
     if (!parentExists) {
-      return res.status(400).json({
-        success: false,
-        error: 'Parent directory does not exist'
-      });
+      return res.status(400).json({ success: false, error: { code: 'API_ERROR', message: 'Parent directory does not exist' } });
     }
 
     // Create the new directory path
@@ -495,10 +531,7 @@ app.post('/api/browse/create-directory', analysisLimiter, async (req, res) => {
     // Check if it already exists
     const alreadyExists = await fs.pathExists(newDirPath);
     if (alreadyExists) {
-      return res.status(400).json({
-        success: false,
-        error: 'Directory already exists'
-      });
+      return res.status(400).json({ success: false, error: { code: 'API_ERROR', message: 'Directory already exists' } });
     }
 
     // Create the directory
@@ -511,7 +544,7 @@ app.post('/api/browse/create-directory', analysisLimiter, async (req, res) => {
     });
   } catch (error) {
     console.error('Error creating directory:', error);
-    res.status(500).json({ success: false, error: error.message });
+    res.status(500).json({ success: false, error: { code: 'API_ERROR', message: error.message } });
   }
 });
 
@@ -520,11 +553,11 @@ app.get('/api/browse/validate', analysisLimiter, async (req, res) => {
     const { path: rawValidatePath, checkMyWork } = req.query;
 
     if (!rawValidatePath || typeof rawValidatePath !== 'string') {
-      return res.status(400).json({ success: false, error: 'Path parameter required' });
+      return res.status(400).json({ success: false, error: { code: 'API_ERROR', message: 'Path parameter required' } });
     }
     const directoryPath = path.resolve(rawValidatePath);
     if (!isAllowedPath(directoryPath)) {
-      return res.status(400).json({ success: false, error: 'Invalid path' });
+      return res.status(400).json({ success: false, error: { code: 'API_ERROR', message: 'Invalid path' } });
     }
 
     const exists = await fs.pathExists(directoryPath);
@@ -541,7 +574,7 @@ app.get('/api/browse/validate', analysisLimiter, async (req, res) => {
       path: directoryPath
     });
   } catch (error) {
-    res.status(500).json({ success: false, error: error.message });
+    res.status(500).json({ success: false, error: { code: 'API_ERROR', message: error.message } });
   }
 });
 
@@ -550,11 +583,11 @@ app.get('/api/analyze', analysisLimiter, async (req, res) => {
   try {
     const rawPath = req.query.path;
     if (!rawPath || typeof rawPath !== 'string') {
-      return res.status(400).json({ success: false, error: 'Path parameter required' });
+      return res.status(400).json({ success: false, error: { code: 'API_ERROR', message: 'Path parameter required' } });
     }
     const directoryPath = path.resolve(rawPath);
     if (!isAllowedPath(directoryPath)) {
-      return res.status(400).json({ success: false, error: 'Invalid path' });
+      return res.status(400).json({ success: false, error: { code: 'API_ERROR', message: 'Invalid path' } });
     }
 
     console.log(`\n=== ANALYZE REQUEST ===`);
@@ -568,10 +601,7 @@ app.get('/api/analyze', analysisLimiter, async (req, res) => {
 
     if (!exists) {
       console.error(`ERROR: Directory not found at path: "${directoryPath}"`);
-      return res.status(404).json({
-        success: false,
-        error: `Directory does not exist: ${directoryPath}`
-      });
+      return res.status(404).json({ success: false, error: { code: 'API_ERROR', message: `Directory does not exist: ${directoryPath}` } });
     }
 
     console.log(`Starting analysis...`);
@@ -584,7 +614,7 @@ app.get('/api/analyze', analysisLimiter, async (req, res) => {
     res.json(result);
   } catch (error) {
     console.error(`Analysis error:`, error);
-    res.status(500).json({ success: false, error: error.message });
+    res.status(500).json({ success: false, error: { code: 'API_ERROR', message: error.message } });
   }
 });
 
@@ -592,11 +622,11 @@ app.get('/api/analyze/cleanup-suggestions', analysisLimiter, async (req, res) =>
   try {
     const rawPath = req.query.path;
     if (!rawPath || typeof rawPath !== 'string') {
-      return res.status(400).json({ success: false, error: 'Path parameter required' });
+      return res.status(400).json({ success: false, error: { code: 'API_ERROR', message: 'Path parameter required' } });
     }
     const directoryPath = path.resolve(rawPath);
     if (!isAllowedPath(directoryPath)) {
-      return res.status(400).json({ success: false, error: 'Invalid path' });
+      return res.status(400).json({ success: false, error: { code: 'API_ERROR', message: 'Invalid path' } });
     }
 
     const analysisResult = await FileAnalyzer.analyzeDirectory(directoryPath);
@@ -612,7 +642,7 @@ app.get('/api/analyze/cleanup-suggestions', analysisLimiter, async (req, res) =>
       suggestions
     });
   } catch (error) {
-    res.status(500).json({ success: false, error: error.message });
+    res.status(500).json({ success: false, error: { code: 'API_ERROR', message: error.message } });
   }
 });
 
@@ -624,7 +654,7 @@ app.post('/api/cleanup/empty-directories', heavyOpLimiter, async (req, res) => {
 
     if (!directories || !Array.isArray(directories)) {
       console.error('Invalid request: directories array missing or not an array');
-      return res.status(400).json({ success: false, error: 'Directories array required' });
+      return res.status(400).json({ success: false, error: { code: 'API_ERROR', message: 'Directories array required' } });
     }
 
     console.log(`Deleting ${directories.length} empty directories...`);
@@ -635,7 +665,7 @@ app.post('/api/cleanup/empty-directories', heavyOpLimiter, async (req, res) => {
     res.json(result);
   } catch (error) {
     console.error('Error in empty directories cleanup:', error);
-    res.status(500).json({ success: false, error: error.message, stack: error.stack });
+    res.status(500).json({ success: false, error: { code: 'API_ERROR', message: error.message, stack: error.stack } });
   }
 });
 
@@ -646,7 +676,7 @@ app.post('/api/cleanup/subframe-directories', heavyOpLimiter, async (req, res) =
 
     if (!objects || !Array.isArray(objects)) {
       console.error('Invalid request: objects array missing or not an array');
-      return res.status(400).json({ success: false, error: 'Objects array required' });
+      return res.status(400).json({ success: false, error: { code: 'API_ERROR', message: 'Objects array required' } });
     }
 
     console.log(`Cleaning up sub-frame directories for ${objects.length} objects...`);
@@ -657,7 +687,7 @@ app.post('/api/cleanup/subframe-directories', heavyOpLimiter, async (req, res) =
     res.json(result);
   } catch (error) {
     console.error('Error in sub-frame cleanup:', error);
-    res.status(500).json({ success: false, error: error.message, stack: error.stack });
+    res.status(500).json({ success: false, error: { code: 'API_ERROR', message: error.message, stack: error.stack } });
   }
 });
 
@@ -665,11 +695,11 @@ app.get('/api/cleanup/subframe-info', analysisLimiter, async (req, res) => {
   try {
     const rawPath = req.query.path;
     if (!rawPath || typeof rawPath !== 'string') {
-      return res.status(400).json({ success: false, error: 'Path parameter required' });
+      return res.status(400).json({ success: false, error: { code: 'API_ERROR', message: 'Path parameter required' } });
     }
     const directoryPath = path.resolve(rawPath);
     if (!isAllowedPath(directoryPath)) {
-      return res.status(400).json({ success: false, error: 'Invalid path' });
+      return res.status(400).json({ success: false, error: { code: 'API_ERROR', message: 'Invalid path' } });
     }
 
     const analysisResult = await FileAnalyzer.analyzeDirectory(directoryPath);
@@ -685,7 +715,7 @@ app.get('/api/cleanup/subframe-info', analysisLimiter, async (req, res) => {
       info
     });
   } catch (error) {
-    res.status(500).json({ success: false, error: error.message });
+    res.status(500).json({ success: false, error: { code: 'API_ERROR', message: error.message } });
   }
 });
 
@@ -695,7 +725,7 @@ app.post('/api/cleanup/session', heavyOpLimiter, async (req, res) => {
     const { mainFolderPath, mainFiles, subFiles } = req.body;
 
     if (!mainFolderPath || !mainFiles) {
-      return res.status(400).json({ success: false, error: 'mainFolderPath and mainFiles are required' });
+      return res.status(400).json({ success: false, error: { code: 'API_ERROR', message: 'mainFolderPath and mainFiles are required' } });
     }
 
     // subFiles is an array of { folder, file } objects — each entry carries its own
@@ -708,7 +738,7 @@ app.post('/api/cleanup/session', heavyOpLimiter, async (req, res) => {
 
     res.json(result);
   } catch (error) {
-    res.status(500).json({ success: false, error: error.message });
+    res.status(500).json({ success: false, error: { code: 'API_ERROR', message: error.message } });
   }
 });
 
@@ -721,7 +751,7 @@ app.get('/api/import/detect-seestar', analysisLimiter, async (req, res) => {
     res.json({ success: true, devices });
   } catch (error) {
     console.error('Error detecting devices:', error);
-    res.status(500).json({ success: false, error: error.message });
+    res.status(500).json({ success: false, error: { code: 'API_ERROR', message: error.message } });
   }
 });
 
@@ -731,15 +761,12 @@ app.post('/api/import/validate-space', analysisLimiter, async (req, res) => {
     const rawSource = req.body.sourcePath;
     const rawDest = req.body.destinationPath;
     if (!rawSource || typeof rawSource !== 'string' || !rawDest || typeof rawDest !== 'string') {
-      return res.status(400).json({
-        success: false,
-        error: 'sourcePath and destinationPath required'
-      });
+      return res.status(400).json({ success: false, error: { code: 'API_ERROR', message: 'sourcePath and destinationPath required' } });
     }
     const sourcePath = path.resolve(rawSource);
     const destinationPath = path.resolve(rawDest);
     if (!isAllowedPath(sourcePath) || !isAllowedPath(destinationPath)) {
-      return res.status(400).json({ success: false, error: 'Invalid path' });
+      return res.status(400).json({ success: false, error: { code: 'API_ERROR', message: 'Invalid path' } });
     }
 
     const importStrategy = strategy || 'full'; // Default to full if not specified
@@ -757,7 +784,7 @@ app.post('/api/import/validate-space', analysisLimiter, async (req, res) => {
     res.json({ success: true, ...result });
   } catch (error) {
     console.error('Error validating space:', error);
-    res.status(500).json({ success: false, error: error.message });
+    res.status(500).json({ success: false, error: { code: 'API_ERROR', message: error.message } });
   }
 });
 
@@ -768,15 +795,12 @@ app.post('/api/import/start', heavyOpLimiter, async (req, res) => {
     const rawDest = req.body.destinationPath;
     if (!rawSource || typeof rawSource !== 'string' || !rawDest || typeof rawDest !== 'string' ||
       !strategy || !clientId) {
-      return res.status(400).json({
-        success: false,
-        error: 'sourcePath, destinationPath, strategy, and clientId required'
-      });
+      return res.status(400).json({ success: false, error: { code: 'API_ERROR', message: 'sourcePath, destinationPath, strategy, and clientId required' } });
     }
     const sourcePath = path.resolve(rawSource);
     const destinationPath = path.resolve(rawDest);
     if (!isAllowedPath(sourcePath) || !isAllowedPath(destinationPath)) {
-      return res.status(400).json({ success: false, error: 'Invalid path' });
+      return res.status(400).json({ success: false, error: { code: 'API_ERROR', message: 'Invalid path' } });
     }
 
     const importSubframeMode = subframeMode || 'all';
@@ -803,7 +827,7 @@ app.post('/api/import/start', heavyOpLimiter, async (req, res) => {
     res.json({ success: true, operationId, message: 'Import started' });
   } catch (error) {
     console.error('Error starting import:', error);
-    res.status(500).json({ success: false, error: error.message });
+    res.status(500).json({ success: false, error: { code: 'API_ERROR', message: error.message } });
   }
 });
 
@@ -816,7 +840,7 @@ app.post('/api/import/cancel', lightLimiter, async (req, res) => {
     res.json(result);
   } catch (error) {
     console.error('Error cancelling import:', error);
-    res.status(500).json({ success: false, error: error.message });
+    res.status(500).json({ success: false, error: { code: 'API_ERROR', message: error.message } });
   }
 });
 
@@ -827,15 +851,12 @@ app.post('/api/import/validate', analysisLimiter, async (req, res) => {
     const rawDest = req.body.destinationPath;
     if (!rawSource || typeof rawSource !== 'string' || !rawDest || typeof rawDest !== 'string' ||
       !clientId) {
-      return res.status(400).json({
-        success: false,
-        error: 'sourcePath, destinationPath, and clientId required'
-      });
+      return res.status(400).json({ success: false, error: { code: 'API_ERROR', message: 'sourcePath, destinationPath, and clientId required' } });
     }
     const sourcePath = path.resolve(rawSource);
     const destinationPath = path.resolve(rawDest);
     if (!isAllowedPath(sourcePath) || !isAllowedPath(destinationPath)) {
-      return res.status(400).json({ success: false, error: 'Invalid path' });
+      return res.status(400).json({ success: false, error: { code: 'API_ERROR', message: 'Invalid path' } });
     }
 
     const operationId = Date.now().toString();
@@ -853,7 +874,7 @@ app.post('/api/import/validate', analysisLimiter, async (req, res) => {
     res.json({ success: true, operationId, message: 'Validation started' });
   } catch (error) {
     console.error('Error starting validation:', error);
-    res.status(500).json({ success: false, error: error.message });
+    res.status(500).json({ success: false, error: { code: 'API_ERROR', message: error.message } });
   }
 });
 
@@ -868,21 +889,15 @@ app.post('/api/merge/analyze', analysisLimiter, async (req, res) => {
     const rawDest = req.body.destinationPath;
 
     if (!sourcePaths.length || sourcePaths.length < 2) {
-      return res.status(400).json({
-        success: false,
-        error: 'At least 2 source paths required'
-      });
+      return res.status(400).json({ success: false, error: { code: 'API_ERROR', message: 'At least 2 source paths required' } });
     }
 
     if (!rawDest || typeof rawDest !== 'string') {
-      return res.status(400).json({
-        success: false,
-        error: 'destinationPath required'
-      });
+      return res.status(400).json({ success: false, error: { code: 'API_ERROR', message: 'destinationPath required' } });
     }
     const destinationPath = path.resolve(rawDest);
     if (!isAllowedPath(destinationPath)) {
-      return res.status(400).json({ success: false, error: 'Invalid destinationPath' });
+      return res.status(400).json({ success: false, error: { code: 'API_ERROR', message: 'Invalid destinationPath' } });
     }
 
     const mergeSubframeMode = subframeMode || 'all';
@@ -892,7 +907,7 @@ app.post('/api/merge/analyze', analysisLimiter, async (req, res) => {
     res.json({ success: true, ...result });
   } catch (error) {
     console.error('Error analyzing merge:', error);
-    res.status(500).json({ success: false, error: error.message });
+    res.status(500).json({ success: false, error: { code: 'API_ERROR', message: error.message } });
   }
 });
 
@@ -905,14 +920,11 @@ app.post('/api/merge/validate-space', analysisLimiter, async (req, res) => {
       .filter(p => isAllowedPath(p));
     const rawDest = req.body.destinationPath;
     if (!sourcePaths.length || !rawDest || typeof rawDest !== 'string') {
-      return res.status(400).json({
-        success: false,
-        error: 'sourcePaths and destinationPath required'
-      });
+      return res.status(400).json({ success: false, error: { code: 'API_ERROR', message: 'sourcePaths and destinationPath required' } });
     }
     const destinationPath = path.resolve(rawDest);
     if (!isAllowedPath(destinationPath)) {
-      return res.status(400).json({ success: false, error: 'Invalid destinationPath' });
+      return res.status(400).json({ success: false, error: { code: 'API_ERROR', message: 'Invalid destinationPath' } });
     }
 
     const mergeSubframeMode = subframeMode || 'all';
@@ -940,7 +952,7 @@ app.post('/api/merge/validate-space', analysisLimiter, async (req, res) => {
     res.json({ success: true, ...result });
   } catch (error) {
     console.error('Error validating merge space:', error);
-    res.status(500).json({ success: false, error: error.message });
+    res.status(500).json({ success: false, error: { code: 'API_ERROR', message: error.message } });
   }
 });
 
@@ -955,14 +967,11 @@ app.post('/api/merge/start', heavyOpLimiter, async (req, res) => {
 
     if (!sourcePaths.length || !rawDest || typeof rawDest !== 'string' ||
       !mergePlan || !clientId) {
-      return res.status(400).json({
-        success: false,
-        error: 'sourcePaths, destinationPath, mergePlan, and clientId required'
-      });
+      return res.status(400).json({ success: false, error: { code: 'API_ERROR', message: 'sourcePaths, destinationPath, mergePlan, and clientId required' } });
     }
     const destinationPath = path.resolve(rawDest);
     if (!isAllowedPath(destinationPath)) {
-      return res.status(400).json({ success: false, error: 'Invalid destinationPath' });
+      return res.status(400).json({ success: false, error: { code: 'API_ERROR', message: 'Invalid destinationPath' } });
     }
 
     console.log(`Starting merge: ${sourcePaths.length} sources -> ${destinationPath}`);
@@ -1002,7 +1011,7 @@ app.post('/api/merge/start', heavyOpLimiter, async (req, res) => {
     res.json({ success: true, operationId, message: 'Merge started' });
   } catch (error) {
     console.error('Error starting merge:', error);
-    res.status(500).json({ success: false, error: error.message });
+    res.status(500).json({ success: false, error: { code: 'API_ERROR', message: error.message } });
   }
 });
 
@@ -1014,7 +1023,7 @@ app.post('/api/merge/cancel', lightLimiter, async (req, res) => {
     res.json(result);
   } catch (error) {
     console.error('Error cancelling merge:', error);
-    res.status(500).json({ success: false, error: error.message });
+    res.status(500).json({ success: false, error: { code: 'API_ERROR', message: error.message } });
   }
 });
 
@@ -1023,14 +1032,11 @@ app.post('/api/merge/validate', analysisLimiter, async (req, res) => {
     const { mergePlan, clientId } = req.body;
     const rawDest = req.body.destinationPath;
     if (!rawDest || typeof rawDest !== 'string' || !mergePlan || !clientId) {
-      return res.status(400).json({
-        success: false,
-        error: 'destinationPath, mergePlan, and clientId required'
-      });
+      return res.status(400).json({ success: false, error: { code: 'API_ERROR', message: 'destinationPath, mergePlan, and clientId required' } });
     }
     const destinationPath = path.resolve(rawDest);
     if (!isAllowedPath(destinationPath)) {
-      return res.status(400).json({ success: false, error: 'Invalid destinationPath' });
+      return res.status(400).json({ success: false, error: { code: 'API_ERROR', message: 'Invalid destinationPath' } });
     }
 
     const operationId = Date.now().toString();
@@ -1048,7 +1054,7 @@ app.post('/api/merge/validate', analysisLimiter, async (req, res) => {
     res.json({ success: true, operationId, message: 'Validation started' });
   } catch (error) {
     console.error('Error starting merge validation:', error);
-    res.status(500).json({ success: false, error: error.message });
+    res.status(500).json({ success: false, error: { code: 'API_ERROR', message: error.message } });
   }
 });
 
@@ -1065,21 +1071,18 @@ app.post('/api/export/stack/scan', analysisLimiter, async (req, res) => {
       .filter(p => isAllowedPath(p));
 
     if (!objectName || !rawDest || typeof rawDest !== 'string' || !subFolderPaths.length) {
-      return res.status(400).json({
-        success: false,
-        error: 'objectName, subFolderPaths, and destinationPath are required'
-      });
+      return res.status(400).json({ success: false, error: { code: 'API_ERROR', message: 'objectName, subFolderPaths, and destinationPath are required' } });
     }
     const destinationPath = path.resolve(rawDest);
     if (!isAllowedPath(destinationPath)) {
-      return res.status(400).json({ success: false, error: 'Invalid destinationPath' });
+      return res.status(400).json({ success: false, error: { code: 'API_ERROR', message: 'Invalid destinationPath' } });
     }
 
     const result = await stackExportService.scanForExport(subFolderPaths, objectName, destinationPath);
     res.json({ success: true, ...result });
   } catch (error) {
     console.error('Stack export scan error:', error);
-    res.status(500).json({ success: false, error: error.message });
+    res.status(500).json({ success: false, error: { code: 'API_ERROR', message: error.message } });
   }
 });
 
@@ -1094,14 +1097,11 @@ app.post('/api/export/stack', heavyOpLimiter, async (req, res) => {
       .filter(p => isAllowedPath(p));
 
     if (!objectName || !rawDest || typeof rawDest !== 'string' || !clientId || !subFolderPaths.length) {
-      return res.status(400).json({
-        success: false,
-        error: 'objectName, subFolderPaths, destinationPath, and clientId are required'
-      });
+      return res.status(400).json({ success: false, error: { code: 'API_ERROR', message: 'objectName, subFolderPaths, destinationPath, and clientId are required' } });
     }
     const destinationPath = path.resolve(rawDest);
     if (!isAllowedPath(destinationPath)) {
-      return res.status(400).json({ success: false, error: 'Invalid destinationPath' });
+      return res.status(400).json({ success: false, error: { code: 'API_ERROR', message: 'Invalid destinationPath' } });
     }
 
     const operationId = Date.now().toString();
@@ -1119,7 +1119,7 @@ app.post('/api/export/stack', heavyOpLimiter, async (req, res) => {
     res.json({ success: true, operationId });
   } catch (error) {
     console.error('Stack export start error:', error);
-    res.status(500).json({ success: false, error: error.message });
+    res.status(500).json({ success: false, error: { code: 'API_ERROR', message: error.message } });
   }
 });
 
@@ -1130,7 +1130,7 @@ app.post('/api/export/stack/cancel', lightLimiter, async (req, res) => {
     clearOperationState();
     res.json(result);
   } catch (error) {
-    res.status(500).json({ success: false, error: error.message });
+    res.status(500).json({ success: false, error: { code: 'API_ERROR', message: error.message } });
   }
 });
 
@@ -1141,7 +1141,7 @@ app.post('/api/export/stack/validate', heavyOpLimiter, async (req, res) => {
     const manifest = Array.isArray(req.body.manifest) ? req.body.manifest : [];
 
     if (!clientId || !manifest.length) {
-      return res.status(400).json({ success: false, error: 'clientId and manifest are required' });
+      return res.status(400).json({ success: false, error: { code: 'API_ERROR', message: 'clientId and manifest are required' } });
     }
 
     // Validate each path in the manifest is on an allowed Windows root
@@ -1151,7 +1151,7 @@ app.post('/api/export/stack/validate', heavyOpLimiter, async (req, res) => {
       .map(e => ({ sourcePath: path.resolve(e.sourcePath), destPath: path.resolve(e.destPath), size: e.size }));
 
     if (!validatedManifest.length) {
-      return res.status(400).json({ success: false, error: 'No valid manifest entries' });
+      return res.status(400).json({ success: false, error: { code: 'API_ERROR', message: 'No valid manifest entries' } });
     }
 
     const operationId = Date.now().toString();
@@ -1164,7 +1164,7 @@ app.post('/api/export/stack/validate', heavyOpLimiter, async (req, res) => {
     res.json({ success: true, operationId });
   } catch (error) {
     console.error('Stack export validate error:', error);
-    res.status(500).json({ success: false, error: error.message });
+    res.status(500).json({ success: false, error: { code: 'API_ERROR', message: error.message } });
   }
 });
 
@@ -1174,14 +1174,11 @@ app.post('/api/rename-object', heavyOpLimiter, async (req, res) => {
     const { fromName, toName } = req.body;
     const rawLib = req.body.libraryPath;
     if (!rawLib || typeof rawLib !== 'string' || !fromName || !toName) {
-      return res.status(400).json({
-        success: false,
-        error: 'libraryPath, fromName and toName are required'
-      });
+      return res.status(400).json({ success: false, error: { code: 'API_ERROR', message: 'libraryPath, fromName and toName are required' } });
     }
     const libraryPath = path.resolve(rawLib);
     if (!isAllowedPath(libraryPath)) {
-      return res.status(400).json({ success: false, error: 'Invalid libraryPath' });
+      return res.status(400).json({ success: false, error: { code: 'API_ERROR', message: 'Invalid libraryPath' } });
     }
 
     console.log(`Renaming object: "${fromName}" → "${toName}" in ${libraryPath}`);
@@ -1196,7 +1193,7 @@ app.post('/api/rename-object', heavyOpLimiter, async (req, res) => {
     res.json(result);
   } catch (error) {
     console.error('Error during object rename:', error);
-    res.status(500).json({ success: false, error: error.message });
+    res.status(500).json({ success: false, error: { code: 'API_ERROR', message: error.message } });
   }
 });
 
@@ -1212,7 +1209,7 @@ app.get('/api/catalog/aliases', analysisLimiter, async (req, res) => {
 
   const { name } = req.query;
   if (!name) {
-    return res.status(400).json({ success: false, error: 'name parameter required' });
+    return res.status(400).json({ success: false, error: { code: 'API_ERROR', message: 'name parameter required' } });
   }
 
   // Normalize: strip local suffixes only — SIMBAD stores identifiers with spaces ("M 27", "NGC 6853")
@@ -1241,7 +1238,7 @@ app.get('/api/catalog/aliases', analysisLimiter, async (req, res) => {
     const response = await fetch(simbadUrl, { signal: AbortSignal.timeout(10000) });
 
     if (!response.ok) {
-      return res.json({ success: false, error: `SIMBAD returned HTTP ${response.status}`, aliases: [] });
+      return res.json({ success: false, error: { code: 'API_ERROR', message: `SIMBAD returned HTTP ${response.status}`, aliases: [] } });
     }
 
     const text = await response.text();
@@ -1250,7 +1247,7 @@ app.get('/api/catalog/aliases', analysisLimiter, async (req, res) => {
       data = JSON.parse(text);
     } catch {
       console.warn(`SIMBAD TAP returned non-JSON for "${normalized}": ${text.substring(0, 120)}`);
-      return res.json({ success: false, error: 'Unexpected response format from SIMBAD', aliases: [] });
+      return res.json({ success: false, error: { code: 'API_ERROR', message: 'Unexpected response format from SIMBAD', aliases: [] } });
     }
 
     // SIMBAD TAP JSON format: { metadata: [{name, datatype, ...}], data: [[row values], ...] }
@@ -1298,7 +1295,7 @@ app.get('/api/catalog/aliases', analysisLimiter, async (req, res) => {
     res.json({ success: true, cached: false, ...result });
   } catch (error) {
     console.error('SIMBAD TAP query failed:', error.message);
-    res.json({ success: false, error: error.message, aliases: [] });
+    res.json({ success: false, error: { code: 'API_ERROR', message: error.message, aliases: [] } });
   }
 });
 
@@ -1350,7 +1347,7 @@ app.post('/api/open-url', lightLimiter, (req, res) => {
   const { url } = req.body || {};
   const allowed = /^https:\/\/(github\.com|buymeacoffee\.com)\//;
   if (!url || !allowed.test(url)) {
-    return res.status(400).json({ error: 'URL not allowed' });
+    return res.status(400).json({ success: false, error: { code: 'API_ERROR', message: 'URL not allowed' } });
   }
   const { spawn } = require('child_process');
   spawn('cmd', ['/c', 'start', '', url], { detached: true, stdio: 'ignore' }).unref();
@@ -1407,10 +1404,10 @@ app.post('/api/update/download', heavyOpLimiter, async (req, res) => {
   const validUrl = /^https:\/\/(github\.com|objects\.githubusercontent\.com)\//;
   const validName = /^SSLM-Setup-[\w.\-]+\.exe$/;
   if (!downloadUrl || !validUrl.test(downloadUrl)) {
-    return res.status(400).json({ error: 'Invalid download URL' });
+    return res.status(400).json({ success: false, error: { code: 'API_ERROR', message: 'Invalid download URL' } });
   }
   if (!fileName || !validName.test(fileName)) {
-    return res.status(400).json({ error: 'Invalid file name' });
+    return res.status(400).json({ success: false, error: { code: 'API_ERROR', message: 'Invalid file name' } });
   }
 
   const destPath = path.join(os.tmpdir(), fileName);
@@ -1420,7 +1417,7 @@ app.post('/api/update/download', heavyOpLimiter, async (req, res) => {
   try {
     const response = await fetch(downloadUrl, { signal: AbortSignal.timeout(120000) });
     if (!response.ok) {
-      return res.status(502).json({ error: `Download failed: HTTP ${response.status}` });
+      return res.status(502).json({ success: false, error: { code: 'API_ERROR', message: `Download failed: HTTP ${response.status}` } });
     }
     const totalBytes = parseInt(response.headers.get('content-length') || '0', 10);
     let bytesDownloaded = 0;
@@ -1454,7 +1451,7 @@ app.post('/api/update/download', heavyOpLimiter, async (req, res) => {
   } catch (err) {
     console.error('Update download failed:', err.message);
     if (socket) socket.emit('update:error', { error: err.message });
-    res.status(500).json({ error: err.message });
+    res.status(500).json({ success: false, error: { code: 'API_ERROR', message: err.message } });
   }
 });
 
@@ -1470,7 +1467,7 @@ app.post('/api/update/install', lightLimiter, (req, res) => {
     !path.resolve(filePath).startsWith(path.resolve(tmpDir)) ||
     !validName.test(path.basename(filePath))
   ) {
-    return res.status(400).json({ error: 'Invalid installer path' });
+    return res.status(400).json({ success: false, error: { code: 'API_ERROR', message: 'Invalid installer path' } });
   }
 
   res.json({ message: 'Launching installer and shutting down...' });

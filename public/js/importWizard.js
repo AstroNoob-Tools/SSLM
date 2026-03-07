@@ -60,6 +60,27 @@ class ImportWizard {
             return;
         }
 
+        // Handle reconnects during an active operation
+        app.socket.on('connect', async () => {
+            console.log('Socket reconnected in ImportWizard');
+            if (this.operationId) {
+                try {
+                    const response = await fetch(`/api/operations/${this.operationId}/status`);
+                    const data = await response.json();
+
+                    if (data.status === 'completed' || data.status === 'import:complete') {
+                        this.handleImportComplete(data.result || data.lastProgress || {});
+                    } else if (data.status === 'error' || data.status === 'import:error') {
+                        this.handleImportError(data.result || data.lastProgress || {});
+                    } else if (data.status === 'cancelled' || data.status === 'import:cancelled') {
+                        this.handleImportCancelled(data.result || data.lastProgress || {});
+                    }
+                } catch (err) {
+                    console.error('Failed to poll operation status after reconnect:', err);
+                }
+            }
+        });
+
         // Listen for import progress events
         app.socket.on('import:progress', (data) => {
             this.handleProgressUpdate(data);

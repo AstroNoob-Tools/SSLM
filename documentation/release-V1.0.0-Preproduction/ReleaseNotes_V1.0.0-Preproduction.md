@@ -1,5 +1,5 @@
 # SSLM — SeeStar Library Manager
-## Release Notes — v1.0.0-beta.4.1
+## Release Notes — V1.0.0-Preproduction
 
 **Release date**: March 2026
 **Platform**: Windows 10 / 11
@@ -257,7 +257,7 @@ When the merge analysis detects that files already exist in the destination, the
 
 ## Upgrading from beta.4
 
-1. Download `SSLM-Setup-v1.0.0-beta.4.1.exe` from the GitHub Releases page.
+1. Download `SSLM-Setup-V1.0.0-Preproduction.exe` from the GitHub Releases page.
 2. Run the installer — it will update the application in place.
 3. Your settings (`%APPDATA%\SSLM\settings.json`) and favorites are preserved automatically.
 4. No manual migration steps are required.
@@ -282,5 +282,5 @@ When the merge analysis detects that files already exist in the destination, the
 
 ---
 
-*SSLM - SeeStar Library Manager v1.0.0-beta.4.1 — Release Notes*
+*SSLM - SeeStar Library Manager V1.0.0-Preproduction — Release Notes*
 *March 2026*

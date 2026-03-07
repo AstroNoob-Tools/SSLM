@@ -7,6 +7,7 @@
 
 Harden SSLM for a stable v1.0 release by closing the remaining open issues in `notes/PRODUCTION_READINESS.md`, currently working on the `auto-update` branch.
 
+
 ---
 
 ## Tech Stack
@@ -71,7 +72,7 @@ Every user-supplied path goes through `path.resolve()` then `isAllowedPath()` in
 - [x] **Issue #9** — Partial file on cancel — `cleanup()` destroys streams + `fs.unlink(destPath)`
 - [x] **Issue #12** — Auto-update — startup check, amber badge, download + install flow
 - [x] **CLAUDE.md** — trimmed from 1685 to ~205 lines (was causing context truncation in claude-cli)
-- [x] **.gitignore** — restored `notes/` as full-directory ignore; added `!documentation/release-v1.0.0-beta.4.1/**` exception
+- [x] **.gitignore** — restored `notes/` as full-directory ignore; added `!documentation/release-V1.0.0-Preproduction/**` exception
 - [x] **Engagement modals** — welcome modal (first operation, Reddit community links) + engagement modal (max 3×, 14-day throttle; Star/Coffee/Feedback cards); state in `settings.json → engagement{}`
 - [x] **Snyk Code audit** — 63 findings triaged; 7 genuine issues fixed: 3× CWE-78 (`exec` → `spawn` in auto-browser-open, open-url, update-install endpoints) + 4× CWE-79 (`escapeHtml` on `error.message`/`data.error` in importWizard.js + mergeWizard.js); 56 false positives documented (Path Traversal/rate-limit/HTTP findings)
 - [x] **Merge re-copy bug** — `buildMergePlan()` dedup changed to size-only (mtime check removed); `fs.utimes` fixed to use `new Date(file.mtime)` (was silently failing with ISO string); `forceOverwrite` param threads through `analyzeSources()` → `buildMergePlan()` → `/api/merge/analyze`
